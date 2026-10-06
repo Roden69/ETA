@@ -175,14 +175,25 @@ mkdir -p dist
   (`%USERPROFILE%\.android\debug.keystore` on his Windows machine).
 - The flatpak Android Studio keystore on this workstation is a different key:
   `~/.var/app/com.google.AndroidStudio/config/.android/debug.keystore`, generated
-  on 2026-10-06, SHA-1 `9B:01:34:B2:…:5D:9B`. The same applies to `app-debug.apk`
-  and to Android Studio's "Run".
+  on 2026-10-06, SHA-1 `9B:01:34:B2:…:5D:9B`.
+  - `~/.android/debug.keystore`, which Gradle uses on the command line, is a
+    symlink to that file. CLI builds and Android Studio's "Run" therefore sign
+    with the same key and update each other's installs.
+  - That key is still not the owner's, so none of these builds can update his
+    phone.
 - **Never uninstall to get around a signature mismatch:** that wipes `erik.db`.
 - To check a key, run `"$bt/apksigner" verify --print-certs <apk>`.
-- `adb` is on `PATH`. The AVD `Pixel_8` is listed with
-  `ANDROID_AVD_HOME=~/.var/app/com.google.AndroidStudio/config/.android/avd ~/Android/Sdk/emulator/emulator -list-avds`;
-  to start it, run the same command with `-avd Pixel_8` instead of `-list-avds`.
-  A fresh emulator install has no signature conflict.
+- **Running on a device.** `adb` is on `PATH`.
+  - The AVD `Pixel_8` (`android-37.1` `google_apis_ps16k`, AVD home
+    `~/.var/app/com.google.AndroidStudio/config/.android/avd`) crashes during boot
+    with SIGSEGV on emulator 37.1.11, with every renderer tried.
+  - Use a phone over wireless debugging instead:
+
+    ```bash
+    adb devices
+    adb -s <serial> install -r app/build/outputs/apk/debug/app-debug.apk   # -r keeps the data
+    adb -s <serial> shell am start -n com.example.erik_iteration_2/com.example.eta.MainActivity
+    ```
 
 ## Code Conventions & Common Patterns
 
