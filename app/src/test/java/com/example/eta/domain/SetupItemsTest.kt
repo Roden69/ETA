@@ -20,6 +20,7 @@ import com.example.eta.domain.setup.WorkSchedule
 import com.example.eta.domain.setup.recurringItems
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
@@ -34,7 +35,18 @@ class SetupItemsTest {
 
     private val now = Instant.parse("2026-09-01T08:00:00Z")
 
-    private fun setup() = UserSetup.draft(now)
+    private fun setup() = UserSetup.draft(now).copy(
+        bedPrepTime = LocalTime(22, 0),
+        morningDuration = 45.minutes,
+        meals = MealPlan.DailyCooking(listOf(DailySlot(LocalTime(18, 30), 1.hours))),
+        housekeeping = HousekeepingPlan.Weekly(WeeklySlot(DayOfWeek.SATURDAY, LocalTime(10, 0), 1.hours)),
+        sport = WeeklySlot(DayOfWeek.TUESDAY, LocalTime(17, 15), 1.hours),
+        freeTime = DailySlot(LocalTime(20, 0), 1.hours + 30.minutes),
+        mindfulness = MindfulnessPlan.EveryDay(DailySlot(LocalTime(21, 30), 15.minutes)),
+        work = WorkSchedule.EveryWorkday(
+            WorkBlock(TimeSpan(LocalTime(9, 0), LocalTime(17, 0)), TimeSpan(LocalTime(12, 30), LocalTime(13, 15))),
+        ),
+    )
 
     @Test
     fun `the free time task carries the role the settlement looks for`() {

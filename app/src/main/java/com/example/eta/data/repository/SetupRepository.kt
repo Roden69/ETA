@@ -54,13 +54,14 @@ class SetupRepository(
      * `completedAt` rather than deleted: deleting would cascade to their blocks
      * and take past completions out of the Erfolgsliste with them.
      */
-    suspend fun complete(setup: UserSetup) {
+    suspend fun complete(setup: UserSetup, routineItems: List<Item>) {
         val now = clock.now()
-        setupDao.upsert(setup.copy(id = SETUP_ID, completedAt = now, updatedAt = now))
-
-        val generated = setup.recurringItems(now)
+        val existing = itemDao.findByIdPrefix(SETUP_ITEM_ID_PREFIX).associateBy { it.id }
+        val generated = (setup.recurringItems(now) + routineItems).map { item ->
+            existing[item.id]?.let { item.copy(createdAt = it.createdAt) } ?: item
+        }
         val stillWanted = generated.map { it.id }.toSet()
-        val obsolete = itemDao.findByIdPrefix(SETUP_ITEM_ID_PREFIX)
+        val obsolete = existing.values
             .filter { it.id !in stillWanted && it.completedAt == null }
             .map { it.copy(completedAt = now, updatedAt = now) }
 
@@ -83,6 +84,9 @@ class SetupRepository(
             // schedule; expansion has to see it here too.
             vacations = vacationRepository.plansFrom(today),
         )
+        // The setup row gates the root screen; publish it only after its schedule
+        // and the first calendar occurrences are ready.
+        setupDao.upsert(setup.copy(id = SETUP_ID, completedAt = now, updatedAt = now))
     }
 
     /**

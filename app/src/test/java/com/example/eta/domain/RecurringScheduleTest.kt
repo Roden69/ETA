@@ -275,7 +275,11 @@ class RecurringScheduleTest {
 
     @Test
     fun `the settings own exactly bed preparation and the morning`() {
-        val owned = UserSetup.draft(now).recurringItems(now).filter { isOwnedBySettings(it.id) }
+        val setup = UserSetup.draft(now).copy(
+            bedPrepTime = LocalTime(22, 0),
+            morningDuration = 45.minutes,
+        )
+        val owned = setup.recurringItems(now).filter { isOwnedBySettings(it.id) }
         assertEquals(setOf(ItemRole.BED_PREP, ItemRole.MORNING), owned.map { it.role }.toSet())
     }
 }

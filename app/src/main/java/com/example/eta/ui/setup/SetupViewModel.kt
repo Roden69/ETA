@@ -3,95 +3,51 @@ package com.example.eta.ui.setup
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.eta.data.repository.SetupRepository
-import com.example.eta.domain.setup.SetupConflict
-import com.example.eta.domain.setup.SetupPart
-import com.example.eta.domain.setup.UserSetup
-import com.example.eta.domain.setup.conflicts
-import com.example.eta.domain.setup.freeMinutesPerWeek
-import com.example.eta.domain.setup.recurringItems
-import com.example.eta.domain.setup.skipping
+import com.example.eta.domain.setup.RoutinePlacement
+import com.example.eta.domain.setup.RoutineSetup
+import com.example.eta.domain.setup.SetupRoutine
 import kotlin.time.Clock
+import kotlin.time.Duration
 import kotlinx.coroutines.flow.MutableStateFlow
-import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.combine
-import kotlinx.coroutines.flow.map
-import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-
-/** What the summary step reports back about the answers so far. */
-data class SetupOutlook(
-    val conflicts: List<SetupConflict>,
-    val freeMinutesPerWeek: Int,
-    val generatedTaskCount: Int,
-)
+import kotlinx.datetime.LocalTime
 
 class SetupViewModel(
     private val setupRepository: SetupRepository,
     private val clock: Clock = Clock.System,
 ) : ViewModel() {
-
-    private val _draft = MutableStateFlow(UserSetup.draft(clock.now()))
-    val draft: StateFlow<UserSetup> = _draft.asStateFlow()
-
-    /**
-     * The pages the user chose to leave out. Kept beside the draft rather than
-     * written into it, so the answers on a skipped page are still there when it
-     * is taken back; [effective] is the draft with them removed.
-     */
-    private val _skipped = MutableStateFlow(emptySet<SetupPart>())
-    val skipped: StateFlow<Set<SetupPart>> = _skipped.asStateFlow()
-
-    private val effective = combine(_draft, _skipped) { draft, skipped -> draft.skipping(skipped) }
+    private val _draft = MutableStateFlow(RoutineSetup.draft(clock.now()))
+    val draft: StateFlow<RoutineSetup> = _draft.asStateFlow()
 
     private val _saving = MutableStateFlow(false)
     val saving: StateFlow<Boolean> = _saving.asStateFlow()
 
-    /**
-     * Recomputed on every answer, because the concept asks for double bookings to
-     * be pointed out *while* the questionnaire is being filled in, not at the end.
-     */
-    val outlook: StateFlow<SetupOutlook> = effective
-        .map { setup ->
-            SetupOutlook(
-                conflicts = setup.conflicts(),
-                freeMinutesPerWeek = setup.freeMinutesPerWeek(),
-                generatedTaskCount = setup.recurringItems(clock.now()).size,
-            )
-        }
-        .stateIn(
-            scope = viewModelScope,
-            started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = SetupOutlook(emptyList(), 0, 0),
-        )
+    fun toggleRoutine(routine: SetupRoutine) = _draft.update { it.toggleRoutine(routine) }
 
-    fun update(transform: (UserSetup) -> UserSetup) {
-        _draft.update(transform)
-    }
+    fun addRoutine(name: String) = _draft.update { it.addRoutine(name) }
 
-    fun skip(part: SetupPart) = _skipped.update { it + part }
+    fun removeRoutine(id: String) = _draft.update { it.removeRoutine(id) }
 
-    fun unskip(part: SetupPart) = _skipped.update { it - part }
+    fun savePlacement(placement: RoutinePlacement) = _draft.update { it.withPlacement(placement) }
 
-    /**
-     * Writes the answers and lays down the schedule. No callback is needed: the
-     * root screen watches the stored setup and swaps itself for the dashboard.
-     *
-     * The flag is cleared again afterwards because this view model outlives the
-     * screen — it lives in the activity's store, so the debug reset comes back to
-     * this same instance and would otherwise find its "Fertig" button stuck.
-     * The draft is deliberately *not* re-seeded: coming back to the questionnaire
-     * with the previous answers still filled in is the friendlier debug loop, and
-     * nothing of it is persisted.
-     */
+    fun deletePlacement(id: String) = _draft.update { it.withoutPlacement(id) }
+
+    fun changeSleep(start: LocalTime, duration: Duration) = _draft.update { it.withSleep(start, duration) }
+
     fun finish() {
-        if (_saving.value) return
+        val draft = _draft.value
+        if (_saving.value || draft.unscheduledRoutines.isNotEmpty()) return
         _saving.value = true
         viewModelScope.launch {
-            setupRepository.complete(_draft.value.skipping(_skipped.value))
-            _saving.value = false
+            try {
+                // Publishing the setup row unlocks the root screen only after its schedule exists.
+                setupRepository.complete(draft.setup, draft.recurringItems(clock.now()))
+            } finally {
+                _saving.value = false
+            }
         }
     }
 }

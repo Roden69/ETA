@@ -4,122 +4,100 @@ paths:
   - "app/src/**/ui/setup/**"
   - "app/src/**/SetupRepository.kt"
   - "app/src/**/Setup*Test.kt"
+  - "app/src/**/RoutineSetupTest.kt"
 ---
 
-### The setup questionnaire
+### First setup: routines, then a weekly calendar
 
-`domain/setup/` holds the whole of it as pure Kotlin, with the UI in `ui/setup/`:
+The first-run intro still precedes setup, and the existing tutorial follows its
+completion. `SetupScreen` now has **two confirmed steps**, not the old questionnaire:
 
-- **`UserSetup`** is a single-row Room entity (`SETUP_ID = 0`) and doubles as the
-  questionnaire's draft — `UserSetup.draft(now)` seeds it with plausible answers.
-  Its nested answers (`MealPlan`, `HousekeepingPlan`, `MindfulnessPlan`,
-  `WorkSchedule`, `WeeklySlot`, `DailySlot`) each `encode()` to one string column,
-  the same trick `RecurrenceRule` uses. `SetupEncodingTest` guards the round trip:
-  a broken one would silently corrupt the entire configuration on next launch.
-- **`SetupSchedule.kt`** flattens the answers into `SetupSpan`s (minutes from
-  midnight, per weekday) and derives `conflicts()` and `freeMinutesPerWeek()` from
-  them. Anything crossing midnight is *split across two weekdays*, not clipped,
-  or the small hours would vanish from the maths. Two spans of the same answer
-  are not a conflict — a wrapped night is one appointment, not two.
-- **`SetupItems.kt`** turns the answers into recurring definitions with
-  **deterministic ids** (`setup:morning`, `setup:work-0-monday`, …), which is what
-  makes re-running the questionnaire an update rather than a second schedule.
-  `SetupRepository.complete` — the questionnaire's path alone since step 18 —
-  retires definitions that no longer follow from the answers via `completedAt`
-  instead of deleting them: `planned_blocks` cascades on delete, so deleting would
-  take past completions out of the Erfolgsliste. It does clear their **still-open
-  future occurrences** (`PlanRepository.clearUpcoming`), or moving Sport from
-  Monday to Tuesday would leave the old Monday blocks standing beside the new ones
-  for as long as they were already laid down. Completed and dismissed blocks are
-  left alone — they are what happened.
+1. **Choose routines.** Schlafen is mandatory. Sport and Achtsamkeit are optional
+   suggestions; a text field adds custom routines, such as Yoga machen or Lernen.
+   Empty names and duplicate normalized names add nothing. Typing a suggestion's
+   name selects that suggestion rather than creating a second routine. Confirming
+   also adds any name still in the input field. Returning from the calendar keeps
+   the draft; removing a routine removes its placements too.
+2. **Schedule the week.** `SetupWeekStep` shows Monday–Sunday with an hourly 00–24
+   grid. The viewport starts at 06:00; hours scroll vertically and the labelled day
+   columns and their header scroll horizontally together. Tapping an empty time
+   creates a temporary **one-hour** placement, snapped to 15 minutes, and opens its
+   editor. The routine, weekday, start and duration can be changed. Existing blocks
+   can be edited or deleted; cancel changes nothing. The alternative "Zeitplatz
+   hinzufügen" button opens the same editor. Durations run from 15 minutes through
+   23 hours 45 minutes. Overnight placements are split visually across weekdays,
+   including Sunday into Monday. Overlapping placements occupy separate lanes and
+   show a warning; warnings do not forbid intentional overlaps.
 
-**A `WeeklySlot` holds a *set* of weekdays.** Sport twice a week is ordinary, and a
-one-day answer made the user enter the same task twice. Each chosen day becomes its
-own definition, with the day in the id (`setup:sport-tuesday`), so the
-questionnaire keeps updating exactly its own rows.
+Sleep starts at **23:00–07:00 every day**. Tapping a sleep block changes the start
+and duration for **all nights**, not just the tapped column. It cannot be removed
+or turned into another routine. Sleep remains configuration, not a task to check
+off. Different weekend nights can still be configured later in Settings.
 
-**The break lives inside the work answer**, not in a question of its own. A
-`WorkBlock` is a span plus an optional `pause`, and `segments()` cuts it into
-work / break / work. That is what stops the lunch break from permanently colliding
-with the working day, and it is the only shape that survives the per-weekday case,
-where a university timetable has several stretches a day each with its own gap. A
-break that does not lie inside its block is **dropped, not clamped**, and the
-questionnaire says so while the user is still looking at it. With
-`WorkSchedule.None` there is no break at all.
+Every selected non-sleep routine must have a placement before "Fertig" is enabled;
+the screen names those still missing. No unselected cooking, housekeeping, work,
+free-time, winding-down or morning tasks are silently added. Planning starts with
+the existing defaults (daily 20:00, weekly Sunday 18:00), editable in Settings.
 
-Whether a generated block pays points is decided by whether it carries a category,
-and that is assigned by meaning: the frame of the day — Bettfertig machen,
-Morgenroutine, Pause, Freizeit — has `category = null` and yields nothing, while
-Hausputz, Sport, Kochen and Achtsamkeit carry theirs. Sleep produces no item at
-all; it is configuration the planner shades (`colors.sleep`) and the free-hour
-maths subtracts.
+### Draft, definitions and completion
 
-### Step 32: the order of the pages, skipping, and a weekend night
+- **`RoutineSetup`**, `SetupRoutine` and `RoutinePlacement` in `RoutineSetup.kt`
+  hold the in-memory first-run draft. `RoutineSetup.draft` disables the optional
+  answers of `UserSetup.draft`; the latter remains the baseline configuration the
+  tutorial uses. There is no new table or schema migration, and existing users
+  keep their configuration and standing tasks.
+- **`UserSetup`** remains the single-row Room entity (`SETUP_ID = 0`). Its encoded
+  answers (`MealPlan`, `HousekeepingPlan`, `MindfulnessPlan`, `WorkSchedule`,
+  `WeeklySlot`, `DailySlot`) and the settings' sleep/planning pages remain supported.
+  `SetupEncodingTest` guards their round trips.
+- **One recurring definition per placement**, with a stable
+  `setup:routine-{placement.id}` id and a weekly recurrence on its chosen day.
+  Multiple times of the same routine on the same day therefore remain separate
+  occurrences without violating the `(itemId, date)` unique index. Sport carries
+  `FOKUS` / `SPORT`, Achtsamkeit `ACHTSAM` / `MINDFULNESS`; custom routines carry no
+  inferred category or role and can be edited later on Lists.
+- **`SetupRepository.complete(setup, routineItems)`** merges the supplied routine
+  definitions with any settings-derived definitions, preserves existing
+  `createdAt`, retires obsolete setup-owned definitions via `completedAt`, and
+  clears only their still-open future occurrences. Completed and discarded blocks
+  remain history. The first 14-day horizon is materialized with `insertMissing`;
+  the setup row is published **last**, because it unlocks the root screen.
+  Ordinary `ScheduleMaintenance.topUp()` continues the standing schedule afterwards.
+- **Overlap checks** use `RoutineSetup.weeklySpans()` and `conflicts()`. Unlike the
+  legacy answer-based helper, two blocks with the same routine name can conflict.
+  `RoutineSetupTest` covers independent same-date occurrences, midnight wrapping,
+  deselection, overlap detection, stable identities and mandatory sleep.
+- The old optional questionnaire pages, summary, `SetupPart` and `skipping` path
+  have been removed. `SetupSteps.kt` retains only the shared sleep and planning
+  settings pages. `SetupItems.kt` / `SetupSchedule.kt` still serve settings,
+  tutorial configuration and existing encoded answers.
 
-**The two pages the app cannot run without come first**: "Schlaf und Morgen", then
-"Planungsphasen" — the planner shades the night and both alarms need an hour.
-The welcome text is the top of the first page rather than a page of its own, so
-the first thing shown is a question. Everything after those two — Essen, Hausputz,
-Sport, Freie Zeit, Selbstachtsamkeit, Arbeit und Uni — carries an **"Überspringen"
-button**, on a line of its own above Zurück / Weiter (three buttons in one row do
-not fit a phone).
+### Sleep and settings
 
-- **Skipping is kept beside the draft, not written into it.** `SetupViewModel.skipped`
-  is a set of `SetupPart`; `UserSetup.skipping(parts)` in `domain/setup/Nights.kt`
-  takes those answers out, and is applied to what the outlook counts and to what
-  `finish` stores. What was typed on a skipped page is therefore still there behind
-  "Doch beantworten".
-- What "taken out" means per page: Hausputz, Sport and Achtsamkeit become null, work
-  becomes `WorkSchedule.None`, the meals an **empty** `DailyCooking`, and free time a
-  slot of **zero duration** — `recurringItems` and `weeklySpans` already drop both,
-  which is why neither needed to become nullable. (The free-time page also asked
-  for a weekly social budget until step 38; the field is gone and the stored
-  figure is read by nothing.)
-- **`UserSetup.draft` must not collide with itself.** Someone who accepts every page
-  gets no "Doppeltbelegung" — sport moved from 18:00 to 17:15 because it ran into
-  the cooking at 18:30 — and `WeekendNightTest` pins it, with and without the
-  suggested weekend. A new default has to pass that test.
+`NightTimes(bedPrep, sleep, wake)` describes a night in offsets from the wake day's
+midnight; offsets before midnight are negative. A night **belongs to the day it
+ends on**. `UserSetup.weekendNight` is nullable; null means every night is alike.
+`weekendDays` identifies the days it ends on, defaulting to Saturday and Sunday.
+`nightEndingOn(weekday)` is the common decision point for shading, free-hour maths,
+recurring framework tasks and the wake alarm.
 
-**The weekend may have a night of its own.** `UserSetup.weekendNight` is a nullable
-`NightTimes(bedPrep, sleep, wake)`, one encoded column; null means every night is
-alike, which is every setup from before. "Am Wochenende → Andere Zeiten" on the
-sleep page switches it on, seeded by `suggestedWeekendNight()` (an hour later to
-bed, two hours longer in it). The page is shared with the settings tab, so it can
-be changed there too. The morning's *length* stays one answer.
+With a separate weekend night, bed preparation and morning definitions are split
+by wake day (`setup:bedprep-saturday`, `setup:morning-saturday`). Without it they
+remain daily definitions. `isOwnedBySettings` identifies these definitions;
+`saveSettings` regenerates only them, leaving first-run and later ordinary
+routines alone. Their morning steps are copied across the new definitions.
 
-- **A night belongs to the day it ends on.** Weekend nights are the ones ending on
-  Saturday and Sunday: Friday and Saturday evening, Saturday and Sunday morning.
-  Sunday evening already belongs to Monday. `nightEndingOn(weekday)` is the one
-  place that decides, and everything goes through it: `weeklySpans`,
-  `sleepStretches(weekday)` (which gained its parameter — a Friday wakes from one
-  night and goes into another), `nextWake` and `recurringItems`.
-- **`NightTimes` speaks in offsets from the wake day's midnight**, negative for the
-  evening before, so "before or after midnight" is settled once. Going to bed at
-  00:30 puts the whole night, winding down included or not, on the right weekday.
-- **Bettfertig machen and Morgenzeit become one definition per night** when there
-  is a weekend night: `setup:bedprep-saturday` is the winding down of the night that
-  *ends* on Saturday, a `Weekly(FRIDAY)` rule. The id carries the wake day, not the
-  day the task falls on, because two nights can wind down on the same weekday (one
-  after midnight, one before). With every night alike they stay the two `Daily`
-  definitions `setup:bedprep` / `setup:morning`. Switching the option retires one
-  set and lays down the other through the ordinary `saveSettings` path.
-- **`isOwnedBySettings(id)` replaced the `SETTINGS_OWNED_ITEM_IDS` set**, since the
-  owned ids are no longer two fixed strings.
+The after-midnight hint and weekday labels in the settings page are derived from
+`NightTimes.sleepDays` / `bedPrepDays`: 01:00 on the night into Sunday is Sunday,
+not Saturday. `WeekendNightTest` keeps this boundary and the weekend wake alarm
+covered.
 
-- **Which days the weekend is, is the user's to say** (step 33).
-  `UserSetup.weekendDays` is the set of days a weekend night **ends** on —
-  Saturday and Sunday (`DEFAULT_WEEKEND`) unless chosen otherwise, so someone
-  working Wednesday to Sunday can have Monday and Tuesday. `nightEndingOn` is
-  still the one place that decides, which is why nothing else had to change. The
-  picker appears under "Andere Zeiten" and refuses to drop the last day: a
-  weekend of no days is "Wie unter der Woche", and that is the switch above it.
-  The set means nothing while `weekendNight` is null.
-- **A bedtime after midnight was always representable and never said so.** The
-  report was that "Samstag um 1:00 Uhr nachts" could not be entered. The model
-  had it — `sleepOffset()` is positive, the night lies wholly on the wake day —
-  but the fields were labelled "(Fr, Sa)" whatever the hour, so 01:00 read as
-  Friday at one. The labels are now computed (`NightTimes.sleepDays` /
-  `bedPrepDays`: the day before, or the wake day itself after midnight) and a
-  hint under the hour says which day's one o'clock it is. `WeekendNightTest` pins
-  the reported case. **Unverified on a device**: if the dial itself refused the
-  hour, that is a different bug and still open.
+### Verification
+
+The two-step screen was exercised on a physical phone using a temporary,
+in-process instrumentation configuration and `AppContainer(sandbox = true)`.
+The scenario selected both suggestions, added custom routines, tapped a one-hour
+slot, edited duration, cancelled and deleted slots, changed daily sleep, assigned
+weekdays, completed setup and checked the stored Room definitions and materialized
+occurrences. The user's `erik.db` was not reset. Temporary instrumentation sources,
+manifest entries and dependencies are not part of the shipped implementation.

@@ -437,8 +437,8 @@ data class UserSetup(
 
     companion object {
         /**
-         * What the questionnaire opens with. Plausible enough that a user who
-         * just taps through ends up with a usable schedule rather than an empty one.
+         * Baseline configuration used by the tutorial and settings.
+         * First-run routine selection removes its optional answers in RoutineSetup.
          */
         fun draft(now: Instant) = UserSetup(
             bedPrepTime = LocalTime(22, 0),
@@ -449,11 +449,9 @@ data class UserSetup(
             housekeeping = HousekeepingPlan.Weekly(
                 WeeklySlot(DayOfWeek.SATURDAY, LocalTime(10, 0), 1.hours),
             ),
-            // After work and done before the cooking at half past six: answers
-            // that are simply accepted must not collide with each other.
+            // After work and done before cooking: the baseline must not collide with itself.
             sport = WeeklySlot(DayOfWeek.TUESDAY, LocalTime(17, 15), 1.hours),
             freeTime = DailySlot(LocalTime(20, 0), 1.hours + 30.minutes),
-            // No longer asked or read; the column stays so no migration is needed.
             socialTimePerWeek = Duration.ZERO,
             mindfulness = MindfulnessPlan.EveryDay(DailySlot(LocalTime(21, 30), 15.minutes)),
             work = WorkSchedule.EveryWorkday(

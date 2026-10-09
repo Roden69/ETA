@@ -110,27 +110,3 @@ fun UserSetup.suggestedWeekendNight(): NightTimes {
     )
 }
 
-/**
- * The questions that may be left unanswered.
- *
- * Sleep and the planning times are not among them: the planner shades the night
- * and the two alarms need an hour, so the app cannot run without those.
- */
-enum class SetupPart { MEALS, HOUSEKEEPING, SPORT, FREE_TIME, MINDFULNESS, WORK }
-
-/**
- * The answers with [parts] taken out, so that nothing is laid down for them.
- *
- * Applied on the way out of the questionnaire rather than to its draft: what was
- * typed into a skipped page is still there if the user comes back to it.
- * A skipped free time takes the social budget with it — they are one page.
- */
-fun UserSetup.skipping(parts: Set<SetupPart>): UserSetup = copy(
-    meals = if (SetupPart.MEALS in parts) MealPlan.DailyCooking(emptyList()) else meals,
-    housekeeping = housekeeping.takeUnless { SetupPart.HOUSEKEEPING in parts },
-    sport = sport.takeUnless { SetupPart.SPORT in parts },
-    freeTime = if (SetupPart.FREE_TIME in parts) freeTime.copy(duration = Duration.ZERO) else freeTime,
-    socialTimePerWeek = if (SetupPart.FREE_TIME in parts) Duration.ZERO else socialTimePerWeek,
-    mindfulness = mindfulness.takeUnless { SetupPart.MINDFULNESS in parts },
-    work = if (SetupPart.WORK in parts) WorkSchedule.None else work,
-)

@@ -7,13 +7,17 @@ import com.example.eta.domain.model.withExtras
 import com.example.eta.domain.setup.NightTimes
 import com.example.eta.domain.setup.SetupLabels
 import com.example.eta.domain.setup.UserSetup
+import com.example.eta.domain.setup.WeeklySlot
 import com.example.eta.domain.setup.isMorningRoutine
 import com.example.eta.domain.setup.isOwnedBySettings
 import com.example.eta.domain.setup.recurringItems
 import com.example.eta.domain.subtask.SubtaskDraft
 import com.example.eta.domain.subtask.matchedTo
 import com.example.eta.domain.subtask.routineProgress
+import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
+import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -80,7 +84,10 @@ class RoutineTest {
 
     @Test
     fun `the mode travels with the extras`() {
-        val item = UserSetup.draft(now).recurringItems(now).first { it.name == SetupLabels.SPORT }
+        val setup = UserSetup.draft(now).copy(
+            sport = WeeklySlot(DayOfWeek.TUESDAY, LocalTime(17, 0), 1.hours),
+        )
+        val item = setup.recurringItems(now).first { it.name == SetupLabels.SPORT }
         assertFalse(item.routineMode)
 
         val routine = item.withExtras(item.extras.copy(routineMode = true))
@@ -92,7 +99,8 @@ class RoutineTest {
 
     @Test
     fun `the morning is a routine by name and by mode`() {
-        val morning = UserSetup.draft(now).recurringItems(now).single { isMorningRoutine(it.id) }
+        val setup = UserSetup.draft(now).copy(morningDuration = 45.minutes)
+        val morning = setup.recurringItems(now).single { isMorningRoutine(it.id) }
         assertEquals("Morgenroutine", morning.name)
         assertTrue(morning.routineMode)
         assertTrue(isOwnedBySettings(morning.id))
@@ -101,6 +109,7 @@ class RoutineTest {
     @Test
     fun `with a weekend night every morning is one, and nothing else is`() {
         val setup = UserSetup.draft(now).copy(
+            morningDuration = 45.minutes,
             weekendNight = NightTimes(LocalTime(23, 30), LocalTime(0, 30), LocalTime(9, 0)),
         )
         val items = setup.recurringItems(now)
