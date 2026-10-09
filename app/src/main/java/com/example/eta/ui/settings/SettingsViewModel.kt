@@ -14,6 +14,7 @@ import com.example.eta.data.repository.CatchUpService
 import com.example.eta.data.repository.PlanningPhaseService
 import com.example.eta.data.repository.SetupRepository
 import com.example.eta.domain.setup.UserSetup
+import com.example.eta.domain.setup.longestAwakeMinutes
 import com.example.eta.domain.planning.nextTaskEvent
 import com.example.eta.domain.reminder.nextReminderAlarm
 import com.example.eta.domain.planning.PlanningPhase
@@ -185,6 +186,10 @@ class SettingsViewModel(
      */
     fun save() {
         val setup = _draft.value ?: return
+        if (setup.longestAwakeMinutes() > 24 * 60) {
+            _message.value = SettingsMessage.Failed("Plane spätestens nach 24 Stunden wieder Schlaf ein.")
+            return
+        }
         viewModelScope.launch {
             setupRepository.saveSettings(setup)
             stored.value = setup

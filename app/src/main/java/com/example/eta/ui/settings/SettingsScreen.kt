@@ -1027,7 +1027,7 @@ private fun DebugBox(onReset: () -> Unit) {
 /**
  * Eta's own wake alarm.
  *
- * It rings at the setup's `wakeTime` rather than at a time of its own, so the
+ * It rings at each configured night's wake time rather than at a time of its own, so the
  * hour the planner shades as the end of the night and the hour the phone rings
  * at can never drift apart. Off by default — an app that starts waking someone
  * because they answered a questionnaire has overstepped.
@@ -1038,10 +1038,17 @@ private fun WakeAlarmBox(setup: UserSetup, onChange: OnSetupChange) {
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = "Weckruf", style = EtaTheme.typography.heading)
             val weekendWake = setup.weekendNight?.wake
-            val hours = setup.wakeTime.formatClock() +
-                (weekendWake?.let { ", am Wochenende um ${it.formatClock()}" } ?: "")
+            // With a night of its own the wake hour differs by day; saying one
+            // would be wrong, so the card names none.
+            val individual = setup.nightOverrides.isNotEmpty()
+            val hours = if (individual) {
+                "zur Aufstehzeit des jeweiligen Tages"
+            } else {
+                "um " + setup.wakeTime.formatClock() +
+                    (weekendWake?.let { ", am Wochenende um ${it.formatClock()}" } ?: "") + " Uhr"
+            }
             EtaText(
-                text = "Eta weckt dich um $hours Uhr — dieselbe " +
+                text = "Eta weckt dich $hours — dieselbe " +
                     "Aufstehzeit, die oben im Schlaf steht. Der Weckruf klingelt über den " +
                     "Sperrbildschirm und läutet, bis du ihn beendest oder neun Minuten " +
                     "schlummerst.",
@@ -1051,7 +1058,7 @@ private fun WakeAlarmBox(setup: UserSetup, onChange: OnSetupChange) {
             EtaChoice(
                 options = listOf(
                     false to "Kein Weckruf",
-                    true to if (weekendWake == null) {
+                    true to if (weekendWake == null && !individual) {
                         "Jeden Tag um ${setup.wakeTime.formatClock()} wecken"
                     } else {
                         "Jeden Tag zur Aufstehzeit wecken"

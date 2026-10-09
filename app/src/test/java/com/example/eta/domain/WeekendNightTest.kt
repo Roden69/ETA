@@ -236,4 +236,26 @@ class WeekendNightTest {
         assertEquals(5 * 480 + 2 * 510, sleep.sumOf { it.minutes })
         assertEquals(WEEK.toSet(), sleep.map { it.weekday }.toSet())
     }
+
+    @Test
+    fun `a night of its own moves that day's morning, the wake alarm and the week's sleep`() {
+        val corrected = draft.copy(
+            morningDuration = 45.minutes,
+            wakeAlarm = true,
+            nightOverrides = mapOf(
+                DayOfWeek.TUESDAY to NightTimes(LocalTime(21, 0), LocalTime(21, 0), LocalTime(5, 30)),
+            ),
+        )
+        val owned = corrected.recurringItems(now).filter { isOwnedBySettings(it.id) }
+
+        assertEquals(LocalTime(5, 30), owned.single { it.id == "setup:morning-tuesday" }.startTime)
+        assertEquals(LocalTime(7, 0), owned.single { it.id == "setup:morning-wednesday" }.startTime)
+        // 2026-09-07 is a Monday; the next wake-up is Tuesday's, at the corrected hour.
+        assertEquals(
+            LocalDateTime(2026, 9, 8, 5, 30),
+            nextWake(corrected, LocalDateTime(2026, 9, 7, 12, 0)),
+        )
+        // Six nights of 8 h and Tuesday's of 8,5 h.
+        assertEquals(6 * 480 + 510, corrected.sleepMinutesPerWeek())
+    }
 }

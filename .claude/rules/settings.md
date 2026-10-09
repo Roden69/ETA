@@ -46,6 +46,14 @@ here would overwrite every edit made on the Listen tab. The weekly social budget
 count, `UserSetup.conflicts()` having described answers that no longer describe the
 schedule.
 
+**Individual nights** are stored in `UserSetup.nightOverrides`, keyed by wake day.
+The sleep page lists these under "Einzelne Nächte" with bedtime, wake-up and reset
+to the weekday/weekend pattern. Pattern edits leave explicit corrections intact.
+`SettingsViewModel.save` refuses a sleep-free gap longer than 24 hours, including
+Sunday into Monday, and leaves the stored setup unchanged with a visible error.
+The wake-alarm card describes each day's actual wake-up instead of claiming a
+single hour when corrections exist.
+
 The **Design** card at the top chooses the look and applies at once, outside the
 draft — see *Step 30*. The tab also holds the Alarme card (*The planning alarm*), the ignored calendar
 events, vacation mode, the open-days catch-up and the debug reset.

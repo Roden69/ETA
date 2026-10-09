@@ -2,6 +2,7 @@ package com.example.eta.ui.setup
 
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
@@ -12,6 +13,8 @@ import com.example.eta.domain.setup.bedPrepDuration
 import com.example.eta.domain.setup.sleepDuration
 import com.example.eta.domain.setup.suggestedWeekendNight
 import com.example.eta.domain.setup.weekdayNight
+import com.example.eta.ui.components.EtaButton
+import com.example.eta.ui.components.EtaButtonStyle
 import com.example.eta.ui.components.EtaChoice
 import com.example.eta.ui.components.EtaDurationPicker
 import com.example.eta.ui.components.EtaField
@@ -19,9 +22,11 @@ import com.example.eta.ui.components.EtaSurface
 import com.example.eta.ui.components.EtaText
 import com.example.eta.ui.components.EtaTimePicker
 import com.example.eta.ui.components.EtaWeekdayPicker
+import com.example.eta.ui.format.formatLong
 import com.example.eta.ui.format.formatShort
 import com.example.eta.ui.format.formatWeekdays
 import com.example.eta.ui.theme.EtaTheme
+import kotlinx.datetime.LocalTime
 
 /** Shared by the sleep and planning settings pages. */
 typealias OnSetupChange = ((UserSetup) -> UserSetup) -> Unit
@@ -176,6 +181,44 @@ fun SleepStep(draft: UserSetup, onChange: OnSetupChange) {
                         "Bettfertig: ${weekend.bedPrepDuration().formatShort()}",
                 )
             }
+
+            if (draft.nightOverrides.isNotEmpty()) {
+                Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
+                    EtaText(text = "Einzelne Nächte", style = EtaTheme.typography.heading)
+                    DerivedHint(
+                        "Diese Nächte hast du einzeln festgelegt. Sie folgen den Zeiten oben " +
+                            "nicht mehr, bis du sie zurücksetzt.",
+                    )
+                    WEEK.filter { it in draft.nightOverrides }.forEach { day ->
+                        val night = draft.nightOverrides.getValue(day)
+
+                        // The night keeps no winding down of its own: it follows bedtime.
+                        fun change(sleep: LocalTime, wake: LocalTime) {
+                            if (sleep == wake) return
+                            onChange {
+                                it.copy(
+                                    nightOverrides = it.nightOverrides +
+                                        (day to NightTimes(bedPrep = sleep, sleep = sleep, wake = wake)),
+                                )
+                            }
+                        }
+                        EtaText(text = "Nacht zum ${day.formatLong()}", style = EtaTheme.typography.bodyStrong)
+                        Row(horizontalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
+                            EtaField(label = "Schlafen gehen", modifier = Modifier.weight(1f)) {
+                                EtaTimePicker(value = night.sleep, onValueChange = { change(it, night.wake) })
+                            }
+                            EtaField(label = "Aufstehen", modifier = Modifier.weight(1f)) {
+                                EtaTimePicker(value = night.wake, onValueChange = { change(night.sleep, it) })
+                            }
+                        }
+                        EtaButton(
+                            text = "Auf die Zeiten oben zurücksetzen",
+                            style = EtaButtonStyle.Secondary,
+                            onClick = { onChange { it.copy(nightOverrides = it.nightOverrides - day) } },
+                        )
+                    }
+                }
+            }
         }
     }
 }
@@ -185,7 +228,7 @@ fun SleepStep(draft: UserSetup, onChange: OnSetupChange) {
  * night it starts, not to the evening of the day it is written on: 01:00 for
  * the night into Sunday is Sunday at one, at the end of Saturday evening.
  */
-private const val AFTER_MIDNIGHT_HINT =
+internal const val AFTER_MIDNIGHT_HINT =
     "Nach Mitternacht — zählt als Ende des Abends davor und liegt im Kalender " +
         "schon auf dem Tag des Aufstehens."
 

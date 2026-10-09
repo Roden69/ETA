@@ -22,9 +22,9 @@ import androidx.compose.ui.semantics.semantics
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.eta.domain.setup.SetupRoutine
 import com.example.eta.domain.setup.RoutineSetup
-import com.example.eta.domain.setup.SLEEP_ROUTINE
-import com.example.eta.domain.setup.SLEEP_ROUTINE_ID
 import com.example.eta.domain.setup.SUGGESTED_SETUP_ROUTINES
+import com.example.eta.domain.setup.WEEK
+import com.example.eta.domain.setup.longestAwakeMinutes
 import com.example.eta.ui.components.EtaButton
 import com.example.eta.ui.components.EtaButtonStyle
 import com.example.eta.ui.components.EtaChoice
@@ -33,8 +33,11 @@ import com.example.eta.ui.components.EtaProgressBar
 import com.example.eta.ui.components.EtaScreen
 import com.example.eta.ui.components.EtaSurface
 import com.example.eta.ui.components.EtaText
-import com.example.eta.ui.format.formatClock
 import com.example.eta.ui.components.EtaTextField
+import com.example.eta.ui.format.formatLong
+import com.example.eta.ui.format.formatMinutes
+import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalTime
 import com.example.eta.ui.theme.EtaTheme
 
 @Composable
@@ -66,14 +69,33 @@ fun SetupScreen(
                     draft = draft,
                     onSavePlacement = viewModel::savePlacement,
                     onDeletePlacement = viewModel::deletePlacement,
-                    onSleepChange = viewModel::changeSleep,
+                    onNightChange = viewModel::changeNight,
                     modifier = Modifier.weight(1f),
                 )
                 val unplanned = draft.unscheduledRoutines
+                val overlappingSleep = draft.overlappingSleep()
+                val awakeMinutes = draft.setup.longestAwakeMinutes()
                 if (unplanned.isNotEmpty()) {
                     EtaText(
                         text = "Noch ohne Zeitplatz: ${unplanned.joinToString { it.name }}. " +
                             "Plane sie ein oder gehe zurück, um sie abzuwählen.",
+                        style = EtaTheme.typography.caption,
+                        color = EtaTheme.colors.warning,
+                    )
+                }
+                if (overlappingSleep.isNotEmpty()) {
+                    EtaText(
+                        text = "Diese Nächte überschneiden sich: " +
+                            "${overlappingSleep.sortedBy { WEEK.indexOf(it) }.joinToString { it.formatLong() }}. " +
+                            "Passe sie an, damit jede Nacht für sich liegt.",
+                        style = EtaTheme.typography.caption,
+                        color = EtaTheme.colors.warning,
+                    )
+                }
+                if (awakeMinutes > 24 * 60) {
+                    EtaText(
+                        text = "Zwischen zwei Schlafblöcken liegen ${formatMinutes(awakeMinutes)} ohne Schlaf. " +
+                            "Plane spätestens nach 24 Stunden wieder Schlaf ein.",
                         style = EtaTheme.typography.caption,
                         color = EtaTheme.colors.warning,
                     )
@@ -88,7 +110,7 @@ fun SetupScreen(
                     EtaButton(
                         text = if (saving) "Wird gespeichert …" else "Fertig",
                         modifier = Modifier.weight(1f),
-                        enabled = !saving && unplanned.isEmpty(),
+                        enabled = !saving && unplanned.isEmpty() && overlappingSleep.isEmpty() && awakeMinutes <= 24 * 60,
                         onClick = viewModel::finish,
                     )
                 }
@@ -103,6 +125,9 @@ fun SetupScreen(
                     },
                     onToggle = viewModel::toggleRoutine,
                     onRemove = viewModel::removeRoutine,
+                    onWeekdayNight = viewModel::changeWeekdayNight,
+                    onWeekendNight = viewModel::changeWeekendNight,
+                    onWeekendDays = viewModel::changeWeekendDays,
                     modifier = Modifier.weight(1f),
                 )
                 EtaButton(
@@ -128,6 +153,9 @@ private fun RoutineSelectionStep(
     onAdd: () -> Unit,
     onToggle: (SetupRoutine) -> Unit,
     onRemove: (String) -> Unit,
+    onWeekdayNight: (LocalTime, LocalTime) -> Unit,
+    onWeekendNight: (LocalTime, LocalTime) -> Unit,
+    onWeekendDays: (Set<DayOfWeek>) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -141,18 +169,12 @@ private fun RoutineSelectionStep(
             style = EtaTheme.typography.body,
             color = EtaTheme.colors.textSecondary,
         )
-        EtaSurface(modifier = Modifier.fillMaxWidth()) {
-            Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.xs)) {
-                EtaText(text = "${SLEEP_ROUTINE.name} · immer dabei", style = EtaTheme.typography.heading)
-                EtaText(
-                    text = "Täglich von ${draft.setup.sleepTime.formatClock()} bis " +
-                        "${draft.setup.wakeTime.formatClock()} Uhr. " +
-                        "Du kannst die Schlafzeiten im Wochenplan anpassen.",
-                    style = EtaTheme.typography.caption,
-                    color = EtaTheme.colors.textSecondary,
-                )
-            }
-        }
+        SleepRhythmCard(
+            draft = draft,
+            onWeekdayNight = onWeekdayNight,
+            onWeekendNight = onWeekendNight,
+            onWeekendDays = onWeekendDays,
+        )
         SUGGESTED_SETUP_ROUTINES.forEach { routine ->
             key(routine.id) {
                 EtaField(label = routine.name) {
@@ -182,8 +204,8 @@ private fun RoutineSelectionStep(
             enabled = routineName.isNotBlank(),
             onClick = onAdd,
         )
-        draft.routines.filter { routine ->
-            routine.id != SLEEP_ROUTINE_ID && SUGGESTED_SETUP_ROUTINES.none { it.id == routine.id }
+        draft.placeableRoutines.filter { routine ->
+            SUGGESTED_SETUP_ROUTINES.none { it.id == routine.id }
         }.forEach { routine ->
             key(routine.id) {
                 EtaSurface(modifier = Modifier.fillMaxWidth()) {

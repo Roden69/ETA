@@ -40,9 +40,12 @@ import androidx.compose.ui.unit.dp
 import com.example.eta.domain.setup.RoutinePlacement
 import com.example.eta.domain.setup.RoutineSetup
 import com.example.eta.domain.setup.SetupRoutine
-import com.example.eta.domain.setup.SLEEP_ROUTINE_ID
+import com.example.eta.domain.setup.NightTimes
+import com.example.eta.domain.setup.SleepNight
 import com.example.eta.domain.setup.WEEK
-import com.example.eta.domain.setup.sleepDuration
+import com.example.eta.domain.setup.longestAwakeMinutes
+import com.example.eta.domain.setup.nightEndingOn
+import com.example.eta.domain.setup.patternNightEndingOn
 import com.example.eta.domain.setup.spans
 import com.example.eta.ui.components.EtaButton
 import com.example.eta.ui.components.EtaButtonStyle
@@ -55,9 +58,9 @@ import com.example.eta.ui.components.EtaTimePicker
 import com.example.eta.ui.components.EtaWeekdayPicker
 import com.example.eta.ui.format.formatClock
 import com.example.eta.ui.format.formatLong
+import com.example.eta.ui.format.formatShort
 import com.example.eta.ui.theme.EtaTheme
 import com.example.eta.ui.theme.colorOf
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.datetime.DayOfWeek
@@ -74,30 +77,41 @@ internal fun SetupWeekStep(
     draft: RoutineSetup,
     onSavePlacement: (RoutinePlacement) -> Unit,
     onDeletePlacement: (String) -> Unit,
-    onSleepChange: (LocalTime, Duration) -> Unit,
+    onNightChange: (DayOfWeek, LocalTime, LocalTime) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var editing by remember { mutableStateOf<PlacementEdit?>(null) }
     var pendingNew by remember { mutableStateOf<RoutinePlacement?>(null) }
+    var editingNight by remember { mutableStateOf<DayOfWeek?>(null) }
     val horizontal = rememberScrollState()
-    val createPlacement by rememberUpdatedState<(DayOfWeek, LocalTime) -> Unit> { day, time ->
-        val created = draft.newPlacement(day, time)
-        pendingNew = created
-        editing = PlacementEdit(created, isNew = true)
-    }
+    val canPlace = draft.placeableRoutines.isNotEmpty()
+    val createPlacement by rememberUpdatedState<(DayOfWeek, LocalTime) -> Unit>(
+        fun(day: DayOfWeek, time: LocalTime) {
+            // Nothing to place until a routine other than sleep was chosen.
+            val created = draft.newPlacement(day, time) ?: return
+            pendingNew = created
+            editing = PlacementEdit(created, isNew = true)
+        },
+    )
 
     Column(
         modifier = modifier.fillMaxSize(),
         verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm),
     ) {
         EtaText(
-            text = "Tippe in den Kalender, um einen Termin einzutragen. Neue Termine dauern eine Stunde.",
+            text = if (canPlace) {
+                "Tippe in den Kalender, um einen Termin einzutragen. Neue Termine dauern eine Stunde."
+            } else {
+                "Du hast keine weitere Routine gewählt. Geh zurück, um Sport, Achtsamkeit oder " +
+                    "eine eigene Routine zu wählen — oder schließe das Setup mit deinen Nächten ab."
+            },
             style = EtaTheme.typography.body,
             color = EtaTheme.colors.textSecondary,
         )
         EtaButton(
             text = "Zeitplatz hinzufügen",
             style = EtaButtonStyle.Secondary,
+            enabled = canPlace,
             onClick = { createPlacement(DayOfWeek.MONDAY, LocalTime(9, 0)) },
             modifier = Modifier.semantics { contentDescription = "Zeitplatz hinzufügen" },
         )
@@ -150,13 +164,15 @@ internal fun SetupWeekStep(
                                 pendingNew = null
                                 editing = PlacementEdit(placement, isNew = false)
                             },
+                            onEditNight = { editingNight = it },
                         )
                     }
                 }
             }
         }
         EtaText(
-            text = "Schlaf ist täglich eingetragen. Änderungen gelten für alle Nächte.",
+            text = "Jede Nacht ist vorläufig nach deinen Schlafzeiten eingetragen. Tippe auf einen " +
+                "Schlafblock, um genau diese Nacht anzupassen.",
             style = EtaTheme.typography.caption,
             color = EtaTheme.colors.textSecondary,
         )
@@ -177,20 +193,13 @@ internal fun SetupWeekStep(
     editing?.let { edit ->
         PlacementEditor(
             edit = edit,
-            routines = draft.routines,
+            routines = draft.placeableRoutines,
             onDismiss = {
                 if (edit.isNew) pendingNew = null
                 editing = null
             },
-            onSave = { placement, isSleep ->
-                if (isSleep) {
-                    onSleepChange(placement.start, placement.duration)
-                    if (!edit.isNew && edit.placement.routineId != SLEEP_ROUTINE_ID) {
-                        onDeletePlacement(edit.placement.id)
-                    }
-                } else {
-                    onSavePlacement(placement)
-                }
+            onSave = { placement ->
+                onSavePlacement(placement)
                 pendingNew = null
                 editing = null
             },
@@ -198,6 +207,18 @@ internal fun SetupWeekStep(
                 onDeletePlacement(edit.placement.id)
                 pendingNew = null
                 editing = null
+            },
+        )
+    }
+
+    editingNight?.let { wakeDay ->
+        SleepEditor(
+            draft = draft,
+            wakeDay = wakeDay,
+            onDismiss = { editingNight = null },
+            onSave = { sleep, wake ->
+                onNightChange(wakeDay, sleep, wake)
+                editingNight = null
             },
         )
     }
@@ -219,6 +240,7 @@ private fun WeekGrid(
     pending: RoutinePlacement?,
     onCreate: (DayOfWeek, LocalTime) -> Unit,
     onEdit: (RoutinePlacement) -> Unit,
+    onEditNight: (DayOfWeek) -> Unit,
 ) {
     val latestCreate by rememberUpdatedState(onCreate)
     val allPlacements = draft.placements + listOfNotNull(pending)
@@ -259,22 +281,23 @@ private fun WeekGrid(
                     },
             )
         }
-        sleepSegments(draft).forEach { (day, range) ->
-            val endExclusive = range.last + 1
-            CalendarBlock(
-                label = "Schlafen",
-                weekday = day,
-                startMinute = range.first,
-                durationMinutes = endExclusive - range.first,
-                width = dayWidth,
-                lane = 0,
-                laneCount = 1,
-                color = EtaTheme.colors.sleep,
-                description = "Schlafen, ${day.formatLong()} ${minuteClock(range.first)} bis ${minuteClock(endExclusive % MINUTES_PER_DAY)}; täglich, antippen zum Ändern",
-                onClick = {
-                    onEdit(RoutinePlacement("sleep", SLEEP_ROUTINE_ID, day, draft.setup.sleepTime, draft.setup.sleepDuration()))
-                },
-            )
+        draft.sleepNights().forEach { sleepNight ->
+            sleepNight.spans().forEach { span ->
+                CalendarBlock(
+                    label = "Schlafen",
+                    weekday = span.weekday,
+                    startMinute = span.fromMinute,
+                    durationMinutes = span.toMinute - span.fromMinute,
+                    width = dayWidth,
+                    lane = 0,
+                    laneCount = 1,
+                    color = EtaTheme.colors.sleep,
+                    description = "Schlafen, ${span.weekday.formatLong()} ${minuteClock(span.fromMinute)} " +
+                        "bis ${minuteClock(span.toMinute % MINUTES_PER_DAY)}; Nacht zum " +
+                        "${sleepNight.wakeDay.formatLong()}, antippen zum Ändern",
+                    onClick = { onEditNight(sleepNight.wakeDay) },
+                )
+            }
         }
         segments(allPlacements, draft.routines).forEach { layout ->
             val segment = layout.segment
@@ -347,53 +370,30 @@ private fun CalendarBlock(
     }
 }
 
-private fun sleepSegments(draft: RoutineSetup): List<Pair<DayOfWeek, IntRange>> {
-    val start = draft.setup.sleepTime.hour * 60 + draft.setup.sleepTime.minute
-    val duration = draft.setup.sleepDuration().inWholeMinutes.toInt()
-    val end = start + duration
-    return WEEK.flatMap { day ->
-        if (end <= MINUTES_PER_DAY) {
-            listOf(day to (start until end))
-        } else {
-            listOf(
-                day to (start until MINUTES_PER_DAY),
-                WEEK[(day.ordinal + 1) % WEEK.size] to (0 until end - MINUTES_PER_DAY),
-            )
-        }
-    }
-}
-
 @Composable
 private fun PlacementEditor(
     edit: PlacementEdit,
     routines: List<SetupRoutine>,
     onDismiss: () -> Unit,
-    onSave: (RoutinePlacement, Boolean) -> Unit,
+    onSave: (RoutinePlacement) -> Unit,
     onDelete: () -> Unit,
 ) {
     var placement by remember(edit.placement.id) { mutableStateOf(edit.placement) }
     val selectedRoutine = routines.firstOrNull { it.id == placement.routineId } ?: routines.first()
-    val isSleep = selectedRoutine.id == SLEEP_ROUTINE_ID
     val endMinute = placement.start.toSecondOfDay() / 60 + placement.duration.inWholeMinutes.toInt()
     val endTime = LocalTime((endMinute % MINUTES_PER_DAY) / 60, endMinute % 60)
     val nextDay = endMinute >= MINUTES_PER_DAY
 
     EtaDialog(title = if (edit.isNew) "Zeitplatz" else "Zeitplatz bearbeiten", onDismiss = onDismiss) {
         EtaField(label = "Routine") {
-            if (!edit.isNew && edit.placement.routineId == SLEEP_ROUTINE_ID) {
-                EtaText(text = "Schlafen", style = EtaTheme.typography.body)
-            } else {
-                EtaChoice(
-                    options = routines.map { it to it.name },
-                    selected = selectedRoutine,
-                    onSelect = { placement = placement.copy(routineId = it.id) },
-                )
-            }
+            EtaChoice(
+                options = routines.map { it to it.name },
+                selected = selectedRoutine,
+                onSelect = { placement = placement.copy(routineId = it.id) },
+            )
         }
-        if (!isSleep) {
-            EtaField(label = "Wochentag") {
-                EtaWeekdayPicker(selected = placement.weekday, onSelect = { placement = placement.copy(weekday = it) }, days = WEEK)
-            }
+        EtaField(label = "Wochentag") {
+            EtaWeekdayPicker(selected = placement.weekday, onSelect = { placement = placement.copy(weekday = it) }, days = WEEK)
         }
         EtaField(label = "Beginn") {
             EtaTimePicker(value = placement.start, onValueChange = { placement = placement.copy(start = it) })
@@ -405,19 +405,87 @@ private fun PlacementEditor(
                 minimum = 15.minutes,
             )
         }
-        if (isSleep) {
-            EtaText(
-                text = "Diese Schlafzeit gilt täglich für alle Nächte.",
-                style = EtaTheme.typography.caption,
-                color = EtaTheme.colors.textSecondary,
-            )
-        }
-        if (!edit.isNew && !isSleep) {
+        if (!edit.isNew) {
             EtaButton(text = "Löschen", style = EtaButtonStyle.Secondary, onClick = onDelete, modifier = Modifier.fillMaxWidth())
         }
         Row(horizontalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
             EtaButton(text = "Abbrechen", style = EtaButtonStyle.Secondary, onClick = onDismiss)
-            EtaButton(text = "Speichern", onClick = { onSave(placement, isSleep) })
+            EtaButton(text = "Speichern", onClick = { onSave(placement) })
+        }
+    }
+}
+
+/**
+ * One night on its own: when this night starts and when it ends. Sleep cannot be
+ * deleted — somebody sleeps at least once in 24 hours — and cannot be moved to
+ * another day either, since the night belongs to the day it ends on; what changes
+ * is the hours. A night that would run into its neighbour is refused, because the
+ * hours of both would be counted as slept twice.
+ */
+@Composable
+private fun SleepEditor(
+    draft: RoutineSetup,
+    wakeDay: DayOfWeek,
+    onDismiss: () -> Unit,
+    onSave: (sleep: LocalTime, wake: LocalTime) -> Unit,
+) {
+    val current = draft.setup.nightEndingOn(wakeDay)
+    val pattern = draft.setup.patternNightEndingOn(wakeDay)
+    var sleep by remember(wakeDay) { mutableStateOf(current.sleep) }
+    var wake by remember(wakeDay) { mutableStateOf(current.wake) }
+    val same = sleep == wake
+    val night = SleepNight(wakeDay, NightTimes(sleep, sleep, wake))
+    val candidate = if (same) null else draft.withNight(wakeDay, sleep, wake)
+    val overlapping = candidate != null && wakeDay in candidate.overlappingSleep()
+    val awakeTooLong = candidate != null && candidate.setup.longestAwakeMinutes() > 24 * 60
+    val corrected = current.sleep != pattern.sleep || current.wake != pattern.wake
+
+    EtaDialog(title = "Schlaf bearbeiten", onDismiss = onDismiss) {
+        EtaText(text = "Nacht zum ${wakeDay.formatLong()}", style = EtaTheme.typography.heading)
+        EtaField(label = "Schlafen gehen") {
+            EtaTimePicker(value = sleep, onValueChange = { sleep = it })
+        }
+        EtaField(label = "Aufstehen") {
+            EtaTimePicker(value = wake, onValueChange = { wake = it })
+        }
+        when {
+            same -> EtaText(
+                text = "Schlafen gehen und Aufstehen dürfen nicht dieselbe Uhrzeit sein.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.warning,
+            )
+
+            overlapping -> EtaText(
+                text = "Diese Nacht überschneidet sich mit einer anderen. Wähle andere Zeiten.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.warning,
+            )
+
+            awakeTooLong -> EtaText(
+                text = "Zwischen zwei Schlafblöcken liegen mehr als 24 Stunden. " +
+                    "Passe auch die benachbarten Nächte an, bevor du das Setup abschließt.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.warning,
+            )
+
+            else -> EtaText(
+                text = "${night.startDay.formatLong()} ${sleep.formatClock()} bis " +
+                    "${wakeDay.formatLong()} ${wake.formatClock()} · ${night.duration.formatShort()}",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textSecondary,
+            )
+        }
+        if (corrected) {
+            EtaButton(
+                text = "Wie die übrigen Tage",
+                style = EtaButtonStyle.Secondary,
+                onClick = { onSave(pattern.sleep, pattern.wake) },
+                modifier = Modifier.fillMaxWidth(),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
+            EtaButton(text = "Abbrechen", style = EtaButtonStyle.Secondary, onClick = onDismiss)
+            EtaButton(text = "Speichern", enabled = !same && !overlapping, onClick = { onSave(sleep, wake) })
         }
     }
 }

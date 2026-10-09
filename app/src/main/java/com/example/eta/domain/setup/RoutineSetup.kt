@@ -29,6 +29,11 @@ val SUGGESTED_SETUP_ROUTINES = listOf(
     SetupRoutine("mindfulness", "Achtsamkeit", Category.ACHTSAM, ItemRole.MINDFULNESS),
 )
 
+/** What a night is seeded with before the user says otherwise. */
+private val DEFAULT_WEEKDAY_NIGHT = NightTimes(LocalTime(23, 0), LocalTime(23, 0), LocalTime(7, 0))
+private val DEFAULT_WEEKEND_NIGHT = NightTimes(LocalTime(0, 0), LocalTime(0, 0), LocalTime(9, 0))
+
+/** One appointment of a selected routine on one weekday. Sleep is never one of these. */
 data class RoutinePlacement(
     val id: String,
     val routineId: String,
@@ -37,6 +42,41 @@ data class RoutinePlacement(
     val duration: Duration,
 )
 
+/**
+ * One night as the weekly calendar draws it: the sleep that **ends** on [wakeDay].
+ *
+ * Each wake day has a provisional night; the separate sleep-gap check enforces
+ * the 24-hour rule when their times change. [startDay] is the evening before,
+ * or the wake day itself where bedtime is after midnight.
+ */
+data class SleepNight(val wakeDay: DayOfWeek, val night: NightTimes) {
+    val startDay: DayOfWeek get() = wakeDay.shifted(Math.floorDiv(night.sleepOffset(), MINUTES_PER_DAY))
+    val start: LocalTime get() = night.sleep
+    val duration: Duration get() = night.sleepDuration()
+
+    /** The stretch as weekday spans: a night over midnight is two, never clipped. */
+    fun spans(): List<SetupSpan> {
+        val from = start.minuteOfDay()
+        val end = from + duration.inWholeMinutes.toInt()
+        return if (end <= MINUTES_PER_DAY) {
+            listOf(SetupSpan(SLEEP_ROUTINE.name, startDay, from, end))
+        } else {
+            listOf(
+                SetupSpan(SLEEP_ROUTINE.name, startDay, from, MINUTES_PER_DAY),
+                SetupSpan(SLEEP_ROUTINE.name, startDay.shifted(1), 0, end - MINUTES_PER_DAY),
+            )
+        }
+    }
+}
+
+/**
+ * The first-run draft: which routines were chosen, where they sit in the week, and
+ * the night underneath it all.
+ *
+ * Sleep is not a routine one places. The first page gives the weekday night and
+ * the weekend night; the calendar lays one provisional [SleepNight] per day from
+ * them, and each can then be corrected on its own (`UserSetup.nightOverrides`).
+ */
 data class RoutineSetup(
     val setup: UserSetup,
     val routines: List<SetupRoutine>,
@@ -45,7 +85,12 @@ data class RoutineSetup(
     companion object {
         fun draft(now: Instant): RoutineSetup = RoutineSetup(
             setup = UserSetup.draft(now).copy(
-                bedPrepTime = LocalTime(23, 0),
+                bedPrepTime = DEFAULT_WEEKDAY_NIGHT.bedPrep,
+                sleepTime = DEFAULT_WEEKDAY_NIGHT.sleep,
+                wakeTime = DEFAULT_WEEKDAY_NIGHT.wake,
+                weekendNight = DEFAULT_WEEKEND_NIGHT,
+                weekendDays = DEFAULT_WEEKEND,
+                nightOverrides = emptyMap(),
                 morningDuration = Duration.ZERO,
                 meals = MealPlan.DailyCooking(emptyList()),
                 housekeeping = null,
@@ -99,21 +144,27 @@ data class RoutineSetup(
         )
     }
 
-    fun newPlacement(weekday: DayOfWeek, start: LocalTime): RoutinePlacement = RoutinePlacement(
-        id = UUID.randomUUID().toString(),
-        routineId = routines.firstOrNull { it.id != SLEEP_ROUTINE_ID }?.id ?: SLEEP_ROUTINE_ID,
-        weekday = weekday,
-        start = start,
-        duration = 1.hours,
-    )
+    /** The routines that can be put into the calendar — everything but sleep. */
+    val placeableRoutines: List<SetupRoutine>
+        get() = routines.filter { it.id != SLEEP_ROUTINE_ID }
+
+    /** A one-hour placement of the first chosen routine; null while none was chosen. */
+    fun newPlacement(weekday: DayOfWeek, start: LocalTime): RoutinePlacement? {
+        val routine = placeableRoutines.firstOrNull() ?: return null
+        return RoutinePlacement(
+            id = UUID.randomUUID().toString(),
+            routineId = routine.id,
+            weekday = weekday,
+            start = start,
+            duration = 1.hours,
+        )
+    }
 
     fun withPlacement(placement: RoutinePlacement): RoutineSetup {
+        require(placement.routineId != SLEEP_ROUTINE_ID) { "Sleep is edited per night, not placed" }
         require(routines.any { it.id == placement.routineId }) { "Placement routine must be selected" }
         require(placement.duration >= 15.minutes && placement.duration <= 23.hours + 45.minutes) {
             "Placement duration must be between 15 minutes and 23 hours 45 minutes"
-        }
-        if (placement.routineId == SLEEP_ROUTINE_ID) {
-            return withSleep(placement.start, placement.duration)
         }
         val index = placements.indexOfFirst { it.id == placement.id }
         return if (index < 0) copy(placements = placements + placement)
@@ -122,18 +173,78 @@ data class RoutineSetup(
 
     fun withoutPlacement(id: String): RoutineSetup = copy(placements = placements.filterNot { it.id == id })
 
-    fun withSleep(start: LocalTime, duration: Duration): RoutineSetup {
-        require(duration >= 15.minutes && duration <= 23.hours + 45.minutes) {
-            "Sleep duration must be between 15 minutes and 23 hours 45 minutes"
+    // --- Sleep: the pattern from the first page ---------------------------------
+
+    /** The ordinary night, for the days that are not the weekend. No winding down: it is not asked. */
+    fun withWeekdayNight(sleep: LocalTime, wake: LocalTime): RoutineSetup {
+        requireDistinct(sleep, wake)
+        return withSetup(setup.copy(bedPrepTime = sleep, sleepTime = sleep, wakeTime = wake))
+    }
+
+    /** The night that ends on the weekend days. */
+    fun withWeekendNight(sleep: LocalTime, wake: LocalTime): RoutineSetup {
+        requireDistinct(sleep, wake)
+        return withSetup(setup.copy(weekendNight = NightTimes(sleep, sleep, wake)))
+    }
+
+    /**
+     * Which days are the weekend. Refuses none and refuses all seven: a weekend of
+     * no days is no weekend, and one of every day leaves no ordinary night to ask.
+     */
+    fun withWeekendDays(days: Set<DayOfWeek>): RoutineSetup {
+        if (days.isEmpty() || days.size == WEEK.size) return this
+        return withSetup(setup.copy(weekendDays = days))
+    }
+
+    // --- Sleep: the individual nights of the calendar ---------------------------
+
+    /**
+     * Sets the night that ends on [wakeDay] on its own. A night put back exactly
+     * where the pattern has it stops being a correction, so a later change to the
+     * pattern carries it along again.
+     */
+    fun withNight(wakeDay: DayOfWeek, sleep: LocalTime, wake: LocalTime): RoutineSetup {
+        requireDistinct(sleep, wake)
+        val pattern = setup.patternNightEndingOn(wakeDay)
+        val overrides = if (pattern.sleep == sleep && pattern.wake == wake) {
+            setup.nightOverrides - wakeDay
+        } else {
+            setup.nightOverrides + (wakeDay to NightTimes(sleep, sleep, wake))
         }
-        val wakeSecond = Math.floorMod(start.toSecondOfDay() + duration.inWholeSeconds.toInt(), 24 * 60 * 60)
-        return copy(setup = setup.copy(
-            bedPrepTime = start,
-            sleepTime = start,
-            wakeTime = LocalTime.fromSecondOfDay(wakeSecond),
-            weekendNight = null,
-            morningDuration = Duration.ZERO,
-        ))
+        return copy(setup = setup.copy(nightOverrides = overrides))
+    }
+
+    /** All seven nights of the week, one per wake day, in week order. */
+    fun sleepNights(): List<SleepNight> = WEEK.map { SleepNight(it, setup.nightEndingOn(it)) }
+
+    /**
+     * The wake days whose night runs into another night. Two nights on top of each
+     * other would count the same hours of sleep twice, so this is a reason not to
+     * finish, unlike an overlap with an ordinary routine, which is only a warning.
+     */
+    fun overlappingSleep(): Set<DayOfWeek> {
+        val nights = sleepNights().map { it to it.spans() }
+        return buildSet {
+            for (i in nights.indices) for (j in i + 1 until nights.size) {
+                if (nights[i].second.any { a -> nights[j].second.any { b -> a.overlaps(b) } }) {
+                    add(nights[i].first.wakeDay)
+                    add(nights[j].first.wakeDay)
+                }
+            }
+        }
+    }
+
+    private fun withSetup(next: UserSetup): RoutineSetup {
+        // Corrections that now equal the pattern stop being corrections.
+        val overrides = next.nightOverrides.filterNot { (day, night) ->
+            val pattern = next.patternNightEndingOn(day)
+            pattern.sleep == night.sleep && pattern.wake == night.wake
+        }
+        return copy(setup = next.copy(nightOverrides = overrides))
+    }
+
+    private fun requireDistinct(sleep: LocalTime, wake: LocalTime) {
+        require(sleep != wake) { "A night needs a bedtime different from the wake time" }
     }
 
     fun recurringItems(now: Instant): List<Item> = placements.mapNotNull { placement ->
@@ -152,24 +263,20 @@ data class RoutineSetup(
     }
 
     fun weeklySpans(): List<SetupSpan> = buildList {
-        WEEK.forEach { weekday ->
-            val night = setup.nightEndingOn(weekday)
-            val offset = night.sleepOffset()
-            val sleepDay = weekday.shifted(Math.floorDiv(offset, MINUTES_PER_DAY))
-            val sleepStart = LocalTime.fromSecondOfDay(Math.floorMod(offset, MINUTES_PER_DAY) * 60)
-            addAll(RoutinePlacement("sleep-$weekday", SLEEP_ROUTINE_ID, sleepDay, sleepStart, night.sleepDuration()).spans(SLEEP_ROUTINE))
-        }
+        sleepNights().forEach { addAll(it.spans()) }
         placements.forEach { placement ->
             routines.firstOrNull { it.id == placement.routineId }?.let { addAll(placement.spans(it)) }
         }
     }.sortedWith(compareBy({ WEEK.indexOf(it.weekday) }, { it.fromMinute }))
 
+    /** Overlaps of routines with each other and with sleep; sleep with sleep is [overlappingSleep]. */
     fun conflicts(): List<SetupConflict> {
         val spans = weeklySpans()
         return buildList {
             for (i in spans.indices) for (j in i + 1 until spans.size) {
                 val first = spans[i]
                 val second = spans[j]
+                if (first.label == SLEEP_ROUTINE.name && second.label == SLEEP_ROUTINE.name) continue
                 if (first.weekday == second.weekday && first.overlaps(second)) {
                     add(SetupConflict(first.weekday, first, second))
                 }
@@ -178,7 +285,7 @@ data class RoutineSetup(
     }
 
     val unscheduledRoutines: List<SetupRoutine>
-        get() = routines.filter { it.id != SLEEP_ROUTINE_ID && placements.none { p -> p.routineId == it.id } }
+        get() = placeableRoutines.filter { routine -> placements.none { it.routineId == routine.id } }
 }
 
 fun RoutinePlacement.spans(routine: SetupRoutine): List<SetupSpan> {

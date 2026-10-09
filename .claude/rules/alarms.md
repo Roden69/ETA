@@ -181,7 +181,7 @@ sleeping phone. If long notes are cut off, a short foreground service is the fix
 
 ### The wake alarm
 
-`UserSetup.wakeAlarm` is the switch, `wakeTime` the hour. **No second time**,
+`UserSetup.wakeAlarm` is the switch, `wakeTimeOn(weekday)` the hour. **No second time**,
 deliberately: the hour the planner shades as the end of the night and the hour the
 phone rings at cannot then drift apart. Off by default. This does not have to go
 through the Android clock app; what it takes:
@@ -217,9 +217,10 @@ Samsung, Xiaomi and others exempt their own clock unconditionally, so the
 the app. If the wake alarm proves unreliable on this phone, that row is the first
 thing to check, and the honest fallback is the system clock.
 
-**The weekend can ring later** since step 32: `nextWake` asks `wakeTimeOn(weekday)`
-day by day, so a `weekendNight` in the setup moves Saturday's and Sunday's alarm with
-the hour the planner shades. Still no time of the alarm's own — the drift that
-design avoids stays avoided. One weekend time for both days; a time per weekday
-would be the next step and nobody asked.
+**Each night can ring at its own hour.** `nextWake` asks `wakeTimeOn(weekday)` day by
+day. `nightEndingOn` resolves an individual `nightOverrides` entry first, then the
+weekend pattern, then the weekday pattern. Planner shading and the alarm therefore
+follow the same corrected night. Settings save reschedules the alarm as before.
+The next wake time for an individually edited night was checked on a physical phone;
+no ringing or sound was triggered by that smoke scenario.
 

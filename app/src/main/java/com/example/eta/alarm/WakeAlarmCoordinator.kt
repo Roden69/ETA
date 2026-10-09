@@ -17,7 +17,7 @@ import kotlinx.coroutines.launch
  * The wake alarm, from the switch in the settings to the ringing and back.
  *
  * Off unless the user asked for it: `UserSetup.wakeAlarm` is the switch, and
- * `wakeTime` is the hour, so the alarm cannot drift away from the hour the
+ * each night's wake time is the hour, so the alarm cannot drift away from the hour the
  * planner shades as the end of the night.
  *
  * Rescheduling follows the same rule as everything else in `alarm/` — it happens

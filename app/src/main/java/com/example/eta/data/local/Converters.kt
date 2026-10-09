@@ -8,6 +8,8 @@ import com.example.eta.domain.setup.MealPlan
 import com.example.eta.domain.setup.MindfulnessPlan
 import com.example.eta.domain.setup.NightTimes
 import com.example.eta.domain.setup.WeeklySlot
+import com.example.eta.domain.setup.decodeNightOverrides
+import com.example.eta.domain.setup.encodeNightOverrides
 import com.example.eta.domain.setup.WorkSchedule
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
@@ -111,6 +113,14 @@ class Converters {
 
     @ColumnTypeConverter
     fun stringToNightTimes(value: String?): NightTimes? = value?.let { NightTimes.decode(it) }
+
+    @ColumnTypeConverter
+    fun nightOverridesToString(value: Map<DayOfWeek, NightTimes>?): String? =
+        value?.let(::encodeNightOverrides)
+
+    @ColumnTypeConverter
+    fun stringToNightOverrides(value: String?): Map<DayOfWeek, NightTimes>? =
+        value?.let(::decodeNightOverrides)
 
     @ColumnTypeConverter
     fun workScheduleToString(value: WorkSchedule?): String? = value?.encode()

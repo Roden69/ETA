@@ -44,7 +44,7 @@ import com.example.eta.domain.setup.UserSetup
         Reward::class,
         RewardTask::class,
     ],
-    version = 27,
+    version = 28,
     exportSchema = true,
 )
 @ColumnTypeConverters(Converters::class)
@@ -849,6 +849,21 @@ val MIGRATION_26_27 = object : Migration(26, 27) {
         )
         connection.execSQL(
             "ALTER TABLE `user_setup` ADD COLUMN `unplannedPenaltyPerHour` REAL NOT NULL DEFAULT 1.5",
+        )
+    }
+}
+
+/**
+ * Version 28: individual nights.
+ *
+ * `user_setup.nightOverrides` holds the nights that differ from the weekday/weekend
+ * pattern as `DAY=bedPrep,sleep,wake` entries joined by `;`, in week order. Empty
+ * for every existing row — each night keeps following the pattern it had.
+ */
+val MIGRATION_27_28 = object : Migration(27, 28) {
+    override suspend fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "ALTER TABLE `user_setup` ADD COLUMN `nightOverrides` TEXT NOT NULL DEFAULT ''",
         )
     }
 }

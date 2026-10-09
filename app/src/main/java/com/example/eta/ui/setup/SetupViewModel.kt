@@ -5,14 +5,15 @@ import androidx.lifecycle.viewModelScope
 import com.example.eta.data.repository.SetupRepository
 import com.example.eta.domain.setup.RoutinePlacement
 import com.example.eta.domain.setup.RoutineSetup
+import com.example.eta.domain.setup.longestAwakeMinutes
 import com.example.eta.domain.setup.SetupRoutine
 import kotlin.time.Clock
-import kotlin.time.Duration
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
+import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalTime
 
 class SetupViewModel(
@@ -35,11 +36,24 @@ class SetupViewModel(
 
     fun deletePlacement(id: String) = _draft.update { it.withoutPlacement(id) }
 
-    fun changeSleep(start: LocalTime, duration: Duration) = _draft.update { it.withSleep(start, duration) }
+    /** The ordinary night from the first page; it lays one provisional night per weekday. */
+    fun changeWeekdayNight(sleep: LocalTime, wake: LocalTime) =
+        _draft.update { if (sleep == wake) it else it.withWeekdayNight(sleep, wake) }
+
+    fun changeWeekendNight(sleep: LocalTime, wake: LocalTime) =
+        _draft.update { if (sleep == wake) it else it.withWeekendNight(sleep, wake) }
+
+    fun changeWeekendDays(days: Set<DayOfWeek>) = _draft.update { it.withWeekendDays(days) }
+
+    /** One night of the calendar on its own, the one that ends on [wakeDay]. */
+    fun changeNight(wakeDay: DayOfWeek, sleep: LocalTime, wake: LocalTime) =
+        _draft.update { if (sleep == wake) it else it.withNight(wakeDay, sleep, wake) }
 
     fun finish() {
         val draft = _draft.value
-        if (_saving.value || draft.unscheduledRoutines.isNotEmpty()) return
+        if (_saving.value || draft.unscheduledRoutines.isNotEmpty() ||
+            draft.overlappingSleep().isNotEmpty() || draft.setup.longestAwakeMinutes() > 24 * 60
+        ) return
         _saving.value = true
         viewModelScope.launch {
             try {

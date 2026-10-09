@@ -85,15 +85,49 @@ fun DayOfWeek.shifted(days: Int): DayOfWeek = WEEK[Math.floorMod(WEEK.indexOf(th
 /** The night of an ordinary day — the three times the questionnaire always asks for. */
 val UserSetup.weekdayNight: NightTimes get() = NightTimes(bedPrepTime, sleepTime, wakeTime)
 
-/** The night that ends on [weekday]: the weekend's own where one was given. */
-fun UserSetup.nightEndingOn(weekday: DayOfWeek): NightTimes =
+/** The night that would end on [weekday] without an individual correction. */
+fun UserSetup.patternNightEndingOn(weekday: DayOfWeek): NightTimes =
     weekendNight?.takeIf { weekday in weekendDays } ?: weekdayNight
+
+/**
+ * The night that ends on [weekday]: its own correction where one was made, else
+ * the weekend's night where one was given, else the ordinary one.
+ */
+fun UserSetup.nightEndingOn(weekday: DayOfWeek): NightTimes =
+    nightOverrides[weekday] ?: patternNightEndingOn(weekday)
+
+/** In week order, so the same corrections are always the same string. */
+fun encodeNightOverrides(overrides: Map<DayOfWeek, NightTimes>): String =
+    WEEK.filter { it in overrides }.joinToString(";") { "${it.name}=${overrides.getValue(it).encode()}" }
+
+fun decodeNightOverrides(value: String): Map<DayOfWeek, NightTimes> =
+    value.split(';').filter { it.isNotEmpty() }.associate { entry ->
+        val (day, night) = entry.split('=', limit = 2)
+        DayOfWeek.valueOf(day) to NightTimes.decode(night)
+    }
 
 fun UserSetup.wakeTimeOn(weekday: DayOfWeek): LocalTime = nightEndingOn(weekday).wake
 
 /** All seven nights of a week together, each at its own length. */
 fun UserSetup.sleepMinutesPerWeek(): Int =
     WEEK.sumOf { nightEndingOn(it).sleepDuration().inWholeMinutes.toInt() }
+
+/** Longest sleep-free interval in the repeating week, including Sunday into Monday. */
+fun UserSetup.longestAwakeMinutes(): Int {
+    val sleeps = WEEK.mapIndexed { index, day ->
+        val night = nightEndingOn(day)
+        val midnight = index * MINUTES_PER_DAY
+        (midnight + night.sleepOffset()) until (midnight + night.wake.minuteOfDay())
+    }.sortedBy { it.first }
+    var end = sleeps.first().last + 1
+    var longest = 0
+    for (index in 1 until sleeps.size) {
+        val sleep = sleeps[index]
+        longest = maxOf(longest, sleep.first - end)
+        end = maxOf(end, sleep.last + 1)
+    }
+    return maxOf(longest, sleeps.first().first + WEEK.size * MINUTES_PER_DAY - end)
+}
 
 /**
  * What a weekend night is seeded with when the option is switched on: an hour
