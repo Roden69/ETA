@@ -4,24 +4,20 @@ import com.example.eta.domain.model.RecurrenceRule
 import com.example.eta.domain.planning.nextWake
 import com.example.eta.domain.planning.sleepStretches
 import com.example.eta.domain.setup.DEFAULT_WEEKEND
-import com.example.eta.domain.setup.MealPlan
 import com.example.eta.domain.setup.NightTimes
 import com.example.eta.domain.setup.SetupLabels
-import com.example.eta.domain.setup.SetupPart
 import com.example.eta.domain.setup.UserSetup
 import com.example.eta.domain.setup.WEEK
-import com.example.eta.domain.setup.WorkSchedule
 import com.example.eta.domain.setup.conflicts
 import com.example.eta.domain.setup.freeMinutesPerWeek
 import com.example.eta.domain.setup.isOwnedBySettings
 import com.example.eta.domain.setup.recurringItems
-import com.example.eta.domain.setup.skipping
 import com.example.eta.domain.setup.sleepMinutesPerWeek
 import com.example.eta.domain.setup.suggestedWeekendNight
 import com.example.eta.domain.setup.wakeTimeOn
 import com.example.eta.domain.setup.weeklySpans
-import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
+import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDateTime
@@ -32,7 +28,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The weekend's own night, the skipped pages, and what the defaults promise. */
+/** The weekend's own night and what the defaults promise. */
 class WeekendNightTest {
 
     private val now = Instant.parse("2026-09-01T08:00:00Z")
@@ -41,6 +37,8 @@ class WeekendNightTest {
 
     /** Weekdays 23:00–07:00, weekend 00:30–09:00 with winding down from 23:30. */
     private val lateWeekend = draft.copy(
+        bedPrepTime = LocalTime(22, 0),
+        morningDuration = 45.minutes,
         weekendNight = NightTimes(
             bedPrep = LocalTime(23, 30),
             sleep = LocalTime(0, 30),
@@ -127,7 +125,8 @@ class WeekendNightTest {
 
     @Test
     fun `with every night alike the two stay single daily tasks`() {
-        val owned = draft.recurringItems(now).filter { isOwnedBySettings(it.id) }
+        val configured = draft.copy(bedPrepTime = LocalTime(22, 0), morningDuration = 45.minutes)
+        val owned = configured.recurringItems(now).filter { isOwnedBySettings(it.id) }
         assertEquals(setOf("setup:bedprep", "setup:morning"), owned.map { it.id }.toSet())
         assertTrue(owned.all { it.recurrenceRule == RecurrenceRule.Daily })
         assertFalse(isOwnedBySettings("setup:sport-tuesday"))
@@ -148,25 +147,7 @@ class WeekendNightTest {
         assertNull(nextWake(lateWeekend, LocalDateTime(2026, 9, 4, 12, 0)))
     }
 
-    @Test
-    fun `a skipped page lays nothing down and collides with nothing`() {
-        val everything = draft.skipping(SetupPart.entries.toSet())
-        val names = everything.recurringItems(now).map { it.name }.toSet()
 
-        assertEquals(setOf(SetupLabels.BED_PREP, SetupLabels.MORNING), names)
-        assertEquals(emptyList<Any>(), everything.conflicts())
-        assertEquals(Duration.ZERO, everything.socialTimePerWeek)
-        assertEquals(WorkSchedule.None, everything.work)
-        assertEquals(MealPlan.DailyCooking(emptyList()), everything.meals)
-    }
-
-    @Test
-    fun `skipping one page leaves the others as they were answered`() {
-        val noSport = draft.skipping(setOf(SetupPart.SPORT))
-        assertNull(noSport.sport)
-        assertEquals(draft.copy(sport = null), noSport)
-        assertEquals(draft, draft.skipping(emptySet()))
-    }
 
     /** The reported case: to bed at one on Saturday night, which is Sunday. */
     private val oneOClock = draft.copy(

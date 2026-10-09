@@ -1,86 +1,47 @@
 package com.example.eta.ui.setup
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.Modifier
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
-import com.example.eta.domain.recurrence.recurringOverlaps
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.semantics.contentDescription
+import androidx.compose.ui.semantics.semantics
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.example.eta.domain.setup.SetupRoutine
+import com.example.eta.domain.setup.RoutineSetup
+import com.example.eta.domain.setup.SLEEP_ROUTINE
+import com.example.eta.domain.setup.SLEEP_ROUTINE_ID
+import com.example.eta.domain.setup.SUGGESTED_SETUP_ROUTINES
 import com.example.eta.ui.settings.CalendarSettingsBox
 import com.example.eta.ui.settings.CalendarSettingsViewModel
-import com.example.eta.domain.setup.SetupConflict
-import com.example.eta.domain.setup.SetupPart
 import com.example.eta.ui.components.EtaButton
 import com.example.eta.ui.components.EtaButtonStyle
+import com.example.eta.ui.components.EtaChoice
+import com.example.eta.ui.components.EtaField
 import com.example.eta.ui.components.EtaProgressBar
 import com.example.eta.ui.components.EtaScreen
 import com.example.eta.ui.components.EtaSurface
 import com.example.eta.ui.components.EtaText
-import com.example.eta.ui.format.formatLong
+import com.example.eta.ui.format.formatClock
+import com.example.eta.ui.components.EtaTextField
 import com.example.eta.ui.theme.EtaTheme
-import kotlinx.coroutines.launch
 
-/**
- * The pages, in order.
- *
- * Not an enum any more: since step 46 the list is **made from the answers**. The
- * fixed pages come first — the welcome with Google, the night, the planning
- * times, free time — then the checklist of standing tasks, and after it one
- * page for every box ticked there: the five the questionnaire has pages of its
- * own for, and the user's own. The progress line, the pager and both buttons
- * count this one list.
- */
-private sealed interface SetupPage {
-    val key: String
-
-    data object Welcome : SetupPage { override val key = "welcome" }
-    data object Sleep : SetupPage { override val key = "sleep" }
-    data object Planning : SetupPage { override val key = "planning" }
-    data object FreeTime : SetupPage { override val key = "freetime" }
-    data object Tasks : SetupPage { override val key = "tasks" }
-    data class BuiltIn(val part: SetupPart) : SetupPage { override val key = "part:${part.name}" }
-    data class Custom(val id: String) : SetupPage { override val key = "custom:$id" }
-    data object Summary : SetupPage { override val key = "summary" }
-}
-
-/** The five the checklist offers, in the order their pages follow it. */
-private val CHECKLIST_PARTS = listOf(
-    SetupPart.MEALS, SetupPart.HOUSEKEEPING, SetupPart.SPORT, SetupPart.MINDFULNESS, SetupPart.WORK,
-)
-
-private fun pagesFor(skipped: Set<SetupPart>, custom: List<CustomTask>): List<SetupPage> =
-    listOf(SetupPage.Welcome, SetupPage.Sleep, SetupPage.Planning, SetupPage.FreeTime, SetupPage.Tasks) +
-        CHECKLIST_PARTS.filter { it !in skipped }.map { SetupPage.BuiltIn(it) } +
-        custom.map { SetupPage.Custom(it.id) } +
-        SetupPage.Summary
-
-/**
- * The questionnaire that runs before the app is usable.
- *
- * It swipes rather than navigates, in the spirit of the rest of the app, and the
- * buttons move the same pager — so a user who prefers tapping and one who prefers
- * flicking end up in the same place.
- *
- * Its last act is not a page: "Fertig" lays the week down and hands over to the
- * week as a timetable — see `SetupWeekReview` — where what collides can be
- * dragged apart instead of typed apart.
- */
+/** Routine selection and a weekly calendar, followed by the shared week review. */
 @Composable
 fun SetupScreen(
     viewModel: SetupViewModel,
@@ -92,149 +53,83 @@ fun SetupScreen(
     calendarViewModel: CalendarSettingsViewModel? = null,
 ) {
     val draft by viewModel.draft.collectAsStateWithLifecycle()
-    val outlook by viewModel.outlook.collectAsStateWithLifecycle()
     val saving by viewModel.saving.collectAsStateWithLifecycle()
-    val skipped by viewModel.skipped.collectAsStateWithLifecycle()
-    val custom by viewModel.custom.collectAsStateWithLifecycle()
-    val morningSteps by viewModel.morningSteps.collectAsStateWithLifecycle()
-    val pages = pagesFor(skipped, custom)
-    val pagerState = rememberPagerState { pages.size }
-    val scope = rememberCoroutineScope()
-    val current = pages[pagerState.currentPage.coerceIn(0, pages.lastIndex)]
+    var planningWeek by rememberSaveable { mutableStateOf(false) }
+    var routineName by rememberSaveable { mutableStateOf("") }
 
-    EtaScreen(modifier = modifier) {
-        Column(Modifier.fillMaxSize()) {
-            SetupHeader(
-                stepNumber = pagerState.currentPage + 1,
-                stepCount = pages.size,
-                modifier = Modifier.padding(
-                    start = EtaTheme.spacing.lg,
-                    end = EtaTheme.spacing.lg,
-                    top = EtaTheme.spacing.lg,
-                ),
+    BackHandler(enabled = planningWeek && !saving) { planningWeek = false }
+
+    EtaScreen(modifier = modifier.imePadding()) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(EtaTheme.spacing.lg),
+            verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md),
+        ) {
+            EtaText(
+                text = "Einrichtung · Schritt ${if (planningWeek) 2 else 1} von 2",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textMuted,
             )
+            EtaProgressBar(fraction = if (planningWeek) 1f else 0.5f)
 
-            HorizontalPager(
-                state = pagerState,
-                // By what the page is, not where it stands: ticking a box in
-                // the checklist inserts pages behind it, and a page's scroll
-                // position and half-typed fields must stay with that page.
-                key = { pages.getOrNull(it)?.key ?: it },
-                modifier = Modifier
-                    .weight(1f)
-                    .fillMaxWidth(),
-            ) { index ->
-                Column(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
-                        .padding(EtaTheme.spacing.lg),
-                    verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.lg),
-                ) {
-                    when (val page = pages.getOrNull(index)) {
-                        // The welcome is the top of the first page, not a page
-                        // of its own; under it, the one thing worth doing
-                        // before any question.
-                        SetupPage.Welcome -> {
-                            WelcomeStep()
-                            if (calendarViewModel != null) {
-                                EtaText(
-                                    text = "Wenn du magst, verbinde zuerst deinen Google Kalender. " +
-                                        "Deine Termine werden dir dann in den Planungsphasen " +
-                                        "angeboten. Das geht auch später in den Einstellungen.",
-                                    style = EtaTheme.typography.body,
-                                    color = EtaTheme.colors.textSecondary,
-                                )
-                                CalendarSettingsBox(calendarViewModel)
-                            }
-                        }
-
-                        SetupPage.Sleep -> SleepStep(
-                            draft = draft,
-                            onChange = viewModel::update,
-                            morningSteps = morningSteps,
-                            onMorningSteps = viewModel::setMorningSteps,
-                        )
-
-                        SetupPage.Planning -> PlanningStep(draft, viewModel::update)
-
-                        SetupPage.FreeTime -> if (SetupPart.FREE_TIME in skipped) {
-                            SkippedStep(title = "Freie Zeit", onAnswer = { viewModel.unskip(SetupPart.FREE_TIME) })
-                        } else {
-                            FreeTimeStep(draft, viewModel::update)
-                        }
-
-                        SetupPage.Tasks -> RecurringTasksStep(
-                            skipped = skipped,
-                            custom = custom.map { it.id to it.name },
-                            onToggle = { part, on -> if (on) viewModel.unskip(part) else viewModel.skip(part) },
-                            onAdd = viewModel::addCustom,
-                            onRemove = viewModel::removeCustom,
-                        )
-
-                        is SetupPage.BuiltIn -> when (page.part) {
-                            SetupPart.MEALS -> MealsStep(draft, viewModel::update)
-                            SetupPart.HOUSEKEEPING -> HousekeepingStep(draft, viewModel::update)
-                            SetupPart.SPORT -> SportStep(draft, viewModel::update)
-                            SetupPart.MINDFULNESS -> MindfulnessStep(draft, viewModel::update)
-                            SetupPart.WORK -> WorkStep(draft, viewModel::update)
-                            SetupPart.FREE_TIME -> Unit
-                        }
-
-                        is SetupPage.Custom -> custom.firstOrNull { it.id == page.id }?.let { task ->
-                            val overlaps = remember(task.attributes, outlook.generated) {
-                                recurringOverlaps(task.attributes.slots(), outlook.generated)
-                            }
-                            CustomTaskStep(
-                                name = task.name,
-                                attributes = task.attributes,
-                                overlaps = overlaps,
-                                onName = { name -> viewModel.updateCustom(task.id) { it.copy(name = name) } },
-                                onAttributes = { answers ->
-                                    viewModel.updateCustom(task.id) { it.copy(attributes = answers) }
-                                },
-                            )
-                        }
-
-                        SetupPage.Summary -> SummaryStep(outlook)
-                        null -> Unit
-                    }
-
-                    // The concept asks for double bookings to be flagged as they
-                    // arise, so the warning travels along instead of waiting for
-                    // the summary.
-                    ConflictBox(conflicts = outlook.conflicts)
-
-                    Spacer(Modifier.size(EtaTheme.spacing.xl))
+            if (planningWeek) {
+                SetupWeekStep(
+                    draft = draft,
+                    onSavePlacement = viewModel::savePlacement,
+                    onDeletePlacement = viewModel::deletePlacement,
+                    onSleepChange = viewModel::changeSleep,
+                    modifier = Modifier.weight(1f),
+                )
+                val unplanned = draft.unscheduledRoutines
+                if (unplanned.isNotEmpty()) {
+                    EtaText(
+                        text = "Noch ohne Zeitplatz: ${unplanned.joinToString { it.name }}. " +
+                            "Plane sie ein oder gehe zurück, um sie abzuwählen.",
+                        style = EtaTheme.typography.caption,
+                        color = EtaTheme.colors.warning,
+                    )
                 }
+                Row(horizontalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
+                    EtaButton(
+                        text = "Zurück",
+                        style = EtaButtonStyle.Secondary,
+                        enabled = !saving,
+                        onClick = { planningWeek = false },
+                    )
+                    EtaButton(
+                        text = if (saving) "Wird gespeichert …" else "Fertig",
+                        modifier = Modifier.weight(1f),
+                        enabled = !saving && unplanned.isEmpty(),
+                        onClick = viewModel::finish,
+                    )
+                }
+            } else {
+                RoutineSelectionStep(
+                    draft = draft,
+                    routineName = routineName,
+                    onNameChange = { routineName = it },
+                    onAdd = {
+                        viewModel.addRoutine(routineName)
+                        routineName = ""
+                    },
+                    onToggle = viewModel::toggleRoutine,
+                    onRemove = viewModel::removeRoutine,
+                    calendarViewModel = calendarViewModel,
+                    modifier = Modifier.weight(1f),
+                )
+                EtaButton(
+                    text = "Bestätigen und Woche planen",
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = {
+                        // A typed routine must not disappear just because Add was not tapped.
+                        if (routineName.isNotBlank()) viewModel.addRoutine(routineName)
+                        routineName = ""
+                        planningWeek = true
+                    },
+                )
             }
-
-            SetupFooter(
-                isFirst = pagerState.currentPage == 0,
-                isLast = pagerState.currentPage >= pages.lastIndex,
-                saving = saving,
-                // Free time keeps its own way out; the standing tasks are
-                // chosen on the checklist, so their pages have none.
-                onSkip = if (current == SetupPage.FreeTime && SetupPart.FREE_TIME !in skipped) {
-                    {
-                        viewModel.skip(SetupPart.FREE_TIME)
-                        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
-                    }
-                } else {
-                    null
-                },
-                onBack = {
-                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
-                },
-                onNext = {
-                    scope.launch { pagerState.animateScrollToPage(pagerState.currentPage + 1) }
-                },
-                onFinish = viewModel::finish,
-            )
         }
     }
 }
-
 /**
  * The questionnaire's last screen: the standing week it has just laid down, as
  * the timetable the dashboard has under "Woche → Generell" — with a box at the
@@ -319,136 +214,99 @@ private val WEEK_REVIEW_NOTES = listOf(
 )
 
 @Composable
-private fun SetupHeader(stepNumber: Int, stepCount: Int, modifier: Modifier = Modifier) {
+private fun RoutineSelectionStep(
+    draft: RoutineSetup,
+    routineName: String,
+    onNameChange: (String) -> Unit,
+    onAdd: () -> Unit,
+    onToggle: (SetupRoutine) -> Unit,
+    onRemove: (String) -> Unit,
+    calendarViewModel: CalendarSettingsViewModel?,
+    modifier: Modifier = Modifier,
+) {
     Column(
-        modifier = modifier.fillMaxWidth(),
-        verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm),
+        modifier = modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.lg),
     ) {
+        EtaText(text = "Deine Routinen", style = EtaTheme.typography.title)
         EtaText(
-            text = "Einrichtung · Schritt $stepNumber von $stepCount",
-            style = EtaTheme.typography.caption,
-            color = EtaTheme.colors.textMuted,
+            text = "Welche Routinen gehören zu deiner Woche? Wähle Vorschläge aus " +
+                "oder ergänze deine eigenen. Auf der nächsten Seite legst du ihre Zeiten fest.",
+            style = EtaTheme.typography.body,
+            color = EtaTheme.colors.textSecondary,
         )
-        EtaProgressBar(fraction = stepNumber.toFloat() / stepCount)
-    }
-}
-
-/** Every double booking the answers so far produce, named in plain German. */
-@Composable
-private fun ConflictBox(conflicts: List<SetupConflict>, modifier: Modifier = Modifier) {
-    if (conflicts.isEmpty()) return
-
-    EtaSurface(
-        modifier = modifier.fillMaxWidth(),
-        borderColor = EtaTheme.colors.warning,
-    ) {
-        Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
-            EtaText(
-                text = if (conflicts.size == 1) {
-                    "Eine Doppeltbelegung"
-                } else {
-                    "${conflicts.size} Doppeltbelegungen"
-                },
-                style = EtaTheme.typography.heading,
-                color = EtaTheme.colors.warning,
-            )
-            conflicts.take(MAX_SHOWN_CONFLICTS).forEach { conflict ->
+        EtaSurface(modifier = Modifier.fillMaxWidth()) {
+            Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.xs)) {
+                EtaText(text = "${SLEEP_ROUTINE.name} · immer dabei", style = EtaTheme.typography.heading)
                 EtaText(
-                    text = "${conflict.weekday.formatLong()}: " +
-                        "${conflict.first.label} und ${conflict.second.label} " +
-                        "überschneiden sich um ${conflict.toMinute - conflict.fromMinute} min.",
-                    style = EtaTheme.typography.body,
+                    text = "Täglich von ${draft.setup.sleepTime.formatClock()} bis " +
+                        "${draft.setup.wakeTime.formatClock()} Uhr. " +
+                        "Du kannst die Schlafzeiten im Wochenplan anpassen.",
+                    style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.textSecondary,
                 )
             }
-            if (conflicts.size > MAX_SHOWN_CONFLICTS) {
-                EtaText(
-                    text = "… und ${conflicts.size - MAX_SHOWN_CONFLICTS} weitere.",
-                    style = EtaTheme.typography.caption,
-                    color = EtaTheme.colors.textMuted,
-                )
+        }
+        SUGGESTED_SETUP_ROUTINES.forEach { routine ->
+            key(routine.id) {
+                EtaField(label = routine.name) {
+                    EtaChoice(
+                        options = listOf(false to "Nicht auswählen", true to "Auswählen"),
+                        selected = draft.routines.any { it.id == routine.id },
+                        onSelect = { selected ->
+                            if (selected != draft.routines.any { it.id == routine.id }) onToggle(routine)
+                        },
+                        modifier = Modifier.semantics { contentDescription = "Routine ${routine.name}" },
+                    )
+                }
             }
-            EtaText(
-                text = "Du kannst trotzdem fortfahren und das später lösen: am Ende der " +
-                    "Einrichtung siehst du deine Woche als Stundenplan und kannst die " +
-                    "Tasks dort einfach auseinanderziehen.",
-                style = EtaTheme.typography.caption,
-                color = EtaTheme.colors.textMuted,
+        }
+        EtaField(label = "Eigene Routine", hint = "Zum Beispiel Yoga machen oder Lernen.") {
+            EtaTextField(
+                value = routineName,
+                onValueChange = onNameChange,
+                placeholder = "Name der Routine",
+                onImeAction = { if (routineName.isNotBlank()) onAdd() },
+                modifier = Modifier.semantics { contentDescription = "Eigene Routine" },
             )
         }
-    }
-}
-
-private const val MAX_SHOWN_CONFLICTS = 6
-
-@Composable
-private fun SetupFooter(
-    isFirst: Boolean,
-    isLast: Boolean,
-    saving: Boolean,
-    onSkip: (() -> Unit)?,
-    onBack: () -> Unit,
-    onNext: () -> Unit,
-    onFinish: () -> Unit,
-) {
-    Column(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(EtaTheme.spacing.lg),
-        verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md),
-    ) {
-    // On a line of its own: three buttons in one row do not fit a phone, and the
-    // last one is then laid out at no width at all.
-    if (onSkip != null) {
         EtaButton(
-            text = "Überspringen",
+            text = "Routine hinzufügen",
             style = EtaButtonStyle.Secondary,
-            modifier = Modifier.fillMaxWidth(),
-            onClick = onSkip,
+            enabled = routineName.isNotBlank(),
+            onClick = onAdd,
         )
-    }
-    Row(
-        modifier = Modifier.fillMaxWidth(),
-        horizontalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md),
-    ) {
-        if (!isFirst) {
-            EtaButton(
-                text = "Zurück",
-                style = EtaButtonStyle.Secondary,
-                onClick = onBack,
-            )
+        draft.routines.filter { routine ->
+            routine.id != SLEEP_ROUTINE_ID && SUGGESTED_SETUP_ROUTINES.none { it.id == routine.id }
+        }.forEach { routine ->
+            key(routine.id) {
+                EtaSurface(modifier = Modifier.fillMaxWidth()) {
+                    Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
+                        EtaText(text = routine.name, style = EtaTheme.typography.heading)
+                        EtaButton(
+                            text = "Entfernen",
+                            style = EtaButtonStyle.Secondary,
+                            onClick = { onRemove(routine.id) },
+                            modifier = Modifier.semantics { contentDescription = "${routine.name} entfernen" },
+                        )
+                    }
+                }
+            }
         }
-        Spacer(Modifier.weight(1f))
-        if (isLast) {
-            EtaButton(
-                text = if (saving) "Wird angelegt …" else "Anlegen und Woche ansehen",
-                enabled = !saving,
-                onClick = onFinish,
-            )
-        } else {
-            EtaButton(text = "Weiter", onClick = onNext)
-        }
-    }
-    }
-}
-
-/** A page the user left out, with the way back in. */
-@Composable
-private fun SkippedStep(title: String, onAnswer: () -> Unit) {
-    EtaSurface(modifier = Modifier.fillMaxWidth()) {
-        Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
-            EtaText(text = title, style = EtaTheme.typography.title)
+        EtaText(
+            text = "Deine Zeitplätze wiederholen sich jede Woche. " +
+                "Routinen und Planungszeiten kannst du später unter Listen und Einstellungen ändern.",
+            style = EtaTheme.typography.caption,
+            color = EtaTheme.colors.textMuted,
+        )
+        calendarViewModel?.let { calendar ->
             EtaText(
-                text = "Übersprungen — dafür wird nichts angelegt. Du kannst es später " +
-                    "jederzeit im Reiter Listen als wiederkehrende Aufgabe nachholen.",
+                text = "Verbinde deinen Google Kalender, um Termine schon in der ersten " +
+                    "Planungsphase zu übernehmen. Das geht auch später in den Einstellungen.",
                 style = EtaTheme.typography.body,
                 color = EtaTheme.colors.textSecondary,
             )
-            EtaButton(
-                text = "Doch beantworten",
-                style = EtaButtonStyle.Secondary,
-                onClick = onAnswer,
-            )
+            CalendarSettingsBox(calendar)
         }
     }
 }
