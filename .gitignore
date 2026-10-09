@@ -6,6 +6,11 @@ captures/
 .externalNativeBuild/
 .cxx/
 
+# Documentation environment and Python bytecode
+.venv-docs/
+__pycache__/
+*.pyc
+
 # Machine-specific: the SDK path, written by Android Studio on first open
 local.properties
 
