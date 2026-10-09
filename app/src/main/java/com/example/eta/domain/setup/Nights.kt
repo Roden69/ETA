@@ -158,9 +158,13 @@ fun UserSetup.withNightMode(mode: NightMode): UserSetup = when (mode) {
     NightMode.PER_DAY -> copy(nightsByDay = allNights())
 }
 
-/** The answers with the night that ends on [day] changed, and that one alone. */
+/**
+ * The answers with the night that ends on [day] changed, and that one alone.
+ * A sparse correction for that day is dropped, since it would otherwise shadow
+ * the new night.
+ */
 fun UserSetup.withNightEndingOn(day: DayOfWeek, night: NightTimes): UserSetup =
-    copy(nightsByDay = allNights() + (day to night))
+    copy(nightsByDay = allNights() + (day to night), nightOverrides = nightOverrides - day)
 
 /**
  * The night that ends on [date], a one-off change for that date included.
@@ -245,19 +249,71 @@ fun NightTimes.withBedPrepNextDay(nextDay: Boolean): NightTimes {
 private const val SNAP_LEAD_MINUTES = 15
 
 /**
- * The night that ends on [weekday]: its own where every weekday has one, else
- * the weekend's where one was given.
+ * The night that would end on [weekday] without an individual correction: its
+ * own where every weekday has one, else the weekend's where one was given, else
+ * the ordinary one.
  */
-fun UserSetup.nightEndingOn(weekday: DayOfWeek): NightTimes {
+fun UserSetup.patternNightEndingOn(weekday: DayOfWeek): NightTimes {
     nightsByDay?.let { return it[weekday] ?: weekdayNight }
     return weekendNight?.takeIf { weekday in weekendDays } ?: weekdayNight
 }
+
+/**
+ * The night that ends on [weekday]: its own correction where one was made, else
+ * the pattern's night.
+ */
+fun UserSetup.nightEndingOn(weekday: DayOfWeek): NightTimes =
+    nightOverrides[weekday] ?: patternNightEndingOn(weekday)
+
+/**
+ * The night that ends on [day] set on its own to [sleep] and [wake]. Put back
+ * exactly where the pattern has it, it is no correction and is dropped, so a
+ * later change to the pattern carries it along again.
+ *
+ * The caller refuses [sleep] equal to [wake].
+ */
+fun UserSetup.withNightOverride(day: DayOfWeek, sleep: LocalTime, wake: LocalTime): UserSetup {
+    val pattern = patternNightEndingOn(day)
+    val overrides = if (pattern.sleep == sleep && pattern.wake == wake) {
+        nightOverrides - day
+    } else {
+        nightOverrides + (day to NightTimes(sleep, sleep, wake))
+    }
+    return copy(nightOverrides = overrides)
+}
+
+/** In week order, so the same corrections are always the same string. */
+fun encodeNightOverrides(overrides: Map<DayOfWeek, NightTimes>): String =
+    WEEK.filter { it in overrides }.joinToString(";") { "${it.name}=${overrides.getValue(it).encode()}" }
+
+fun decodeNightOverrides(value: String): Map<DayOfWeek, NightTimes> =
+    value.split(';').filter { it.isNotEmpty() }.associate { entry ->
+        val (day, night) = entry.split('=', limit = 2)
+        DayOfWeek.valueOf(day) to NightTimes.decode(night)
+    }
 
 fun UserSetup.wakeTimeOn(weekday: DayOfWeek): LocalTime = nightEndingOn(weekday).wake
 
 /** All seven nights of a week together, each at its own length. */
 fun UserSetup.sleepMinutesPerWeek(): Int =
     WEEK.sumOf { nightEndingOn(it).sleepDuration().inWholeMinutes.toInt() }
+
+/** Longest sleep-free interval in the repeating week, including Sunday into Monday. */
+fun UserSetup.longestAwakeMinutes(): Int {
+    val sleeps = WEEK.mapIndexed { index, day ->
+        val night = nightEndingOn(day)
+        val midnight = index * MINUTES_PER_DAY
+        (midnight + night.sleepOffset()) until (midnight + night.wake.minuteOfDay())
+    }.sortedBy { it.first }
+    var end = sleeps.first().last + 1
+    var longest = 0
+    for (index in 1 until sleeps.size) {
+        val sleep = sleeps[index]
+        longest = maxOf(longest, sleep.first - end)
+        end = maxOf(end, sleep.last + 1)
+    }
+    return maxOf(longest, sleeps.first().first + WEEK.size * MINUTES_PER_DAY - end)
+}
 
 /**
  * What a weekend night is seeded with when the option is switched on: an hour

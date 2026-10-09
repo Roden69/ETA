@@ -52,7 +52,7 @@ import com.example.eta.domain.setup.UserSetup
         SleepLog::class,
         Note::class,
     ],
-    version = 32,
+    version = 33,
     exportSchema = true,
 )
 @ColumnTypeConverters(Converters::class)
@@ -994,5 +994,20 @@ val MIGRATION_30_31 = object : Migration(30, 31) {
 val MIGRATION_31_32 = object : Migration(31, 32) {
     override suspend fun migrate(connection: SQLiteConnection) {
         connection.execSQL("ALTER TABLE `items` ADD COLUMN `color` INTEGER")
+    }
+}
+
+/**
+ * Version 33: individual nights.
+ *
+ * `user_setup.nightOverrides` holds the nights that differ from the weekday/weekend
+ * pattern as `DAY=bedPrep,sleep,wake` entries joined by `;`, in week order. Empty
+ * for every existing row — each night keeps following the pattern it had.
+ */
+val MIGRATION_32_33 = object : Migration(32, 33) {
+    override suspend fun migrate(connection: SQLiteConnection) {
+        connection.execSQL(
+            "ALTER TABLE `user_setup` ADD COLUMN `nightOverrides` TEXT NOT NULL DEFAULT ''",
+        )
     }
 }

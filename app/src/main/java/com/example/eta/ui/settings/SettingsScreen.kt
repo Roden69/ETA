@@ -1527,7 +1527,7 @@ private fun DebugBox(onReset: () -> Unit) {
 /**
  * Eta's own wake alarm.
  *
- * It rings at the setup's `wakeTime` rather than at a time of its own, so the
+ * It rings at each configured night's wake time rather than at a time of its own, so the
  * hour the planner shades as the end of the night and the hour the phone rings
  * at can never drift apart. Off by default — an app that starts waking someone
  * because they answered a questionnaire has overstepped.
@@ -1538,8 +1538,12 @@ private fun WakeAlarmBox(setup: UserSetup, onChange: OnSetupChange) {
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = "Weckruf", style = EtaTheme.typography.heading)
             // As many hours as the week has: one, the weekend's beside it, or
-            // one per weekday, which is too many to list in a sentence.
-            val hours = when (setup.nightMode) {
+            // one per weekday, which is too many to list in a sentence. A night
+            // of its own moves the hour by day, so the card names none.
+            val individual = setup.nightOverrides.isNotEmpty()
+            val hours = if (individual) {
+                "zur Aufstehzeit des jeweiligen Tages"
+            } else when (setup.nightMode) {
                 NightMode.SAME -> "um ${setup.wakeTime.formatClock()} Uhr"
                 NightMode.WEEKEND -> "um ${setup.wakeTime.formatClock()}, am Wochenende um " +
                     "${setup.weekendNight?.wake?.formatClock()} Uhr"
@@ -1556,7 +1560,7 @@ private fun WakeAlarmBox(setup: UserSetup, onChange: OnSetupChange) {
             EtaChoice(
                 options = listOf(
                     false to "Kein Weckruf",
-                    true to if (setup.nightMode == NightMode.SAME) {
+                    true to if (setup.nightMode == NightMode.SAME && !individual) {
                         "Jeden Tag um ${setup.wakeTime.formatClock()} wecken"
                     } else {
                         "Jeden Tag zur Aufstehzeit wecken"

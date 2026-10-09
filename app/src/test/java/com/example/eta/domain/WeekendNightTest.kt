@@ -7,15 +7,20 @@ import com.example.eta.domain.setup.DEFAULT_WEEKEND
 import com.example.eta.domain.setup.NightTimes
 import com.example.eta.domain.setup.SetupLabels
 import com.example.eta.domain.setup.UserSetup
+import com.example.eta.domain.setup.allNights
 import com.example.eta.domain.setup.WEEK
 import com.example.eta.domain.setup.conflicts
 import com.example.eta.domain.setup.freeMinutesPerWeek
+import com.example.eta.domain.setup.nightEndingOn
 import com.example.eta.domain.setup.isOwnedBySettings
 import com.example.eta.domain.setup.recurringItems
 import com.example.eta.domain.setup.sleepMinutesPerWeek
 import com.example.eta.domain.setup.suggestedWeekendNight
+import com.example.eta.domain.setup.weekdayNight
 import com.example.eta.domain.setup.wakeTimeOn
 import com.example.eta.domain.setup.weeklySpans
+import com.example.eta.domain.setup.withNightEndingOn
+import com.example.eta.domain.setup.withNightOverride
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
@@ -235,5 +240,67 @@ class WeekendNightTest {
         // 5 × 8 h and 2 × 8,5 h.
         assertEquals(5 * 480 + 2 * 510, sleep.sumOf { it.minutes })
         assertEquals(WEEK.toSet(), sleep.map { it.weekday }.toSet())
+    }
+
+    @Test
+    fun `a night of its own moves that day's morning, the wake alarm and the week's sleep`() {
+        val corrected = draft.copy(
+            morningDuration = 45.minutes,
+            wakeAlarm = true,
+            nightOverrides = mapOf(
+                DayOfWeek.TUESDAY to NightTimes(LocalTime(21, 0), LocalTime(21, 0), LocalTime(5, 30)),
+            ),
+        )
+        val owned = corrected.recurringItems(now).filter { isOwnedBySettings(it.id) }
+
+        assertEquals(LocalTime(5, 30), owned.single { it.id == "setup:morning-tuesday" }.startTime)
+        assertEquals(LocalTime(7, 0), owned.single { it.id == "setup:morning-wednesday" }.startTime)
+        // 2026-09-07 is a Monday; the next wake-up is Tuesday's, at the corrected hour.
+        assertEquals(
+            LocalDateTime(2026, 9, 8, 5, 30),
+            nextWake(corrected, LocalDateTime(2026, 9, 7, 12, 0)),
+        )
+        // Six nights of 8 h and Tuesday's of 8,5 h.
+        assertEquals(6 * 480 + 510, corrected.sleepMinutesPerWeek())
+    }
+
+    @Test
+    fun `resetting a correction over a per-day night restores that day's own night and leaves the others`() {
+        val explicit = WEEK.associateWith { day ->
+            if (day == DayOfWeek.TUESDAY) {
+                NightTimes(LocalTime(22, 0), LocalTime(22, 0), LocalTime(6, 30))
+            } else {
+                draft.weekdayNight
+            }
+        }
+        val perDay = draft.copy(nightsByDay = explicit)
+
+        val corrected = perDay.withNightOverride(DayOfWeek.TUESDAY, LocalTime(21, 0), LocalTime(5, 0))
+        assertEquals(LocalTime(5, 0), corrected.nightEndingOn(DayOfWeek.TUESDAY).wake)
+        (WEEK - DayOfWeek.TUESDAY).forEach { day ->
+            assertEquals(explicit.getValue(day), corrected.nightEndingOn(day))
+        }
+
+        val reset = corrected.withNightOverride(DayOfWeek.TUESDAY, LocalTime(22, 0), LocalTime(6, 30))
+        assertTrue(reset.nightOverrides.isEmpty())
+        assertEquals(explicit, reset.allNights())
+        assertEquals(explicit.getValue(DayOfWeek.TUESDAY), reset.nightEndingOn(DayOfWeek.TUESDAY))
+    }
+
+    @Test
+    fun `a day-specific edit replaces a sparse correction on that day and keeps corrections elsewhere`() {
+        val wednesdayOverride = NightTimes(LocalTime(0, 0), LocalTime(0, 30), LocalTime(8, 0))
+        val overridden = draft.copy(
+            nightOverrides = mapOf(
+                DayOfWeek.TUESDAY to NightTimes(LocalTime(21, 0), LocalTime(21, 0), LocalTime(5, 0)),
+                DayOfWeek.WEDNESDAY to wednesdayOverride,
+            ),
+        )
+        val late = NightTimes(LocalTime(23, 0), LocalTime(0, 0), LocalTime(7, 30))
+
+        val changed = overridden.withNightEndingOn(DayOfWeek.TUESDAY, late)
+        assertEquals(late, changed.nightEndingOn(DayOfWeek.TUESDAY))
+        assertEquals(mapOf(DayOfWeek.WEDNESDAY to wednesdayOverride), changed.nightOverrides)
+        assertEquals(wednesdayOverride, changed.nightEndingOn(DayOfWeek.WEDNESDAY))
     }
 }

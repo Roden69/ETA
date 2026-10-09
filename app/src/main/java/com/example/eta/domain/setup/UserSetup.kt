@@ -353,6 +353,13 @@ data class UserSetup(
      * Always all seven — see `allNights`.
      */
     val nightsByDay: Map<DayOfWeek, NightTimes>? = null,
+    /**
+     * Nights that differ from the weekday/weekend pattern, by the weekday they
+     * **end** on — one correction per night, so a single odd night does not need
+     * a weekend of its own. Empty for every setup from before this existed; a night
+     * missing here follows the pattern, see `nightEndingOn`.
+     */
+    val nightOverrides: Map<DayOfWeek, NightTimes> = emptyMap(),
     /** How much of the morning belongs to getting going, starting at [wakeTime]. */
     val morningDuration: Duration,
     val meals: MealPlan,

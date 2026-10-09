@@ -79,39 +79,28 @@ returns false for both, so the caller falls back to `play`. The settings page
 "Ansagen" is called **"Audio"** and opens with `AudioModeBox`, applied at once.
 **The wake alarm asks none of it.**
 
-#### The setup, rebuilt
+#### Setup integration after the routine-onboarding rebase
 
-`SetupPage` is a list **made from the answers**, not an enum:
+The first-run questionnaire has been replaced by the two confirmed steps in
+`setup.md`: routines and sleep, then the weekly calendar. Its `SetupPage`,
+`SetupPart`, checklist-specific pages and custom-task pages no longer exist.
+The optional Google connection is retained on the first page.
 
-1. **Welcome**, with `CalendarSettingsBox` — Google before the first question.
-2. **Schlaf und Morgen**, with a **"Folgetag"** box under "Bettfertig machen"
-   and "Schlafen gehen" (`NextDayBox`) and the **morning routine's steps**
-   (`SleepStep(morningSteps, onMorningSteps)`; the settings pass none).
-3. **Planungsphasen**, unchanged. 4. **Freie Zeit**, unchanged, with its own
-   "Überspringen".
-5. **Wiederkehrende Tasks** (`RecurringTasksStep`): the five as checkboxes —
-   **a box unticked is `SetupPart` skipped**, the mechanism step 32 had — and
-   the user's own (`CustomTask`), added by name.
-6. One page per ticked box: the five keep their own pages, a custom one is
-   `CustomTaskStep` — a name and `RecurringAttributeFields`.
-7. Summary, then "Anlegen und Woche ansehen".
+- **"Folgetag" remains derived, not stored**, in the shared settings `SleepStep`.
+  `withSleepNextDay` moves bedtime while keeping winding-down length;
+  `withBedPrepNextDay` moves winding down and bedtime across midnight as needed.
+  `SetupAndRhythmTest` covers both.
+- **Morning steps remain editable in settings and Lists.** First-run setup does
+  not silently create a morning task or winding-down task.
+- **The standing-week review remains after completion.**
+  `SetupViewModel.weekReview` is set before `SetupRepository.complete` publishes
+  the setup row. `EtaApp` shows `SetupWeekReview` before the tutorial: the
+  dashboard timetable, "Generell" only, appointments visible, with the existing
+  four-page explanation. The flag remains in memory only.
+- **Individual first-run nights use sparse corrections** over the standing
+  pattern. The upstream full per-weekday schedule and next-day settings stay
+  supported; schema 33 adds the correction column without changing schemas 28–32.
 
-- **"Folgetag" is derived, not stored.** An hour before getting up *is* after
-  midnight. The box ticks itself when such an hour is picked, and ticking it by
-  hand **moves the hour**: `withSleepNextDay` (winding down follows, length
-  kept), `withBedPrepNextDay` (the bedtime follows across midnight where it was
-  still in the evening). `SetupAndRhythmTest` pins both.
-- **`finish()`**: `complete` → `saveMorningSteps` (the routine's task has to
-  exist first) → `createGroup` per custom task.
-- **The last screen is not a page**: `SetupViewModel.weekReview` is set
-  *before* `complete` — storing the answers is what swaps the root screen — and
-  `EtaApp` then shows `SetupWeekReview` before the tutorial: the dashboard's
-  timetable, "Generell" only, "Termine anzeigen" on, with a four-page box at
-  its foot (the week, the lock, Aktuell/Generell and why "Aktuell" is grey,
-  where to find it again). In memory only: a process that dies there lands on
-  the dashboard.
-- Conflicts on a page still say so, and now say they can be dragged apart on
-  that last screen.
 
 **Verified by the compiler, the suite (694; 10 in `SetupAndRhythmTest`),
 `assembleRelease`, `lint` and the migration against `32.json`.** Nobody has seen

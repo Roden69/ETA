@@ -6,10 +6,13 @@ import com.example.eta.domain.setup.DailySlot
 import com.example.eta.domain.setup.HousekeepingPlan
 import com.example.eta.domain.setup.MealPlan
 import com.example.eta.domain.setup.MindfulnessPlan
+import com.example.eta.domain.setup.NightTimes
 import com.example.eta.domain.setup.TimeSpan
 import com.example.eta.domain.setup.WeeklySlot
 import com.example.eta.domain.setup.WorkBlock
 import com.example.eta.domain.setup.WorkSchedule
+import com.example.eta.domain.setup.decodeNightOverrides
+import com.example.eta.domain.setup.encodeNightOverrides
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.datetime.DayOfWeek
@@ -127,5 +130,18 @@ class SetupEncodingTest {
     fun `the daily recurrence rule survives the round trip`() {
         val rule: RecurrenceRule = RecurrenceRule.Daily
         assertEquals(rule, RecurrenceRule.decode(rule.encode()))
+    }
+
+    @Test
+    fun `individual nights survive the round trip and decode persisted values`() {
+        val nights = mapOf(
+            DayOfWeek.FRIDAY to NightTimes(LocalTime(0, 15), LocalTime(1, 0), LocalTime(9, 0)),
+            DayOfWeek.TUESDAY to NightTimes(LocalTime(21, 0), LocalTime(21, 0), LocalTime(5, 30)),
+        )
+        val encoded = encodeNightOverrides(nights)
+
+        assertEquals(nights, decodeNightOverrides(encoded))
+        assertEquals(nights, decodeNightOverrides("TUESDAY=75600,75600,19800;FRIDAY=900,3600,32400"))
+        assertEquals(emptyMap<DayOfWeek, NightTimes>(), decodeNightOverrides(encodeNightOverrides(emptyMap())))
     }
 }

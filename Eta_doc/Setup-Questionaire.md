@@ -3,13 +3,19 @@
 Das erste Setup besteht nach der Einführung aus zwei Seiten. Es ersetzt den
 bisherigen Fragebogen; bestehende Nutzer behalten ihre Einstellungen und Routinen.
 
-## 1. Routinen auswählen
+## 1. Routinen und Schlaf
 
-- **Schlafen** ist fest dabei und kann nicht abgewählt werden.
 - **Sport** und **Achtsamkeit** werden zur optionalen Auswahl vorgeschlagen.
 - Ein eigenes Eingabefeld ergänzt weitere Routinen, etwa **Yoga machen** oder
   **Lernen**. Weitere Namen können nacheinander hinzugefügt werden.
 - Doppelte oder leere Namen erzeugen keine zusätzlichen Routinen.
+- **Schlafen** ist immer dabei und wird nicht ausgewählt oder eingeplant wie die
+  anderen Routinen. Die Seite fragt, wann man schläft:
+  - **Unter der Woche:** Schlafen gehen und Aufstehen (vorbelegt 23:00 bis 07:00 Uhr)
+  - **Am Wochenende:** Schlafen gehen und Aufstehen (vorbelegt 00:00 bis 09:00 Uhr)
+  - **Welche Tage das Wochenende sind** (vorbelegt Samstag und Sonntag; gemeint sind
+    die Tage, an denen man nach diesen Zeiten aufsteht — der Abend davor gehört dazu)
+  - Schlafen gehen und Aufstehen dürfen nicht dieselbe Uhrzeit sein.
 - „Bestätigen und Woche planen“ übernimmt die Auswahl und öffnet die Wochenansicht.
   Ein noch im Eingabefeld stehender Name wird dabei ebenfalls übernommen.
 
@@ -30,18 +36,41 @@ vertikal, die Wochentage auf kleinen Bildschirmen horizontal durchscrollen.
 - Doppeltbelegungen werden angezeigt. Überlappende Zeitplätze bleiben einzeln
   auswählbar; eine bewusste Überschneidung verhindert den Abschluss nicht.
 - „Zeitplatz hinzufügen“ ist eine Alternative zum direkten Antippen des Rasters.
+  Ist außer Schlafen keine Routine gewählt, gibt es nichts einzuplanen; die Seite
+  sagt das.
 
-**Schlafen** ist täglich von 23:00 bis 07:00 Uhr vorbelegt. Ein Schlafblock kann
-angetippt werden, um Beginn und Dauer zu ändern; diese Änderung gilt für **alle
-Nächte**. Schlafblöcke können nicht gelöscht oder in andere Routinen umgewandelt
-werden. Abweichende Wochenendschlafzeiten lassen sich später in den Einstellungen
-festlegen.
+### Schlaf: jede Nacht einmal, jede einzeln anpassbar
+
+Es muss mindestens einmal in 24 Stunden geschlafen werden — **wann**, legt man selbst
+fest. Schlaf hängt deshalb an keiner festen Uhrzeit:
+
+- Aus den Angaben der ersten Seite entsteht für **jeden Tag eine vorläufige Nacht**
+  im Kalender: sieben Nächte, jede gehört zu dem Tag, an dem sie endet.
+- Antippen eines Schlafblocks öffnet genau diese Nacht: Schlafen gehen und Aufstehen
+  lassen sich einzeln ändern, alle anderen Nächte bleiben, wie sie sind. „Wie die
+  übrigen Tage“ nimmt eine geänderte Nacht zurück.
+- Schlaf kann nicht gelöscht und nicht auf einen anderen Tag verschoben werden; es
+  ändern sich nur die Zeiten.
+- Zwei Nächte dürfen sich nicht überschneiden, sonst würde dieselbe Zeit doppelt als
+  Schlaf zählen. Der Editor lässt das nicht zu; entsteht es durch die erste Seite,
+  nennt die Wochenseite die betroffenen Nächte und „Fertig“ bleibt gesperrt.
+- Zwischen dem Ende eines Schlafblocks und dem nächsten Beginn dürfen höchstens
+  24 Stunden liegen, auch über den Wechsel von Sonntag auf Montag. Sieben
+  Schlafblöcke allein reichen dafür nicht: Zu lange Abstände werden angezeigt und
+  verhindern „Fertig“. Die Einstellungen prüfen diese Grenze beim Speichern ebenfalls.
+- Ändert man die Zeiten der ersten Seite nachträglich, folgen alle Nächte, die nicht
+  einzeln angepasst wurden. Einzeln angepasste Nächte behalten ihre Zeiten.
+- Die einzelnen Nächte stehen auch in den Einstellungen unter Schlaf („Einzelne
+  Nächte“) und können dort geändert oder zurückgesetzt werden. Der Weckruf klingelt
+  zur Aufstehzeit der jeweiligen Nacht.
 
 „Fertig“ schließt das Setup ab, sobald jede ausgewählte Routine mindestens einen
-Zeitplatz hat. Nicht eingeplante Routinen werden benannt; über „Zurück“ können sie
-abgewählt oder ergänzt werden. Die Zeitplätze werden als wöchentlich wiederkehrende
-Aufgaben gespeichert und anschließend im normalen Planer verwendet. Schlaf bleibt
-Schlafzeit-Konfiguration und ist keine abzuhakende Aufgabe.
+Zeitplatz hat, keine zwei Nächte aufeinanderliegen und keine Schlafpause länger als
+24 Stunden ist. Nicht eingeplante Routinen werden benannt; über „Zurück“ können sie
+abgewählt oder ergänzt werden. Die
+Zeitplätze werden als wöchentlich wiederkehrende Aufgaben gespeichert und
+anschließend im normalen Planer verwendet. Schlaf bleibt Schlafzeit-Konfiguration
+und ist keine abzuhakende Aufgabe.
 
 Nicht ausgewählte Routinen werden nicht automatisch ergänzt. Weitere Anpassungen
 erfolgen später unter Listen und Einstellungen. Die Planungszeiten beginnen mit

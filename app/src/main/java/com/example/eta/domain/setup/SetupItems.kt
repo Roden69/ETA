@@ -33,7 +33,7 @@ private val SETTINGS_OWNED_KEYS = listOf("bedprep", "morning")
 
 /**
  * Whether [id] is one of them. With every night alike each is one daily
- * definition (`setup:bedprep`); with a weekend of its own there is one per night,
+ * definition (`setup:bedprep`); with nights that differ there is one per night,
  * named after the day that night ends on (`setup:bedprep-saturday`).
  */
 fun isOwnedBySettings(id: String): Boolean = SETTINGS_OWNED_KEYS.any { key ->
@@ -113,7 +113,7 @@ fun UserSetup.recurringItems(now: Instant): List<Item> {
         }
     }
 
-    if (nightMode == NightMode.SAME) {
+    if (nightMode == NightMode.SAME && nightOverrides.isEmpty()) {
         daily("bedprep", SetupLabels.BED_PREP, null, bedPrepTime, bedPrepDuration(), ItemRole.BED_PREP)
         daily("morning", SetupLabels.MORNING, null, wakeTime, morningDuration, ItemRole.MORNING)
     } else {
