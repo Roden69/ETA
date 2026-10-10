@@ -1,0 +1,25 @@
+Licensing status
+================
+
+No project-wide license is granted for this repository.
+
+This repository is a fork of:
+https://github.com/Erbsenherr/Eta_productivity_application
+
+The upstream project does not specify a project-wide license. Permission to
+create this fork must not be interpreted as a grant of an MIT, Apache, GPL,
+or other general-purpose license for the upstream work or this repository.
+This notice does not grant any additional permissions.
+
+Copyright in the original work and subsequent contributions remains with the
+respective copyright holders. Except where a separate license or permission
+applies, all rights are reserved, subject to rights provided by applicable law.
+Any use, modification, or redistribution requiring permission must be authorized
+by the relevant rights holders.
+
+A project-wide open-source license can only be added with the necessary
+permission from the affected rights holders. This includes permission covering
+bundled images, sounds, and other assets, not only source code.
+
+Third-party dependencies and files with their own license notices remain subject
+to their respective license terms. This notice does not replace those terms.

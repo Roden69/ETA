@@ -1,0 +1,51 @@
+[project]
+site_name = "ETA · Dokumentation"
+site_description = "Gemeinsame Projekt-, Entwicklungs- und Fachdokumentation für Menschen und KI-Agenten"
+repo_url = "https://github.com/Roden69/ETA"
+edit_uri = ""
+docs_dir = "build/documentation/source"
+site_dir = "build/documentation/site"
+nav = [
+  { "Start" = "index.md" },
+  { "Projekt" = [
+    { "Architektur" = "architecture.md" },
+    { "Entwicklung und Prüfung" = "development.md" },
+    { "Dokumentation pflegen" = "workflow.md" },
+    { "Dokumentationsentscheidung" = "decisions/0001-docs-as-code.md" },
+  ] },
+  { "Produktspezifikationen" = "specifications/index.md" },
+  { "Fachnotizen" = "notes/index.md" },
+  { "Generierte Projektreferenz" = "reference/project.md" },
+  { "Änderungsnotizen" = "changes/index.md" },
+  { "Historisches Archiv" = "history/index.md" },
+]
+
+[project.theme]
+language = "de"
+font = false
+features = ["navigation.sections", "navigation.top", "content.code.copy", "search.highlight"]
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: light)"
+scheme = "default"
+primary = "indigo"
+accent = "indigo"
+toggle = { icon = "lucide/moon", name = "Dunkles Farbschema" }
+
+[[project.theme.palette]]
+media = "(prefers-color-scheme: dark)"
+scheme = "slate"
+primary = "indigo"
+accent = "indigo"
+toggle = { icon = "lucide/sun", name = "Helles Farbschema" }
+
+[project.markdown_extensions.admonition]
+[project.markdown_extensions.tables]
+[project.markdown_extensions.toc]
+permalink = true
+
+[project.markdown_extensions."pymdownx.superfences"]
+
+[project.validation]
+invalid_links = true
+invalid_link_anchors = true

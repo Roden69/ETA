@@ -1,0 +1,65 @@
+{
+  "schema_version": 1,
+  "repository_url": "https://github.com/Roden69/ETA",
+  "collections": [
+    {
+      "source": "Eta_doc",
+      "output": "specifications",
+      "title": "Produktspezifikationen",
+      "kind": "specification",
+      "status": "current",
+      "include": ["*.md"],
+      "exclude": []
+    },
+    {
+      "source": ".claude/rules",
+      "output": "notes",
+      "title": "Fachnotizen",
+      "kind": "subject-note",
+      "status": "current",
+      "include": ["*.md"],
+      "exclude": ["step-*.md", "steps-*.md"]
+    },
+    {
+      "source": ".claude/rules",
+      "output": "history",
+      "title": "Historische Entwicklungsnotizen",
+      "kind": "development-history",
+      "status": "historical",
+      "include": ["step-*.md", "steps-*.md"],
+      "exclude": []
+    },
+    {
+      "source": "patchnotes",
+      "output": "changes",
+      "title": "Änderungsnotizen",
+      "kind": "release-history",
+      "status": "historical",
+      "include": ["*.md"],
+      "exclude": [],
+      "descending": true
+    }
+  ],
+  "topics": [
+    {"id": "database", "paths": ["app/src/**/data/local/**", "app/src/**/domain/model/**", "app/schemas/**"], "documents": [".claude/rules/database.md", "docs/architecture.md"]},
+    {"id": "setup", "paths": ["app/src/**/domain/setup/**", "app/src/**/ui/setup/**"], "documents": [".claude/rules/setup.md", "Eta_doc/Setup-Questionaire.md"]},
+    {"id": "planner", "paths": ["app/src/**/ui/planner/**", "app/src/**/domain/planning/**"], "documents": [".claude/rules/day-planner.md", ".claude/rules/step-20-22.md", "Eta_doc/Planungsphase.md"]},
+    {"id": "dashboard", "paths": ["app/src/**/ui/dashboard/**"], "documents": [".claude/rules/dashboard.md", "Eta_doc/Dashboard.md"]},
+    {"id": "lists", "paths": ["app/src/**/ui/lists/**"], "documents": [".claude/rules/lists.md", ".claude/rules/step-25-wochenschema.md", "Eta_doc/Konzept.md"]},
+    {"id": "week-planning", "paths": ["app/src/**/ui/weekplanner/**", "app/src/**/domain/weekplanning/**"], "documents": [".claude/rules/week-planning.md", "Eta_doc/Planungsphase.md"]},
+    {"id": "reevaluation", "paths": ["app/src/**/ui/reevaluation/**", "app/src/**/domain/reevaluation/**", "app/src/**/ReevaluationService.kt", "app/src/**/DayClosingService.kt"], "documents": [".claude/rules/streak-reevaluation.md", "Eta_doc/Tägliche Reevaluation.md"]},
+    {"id": "points-and-contracts", "paths": ["app/src/**/domain/reward/**", "app/src/**/domain/contract/**", "app/src/**/ui/contracts/**", "app/src/**/ui/rewards/**"], "documents": [".claude/rules/contracts.md", ".claude/rules/step-35-belohnomat.md", "Eta_doc/Belohnungssystem.md", "Eta_doc/Selbstverträge.md"]},
+    {"id": "alarms", "paths": ["app/src/**/alarm/**", "app/src/**/ui/reminders/**", "app/src/**/domain/reminder/**", "app/src/**/domain/pomodoro/**", "sounds/**", "app/src/main/res/raw/**", "app/src/main/AndroidManifest.xml"], "documents": [".claude/rules/alarms.md", ".claude/rules/step-18-standing-schedule.md"]},
+    {"id": "recurrence-and-growth", "paths": ["app/src/**/domain/recurrence/**", "app/src/**/domain/growth/**", "app/src/**/ui/growth/**", "app/src/**/ScheduleMaintenance.kt", "app/src/**/RecurringTaskService.kt"], "documents": [".claude/rules/step-18-standing-schedule.md", ".claude/rules/step-19-24-growth.md", "docs/architecture.md"]},
+    {"id": "subtasks", "paths": ["app/src/**/domain/subtask/**", "app/src/**/ui/subtasks/**", "app/src/**/ui/attributes/**", "app/src/**/*Signature*.kt"], "documents": [".claude/rules/step-23-subtasks.md", ".claude/rules/quickadd-attributes.md"]},
+    {"id": "quick-add", "paths": ["app/src/**/ui/quickadd/**", "app/src/**/ui/concretize/**", "app/src/**/widget/**"], "documents": [".claude/rules/quickadd-attributes.md", "Eta_doc/ToDo-Karten.md"]},
+    {"id": "settings-and-backup", "paths": ["app/src/**/ui/settings/**", "app/src/**/data/backup/**"], "documents": [".claude/rules/settings.md", "docs/development.md"]},
+    {"id": "calendar", "paths": ["app/src/**/data/calendar/**", "app/src/**/ui/calendar/**"], "documents": [".claude/rules/google-calendar.md", "docs/architecture.md"]},
+    {"id": "vacation", "paths": ["app/src/**/domain/vacation/**", "app/src/**/ui/vacation/**"], "documents": [".claude/rules/vacation.md"]},
+    {"id": "ui-foundation", "paths": ["app/src/**/ui/components/**", "app/src/**/ui/theme/**", "app/src/**/ui/root/**", "app/src/**/ui/format/**", "images/**"], "documents": [".claude/rules/ui-foundation.md", ".claude/rules/step-30-designs.md", "docs/architecture.md"]},
+    {"id": "build-and-ci", "paths": ["*.gradle.kts", "gradle/**", "gradle.properties", "gradlew", "gradlew.bat", ".github/workflows/**", "app/build.gradle.kts"], "documents": ["docs/development.md"]},
+    {"id": "documentation", "paths": ["docs/**", "Eta_doc/**", ".claude/rules/**", "scripts/**", "zensical.toml", "requirements-docs.txt", "README.md", "AGENTS.md", ".gitignore", ".github/pull_request_template.md"], "documents": ["docs/workflow.md", "docs/decisions/0001-docs-as-code.md"]},
+    {"id": "repository-notes", "paths": ["patchnotes/**", "update.txt", "LICENSE", "CLAUDE.md", ".omp/**"], "documents": ["docs/workflow.md", "docs/README.md"]},
+    {"id": "application-fallback", "fallback": true, "paths": ["app/**"], "documents": ["docs/architecture.md", "docs/development.md"]}
+  ]
+}
