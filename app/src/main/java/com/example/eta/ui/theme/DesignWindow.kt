@@ -2,11 +2,11 @@ package com.example.eta.ui.theme
 
 import android.content.res.Configuration
 import android.graphics.Color as AndroidColor
-import android.graphics.drawable.ColorDrawable
 import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.ui.graphics.toArgb
+import androidx.core.graphics.drawable.toDrawable
 
 /**
  * Makes the window agree with the design: edge to edge, and the two things
@@ -37,7 +37,7 @@ fun ComponentActivity.applyDesignToWindow(choice: DesignChoice) {
             navigationBarStyle = SystemBarStyle.light(LIGHT_SCRIM, DARK_SCRIM),
         )
     }
-    window.setBackgroundDrawable(ColorDrawable(colors.background.toArgb()))
+    window.setBackgroundDrawable(colors.background.toArgb().toDrawable())
 }
 
 // The scrims `enableEdgeToEdge()` uses by default, which it does not expose.

@@ -6,7 +6,6 @@
     <!-- Mirrors LegacyDarkColors; see the light file for why these are by hand. -->
     <color name="eta_widget_surface">#1B1B1F</color>
     <color name="eta_widget_border">#2E2E36</color>
-    <color name="eta_widget_text">#F2F2F0</color>
     <color name="eta_widget_muted">#77756F</color>
     <color name="eta_widget_accent">#818CF8</color>
 

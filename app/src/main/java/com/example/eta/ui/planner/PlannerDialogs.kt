@@ -12,6 +12,7 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableDoubleStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
@@ -173,7 +174,7 @@ fun BlockEditDialog(
     val recurring = entry.item.recurrenceRule != null
     // Custom Earn, Custom Spend and Social: what they are worth is their rate.
     val spend = entry.item.type == ItemType.SPEND
-    var rate by remember(entry.block.id) { mutableStateOf(entry.item.pointsPerHour ?: 0.0) }
+    var rate by remember(entry.block.id) { mutableDoubleStateOf(entry.item.pointsPerHour ?: 0.0) }
     var building by remember(entry.block.id) { mutableStateOf(false) }
     val pointsVisible = LocalPointsVisible.current
     // "Flexibel" is offered on an occurrence of a standing task and on nothing
@@ -1001,7 +1002,7 @@ fun SpendDialog(
 ) {
     var name by remember(kind) { mutableStateOf("") }
     var note by remember(kind) { mutableStateOf("") }
-    var rate by remember(kind) { mutableStateOf(kind.pointsPerHour) }
+    var rate by remember(kind) { mutableDoubleStateOf(kind.pointsPerHour) }
 
     PlannerDialog(title = kind.label, onDismiss = onDismiss) {
         EtaField(label = "Name") {

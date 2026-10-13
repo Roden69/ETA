@@ -804,13 +804,13 @@ fun RecurringGroupEditDialog(
  */
 @Composable
 internal fun SchemePreview(
+    modifier: Modifier = Modifier,
     /** The week without the task being edited — also what the free-slot search reads. */
     booked: Map<DayOfWeek, List<IntRange>>,
     attributes: RecurringAttributes,
     /** What the form collides with: on those weekdays the mark is drawn red. */
     overlaps: List<RecurringOverlap>,
     rhythm: Rhythm = Rhythm.Weekly,
-    modifier: Modifier = Modifier,
 ) {
     // The form's own rhythm, which it may just have changed; [rhythm] is the
     // one the task had when the window opened.

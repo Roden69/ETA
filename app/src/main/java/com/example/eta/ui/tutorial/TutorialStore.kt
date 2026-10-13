@@ -1,6 +1,7 @@
 package com.example.eta.ui.tutorial
 
 import android.content.Context
+import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -69,20 +70,23 @@ class TutorialStore(context: Context) {
 
     /** The Listen tab's offer was taken or turned down; it is not made again. */
     fun answerListsOffer() {
-        prefs.edit().putBoolean(KEY_LISTS_ANSWERED, true).apply()
+        prefs.edit { putBoolean(KEY_LISTS_ANSWERED, true) }
         _state.update { it.copy(listsOffer = false) }
     }
 
     /** The debug reset: back to before the first start, welcome page included. */
     fun reset() {
-        prefs.edit().putBoolean(KEY_LISTS_ANSWERED, false).apply()
+        prefs.edit { putBoolean(KEY_LISTS_ANSWERED, false) }
         _state.update { it.copy(listsOffer = true) }
         write(introSeen = false, owed = false)
         _state.update { it.copy(requested = false, requestedId = null) }
     }
 
     private fun write(introSeen: Boolean, owed: Boolean) {
-        prefs.edit().putBoolean(KEY_INTRO_SEEN, introSeen).putBoolean(KEY_OWED, owed).apply()
+        prefs.edit {
+            putBoolean(KEY_INTRO_SEEN, introSeen)
+            putBoolean(KEY_OWED, owed)
+        }
         _state.update { it.copy(introSeen = introSeen, owed = owed) }
     }
 

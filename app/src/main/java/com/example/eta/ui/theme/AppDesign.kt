@@ -5,6 +5,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.toArgb
+import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -194,12 +195,12 @@ class DesignStore(context: Context) {
     fun select(tabStyle: TabStyle) = store(_choice.value.copy(tabStyle = tabStyle))
 
     private fun store(choice: DesignChoice) {
-        prefs.edit()
-            .putString(KEY_DESIGN, choice.design.name)
-            .putString(KEY_BRIGHTNESS, choice.brightness.name)
-            .putString(KEY_TAB_STYLE, choice.tabStyle.name)
-            .apply { if (choice.accent == null) remove(KEY_ACCENT) else putInt(KEY_ACCENT, choice.accent) }
-            .apply()
+        prefs.edit {
+            putString(KEY_DESIGN, choice.design.name)
+            putString(KEY_BRIGHTNESS, choice.brightness.name)
+            putString(KEY_TAB_STYLE, choice.tabStyle.name)
+            if (choice.accent == null) remove(KEY_ACCENT) else putInt(KEY_ACCENT, choice.accent)
+        }
         _choice.value = choice
     }
 

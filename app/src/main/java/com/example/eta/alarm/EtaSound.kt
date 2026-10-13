@@ -17,6 +17,7 @@ import android.os.VibratorManager
 import androidx.annotation.RawRes
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
+import androidx.core.content.edit
 import androidx.core.content.getSystemService
 
 /**
@@ -102,7 +103,7 @@ object EtaSound {
         prefs(context).getBoolean(KEY_IGNORE_DND, false)
 
     fun setIgnoresDoNotDisturb(context: Context, ignore: Boolean) {
-        prefs(context).edit().putBoolean(KEY_IGNORE_DND, ignore).apply()
+        prefs(context).edit { putBoolean(KEY_IGNORE_DND, ignore) }
     }
 
     /**

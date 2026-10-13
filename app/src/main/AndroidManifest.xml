@@ -63,7 +63,6 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
-            android:label="@string/app_name"
             android:launchMode="singleTask"
             android:theme="@style/Theme.Eta.Launch"
             android:windowSoftInputMode="adjustResize">
@@ -129,7 +128,8 @@
             android:showWhenLocked="true"
             android:turnScreenOn="true"
             android:taskAffinity=""
-            android:theme="@style/Theme.Eta" />
+            android:theme="@style/Theme.Eta"
+            tools:targetApi="o_mr1" />
 
         <receiver
             android:name=".alarm.BootCompletedReceiver"
