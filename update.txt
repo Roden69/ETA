@@ -1,4 +1,0 @@
-Belohn-o-mat:
-Bugfix: Es soll immer nur die erste Aufgabe gefüllt werden. Der "Füllst sich gerade" Status soll sich also mit der Position der Task verändern.
-Wenn eine Aufgabe gebunden ist, dann Sammelt sie auch Punkte, wenn sie nicht auf Priorität 1 ist. Es kann allerdings auch nur jede Aufgabe nur zur genau einer Belohnung gebunden werden.
-Gebundene Aufgaben zählen auch nicht für Belohnungen, die ungebunden sind.
