@@ -1,3 +1,10 @@
+---
+doc_type: guide
+status: current
+owner: eta-maintainers
+summary: Android-CI, Debug-Artefakte und signierte Release-Veröffentlichungen im Fork.
+---
+
 # Android CI/CD
 
 Workflow: [`.github/workflows/android.yml`](../.github/workflows/android.yml).

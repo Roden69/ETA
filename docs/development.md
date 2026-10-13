@@ -48,4 +48,4 @@ Keystore-Dateien, Passwörter und Tokens sind Geheimnisse: nicht committen, in T
 
 ## CI und Veröffentlichung
 
-Der [Dokumentationsworkflow](../.github/workflows/documentation.yml) prüft und baut die Dokumentation unabhängig von der Android-Toolchain. Er baut oder veröffentlicht keine APK und aktiviert kein öffentliches Dokumentationshosting. Android-Build- oder Release-Automation ist nur dann eingerichtet, wenn ein entsprechender Workflow tatsächlich im Repository vorhanden ist; keine Release-Berechtigungen oder Tag-Automation aus historischen Notizen ableiten. Die menschenlesbaren Änderungen einer gelieferten App-Version stehen in den vorhandenen [Patchnotes](../patchnotes/README.md).
+Der [Dokumentationsworkflow](../.github/workflows/documentation.yml) prüft und baut die Dokumentation unabhängig von der Android-Toolchain. Er baut keine APK und aktiviert kein öffentliches Dokumentationshosting. Der [Android-CI/CD-Workflow](ci-cd.md) führt die Android-Prüfungen aus und veröffentlicht signierte Release-APKs bei passenden Tags. Die menschenlesbaren Änderungen einer gelieferten App-Version stehen in den vorhandenen [Patchnotes](../patchnotes/README.md).
