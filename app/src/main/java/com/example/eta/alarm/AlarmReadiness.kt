@@ -10,6 +10,7 @@ import android.os.PowerManager
 import android.provider.Settings
 import androidx.core.content.ContextCompat
 import androidx.core.content.getSystemService
+import androidx.core.net.toUri
 
 /**
  * Whether this device will actually let Eta's alarms through.
@@ -49,12 +50,8 @@ fun alarmReadiness(context: Context): AlarmReadiness = AlarmReadiness(
         true
     },
     exactAlarmsAllowed = context.getSystemService<AlarmManager>()?.canScheduleExact() ?: false,
-    ignoringBatteryOptimisation = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.M) {
-        context.getSystemService<PowerManager>()
-            ?.isIgnoringBatteryOptimizations(context.packageName) ?: false
-    } else {
-        true
-    },
+    ignoringBatteryOptimisation = context.getSystemService<PowerManager>()
+        ?.isIgnoringBatteryOptimizations(context.packageName) ?: false,
 )
 
 /**
@@ -78,7 +75,7 @@ object AlarmSettingsIntents {
     fun exactAlarms(context: Context): Intent =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
             Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM)
-                .setData("package:${context.packageName}".toAndroidUri())
+                .setData("package:${context.packageName}".toUri())
         } else {
             appDetails(context)
         }.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
@@ -96,7 +93,5 @@ object AlarmSettingsIntents {
 
     private fun appDetails(context: Context): Intent =
         Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
-            .setData("package:${context.packageName}".toAndroidUri())
-
-    private fun String.toAndroidUri() = android.net.Uri.parse(this)
+            .setData("package:${context.packageName}".toUri())
 }
