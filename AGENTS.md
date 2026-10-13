@@ -303,12 +303,12 @@ release/copy script; this list is the whole toolchain.
 
   |Component|Version|
   |---|---|
-  |Gradle / AGP|9.5.0 / 9.3.2|
+  |Gradle / AGP|9.5.0 / 9.3.3|
   |Kotlin (built in, Compose plugin) / KSP|2.2.10 / 2.3.6|
-  |Compose BOM|2026.02.01|
-  |Room 3 (`androidx.room3`)|3.0.1|
+  |Compose BOM|2026.09.00|
+  |Room 3 (`androidx.room3`)|3.0.3|
   |kotlinx-datetime|0.8.0|
-  |lifecycle / activity-compose / core-ktx|2.6.1 / 1.8.0 / 1.10.1|
+  |lifecycle / activity-compose / core-ktx|2.11.0 / 1.13.0 / 1.19.1|
   |play-services-auth|22.0.0|
   |desugar_jdk_libs|2.1.5|
 
