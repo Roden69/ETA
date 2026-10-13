@@ -12,6 +12,11 @@ Operational instructions: `docs/ci-cd.md`.
   `app/build/outputs/apk/debug/app-debug.apk`; Release requires the signed
   `app/build/outputs/apk/release/app-release.apk`, verifies it with `apksigner`, and
   publishes `Eta-<tag>.apk` with GitHub-generated release notes. Missing APKs fail.
+- Debug signing: the optional `ANDROID_DEBUG_KEYSTORE_BASE64` secret holds Daniel's
+  `~/.android/debug.keystore` (SHA-1 `9B:01:…:5D:9B`, password `android`). The debug
+  job restores it to the Android user home before `assembleDebug` and fails if the
+  APK's signer differs. Without it (foreign-fork PRs) the runner generates a throwaway
+  key per run: such APKs update no other install and cannot use Google Calendar.
 - Canonical tags: `vMAJOR.MINOR.PATCH`, no leading zeroes or suffixes; major
   0..2099, minor/patch 0..999. `ETA_RELEASE_VERSION` supplies the version without
   `v`. Gradle validates it and maps `versionCode = major*1_000_000 + minor*1_000 +
