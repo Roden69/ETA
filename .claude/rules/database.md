@@ -12,6 +12,11 @@ matching `app/schemas/…/N.json`: Room validates at open time and a mismatch is
 runtime crash, not a compile error. A new *enum value* needs no migration at all —
 Room stores enums by name in a TEXT column.
 
+JVM migration tests use `MigrationTestHelper` to apply the shared
+`ETA_DATABASE_MIGRATIONS` list one version at a time and let Room validate each
+result against its exported schema. They also migrate a version-1 item through
+the full chain to check data preservation and defaults.
+
 | version (each `MIGRATION_<from>_<to>`) | adds |
 | --- | --- |
 | 1→2 | `user_setup` |
