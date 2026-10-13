@@ -28,7 +28,7 @@ standing schedule, and a read-only Google Calendar import. It is one module,
   timeouts and phase mechanics come from `Belohnungssystem.md`,
   `Planungsphase.md`, `Tägliche Reevaluation.md`, `Selbstverträge.md`,
   `Setup-Questionaire.md`, `ToDo-Karten.md`, `Dashboard.md`, `Zeitplan.md`.
-- **Subject notes:** `.claude/rules/*.md` (23 files). They are not loaded
+- **Subject notes:** `.claude/rules/*.md`. They are not loaded
   automatically outside Claude Code; use the *Subject Index* to pick one. The
   `step-*` notes are historical: their schema versions and details may be stale,
   so `r/database.md` and the code win.
@@ -72,7 +72,7 @@ the owner.
 
 **Lists and roles**
 - Recognise a kind of block by `Item.role` (`ItemRole`), never by id. The
-  `setup:` id prefix exists only so questionnaire items regenerate idempotently.
+  `setup:` id prefix identifies setup-owned definitions for stable regeneration.
 - The Erfolgsliste is built from completed blocks, excluding standing tasks — not
   from `Stage.DONE`. "Liste für Morgen" is tomorrow's confirmed blocks, not a
   `Stage`.
@@ -108,7 +108,7 @@ flowchart LR
     `Calendar`, `PlannerToday`, `WeekPlanner`, `WeekTopUp`, `Reevaluation`,
     `Concretize`, `Vacation`.
   - `EtaTab`, in this order: `Today`, `Lists`, `Contracts`, `Reminders`,
-    `Settings`, `Growth` (last at the user's request).
+    `Growth`, `Rewards`, `Settings` (last).
   - `AppFlow` and `EtaTab` are saved by name (`FLOW_SAVER`, `TAB_SAVER`), so
     renaming a value drops the saved state.
 - **Day flow:** a planning alarm opens
@@ -142,10 +142,10 @@ flowchart LR
 |`data/repository/`|`*Repository` (CRUD and Flows), `*Service` (use cases)|
 |`data/calendar/`|Google auth and Calendar HTTP|
 |`alarm/`, `widget/`|Alarms, sound, text-to-speech, the wake screen; the Quick-Add widget|
-|`ui/<feature>/`|`<Feature>Screen.kt`, `<Feature>ViewModel.kt`, dialogs (16 features, e.g. `planner`, `weekplanner`, `reevaluation`, `concretize`, `lists`, `growth`)|
+|`ui/<feature>/`|Feature screens, ViewModels and dialogs; see Subject Index (feature directories change over time)|
 |`ui/root/`|`EtaApp.kt` (navigation, ViewModel wiring), `RootViewModel.kt`|
 |`ui/components/`, `ui/theme/`, `ui/format/`|Foundation design system (`Eta*` components); `AppDesign` / `Brightness`; `Formatting.kt`|
-|`app/schemas/com.example.eta.data.local.EtaDatabase/`|Exported schemas `1.json` … `21.json`, committed|
+|`app/schemas/com.example.eta.data.local.EtaDatabase/`|Committed exported Room schemas; inspect this directory for current versions|
 |`res/raw/` + root `sounds/`|The 7 shipped MP3s and their source copies; keep both in sync by hand|
 |`images/`|Source PNG for the app/launch glyph|
 
@@ -177,6 +177,13 @@ definition vs. occurrence, closing a day, points, stages, `ItemRole`.
 |vacation|`r/vacation.md`|
 |theme, designs, launch screen|`r/step-30-designs.md`, `r/ui-foundation.md`|
 |components, navigation|`r/ui-foundation.md`|
+|routine mode, first setup|`r/setup.md`, `r/step-34-routine.md`|
+|tutorial|`r/step-38-tutorial.md`|
+|Belohn-o-mat, rewards|`r/step-35-belohnomat.md`|
+|Advanced Features, unlock dates|`r/step-36-advanced-features.md`|
+|weekend choice, end dates|`r/step-33-small-ones.md`|
+|CI and releases|`r/ci-cd.md`, [CI/CD](docs/ci-cd.md)|
+|documentation maintenance|`r/documentation.md`, [documentation workflow](docs/workflow.md)|
 
 ## Development Commands
 
@@ -192,8 +199,10 @@ bash gradlew assembleRelease                           # full compile; catches r
 bash gradlew compileDebugKotlin --rerun-tasks          # after changing a shared type
 ```
 
-There is no CI (`.github/` is absent), no git hook, no lint baseline and no
-release/copy script; this list is the whole toolchain.
+There is no git hook, lint baseline or release/copy script. Android CI is defined
+in [`.github/workflows/android.yml`](.github/workflows/android.yml); documentation
+CI is in [`.github/workflows/documentation.yml`](.github/workflows/documentation.yml).
+See [CI/CD](docs/ci-cd.md) for workflows and release details.
 
 **Definition of Done**
 1. `testDebugUnitTest` is green. The console prints no count; read the XML.
@@ -202,7 +211,7 @@ release/copy script; this list is the whole toolchain.
 4. UI, sound and alarm changes are checked on a phone, not just compiled.
 5. The matching `.claude/rules` note or this file is updated if behaviour or a
    convention changed.
-6. One commit on the topic branch, pushed to `origin`.
+6. One commit on the topic branch, pushed to `origin` (not `main`).
 
 ## Code Conventions & Common Patterns
 
@@ -323,10 +332,8 @@ release/copy script; this list is the whole toolchain.
   - local Room only, but ready for sync (UUID keys, `updatedAt`)
   - Calendar read-only
   - the Eta design is the default and follows the system's dark mode
-- **Setup questionnaire:**
-  - It asks start times for Hausputz, Sport and Kochen, and has no separate
-    Mittagspause question.
-  - Its framework blocks carry no category; only "Arbeit / Uni" counts as Fokus.
+- **First-run setup:** routine selection and a weekly calendar, preceded by the
+  intro and followed by the tutorial. See [`r/setup.md`](.claude/rules/setup.md).
 
 ## Testing & QA
 
@@ -367,8 +374,12 @@ release/copy script; this list is the whole toolchain.
 |`upstream`|`Erbsenherr/Eta_productivity_application` (the owner)|Fetch only; PRs target `main`|
 |`origin`|`Roden69/ETA` (this fork)|Push topic branches|
 
-- **Branches:** work on a topic branch (currently `dev/daniel`), never on
-  `main`. Sync with `git fetch upstream && git rebase upstream/main`.
+- **Branches:** use one topic branch per subject from `origin/main`, never work
+  directly on `main`. This fork's `main` carries fork-only work (CI,
+  documentation system, routine onboarding) on top of upstream. Before syncing
+  with `upstream/main`, compare the Room schema versions of both sides: both
+  can use the same version number for different schemas, and a device on one
+  schema then crashes when the other build opens its database.
 - **PRs:** one subject per PR, together with the matching `.claude/rules` note,
   because the owner's assistant relies on those notes.
 - **Old commits:** never check out commits that still tracked `local.properties`

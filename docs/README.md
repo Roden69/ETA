@@ -70,6 +70,6 @@ Die gebaute Website stellt `/llms.txt` als kuratierten Einstieg und `/markdown/`
 
 ## CI und Veröffentlichung
 
-Der Dokumentationsworkflow prüft die Quellen, baut die Website und stellt sie als GitHub-Actions-Artefakt bereit. Auf Pull Requests ermittelt er zusätzlich Dokumente, die anhand der geänderten Pfade geprüft werden sollen. Inhaltliche Aktualität und die Begründung für eine nicht notwendige Dokuänderung bleiben Review-Aufgaben.
+Der [Dokumentationsworkflow](../.github/workflows/documentation.yml) prüft die Quellen, baut die Website und stellt sie als GitHub-Actions-Artefakt bereit. Auf Pull Requests ermittelt er zusätzlich Dokumente, die anhand der geänderten Pfade geprüft werden sollen. Inhaltliche Aktualität und die Begründung für eine nicht notwendige Dokuänderung bleiben Review-Aufgaben. Der [Android-CI/CD-Workflow](ci-cd.md) testet und baut Debug-APKs und veröffentlicht signierte Release-APKs für passende Tags.
 
 GitHub Pages oder ein öffentlicher Hostingdienst werden nicht automatisch aktiviert. Vor einer Veröffentlichung alle mitgebauten Fachnotizen und Exporte auf sensible Inhalte prüfen; Zugriffsschutz muss auch Suchindizes, Markdown-Ansichten und Vorschauartefakte umfassen.
