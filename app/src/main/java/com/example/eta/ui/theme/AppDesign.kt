@@ -1,6 +1,7 @@
 package com.example.eta.ui.theme
 
 import android.content.Context
+import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -114,10 +115,10 @@ class DesignStore(context: Context) {
     fun select(brightness: Brightness) = store(_choice.value.copy(brightness = brightness))
 
     private fun store(choice: DesignChoice) {
-        prefs.edit()
-            .putString(KEY_DESIGN, choice.design.name)
-            .putString(KEY_BRIGHTNESS, choice.brightness.name)
-            .apply()
+        prefs.edit {
+            putString(KEY_DESIGN, choice.design.name)
+            putString(KEY_BRIGHTNESS, choice.brightness.name)
+        }
         _choice.value = choice
     }
 

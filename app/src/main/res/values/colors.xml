@@ -11,7 +11,6 @@
     -->
     <color name="eta_widget_surface">#FFFFFF</color>
     <color name="eta_widget_border">#E4E2DD</color>
-    <color name="eta_widget_text">#1A1A17</color>
     <color name="eta_widget_muted">#8E8B83</color>
     <color name="eta_widget_accent">#4F46E5</color>
 
@@ -21,14 +20,12 @@
     -->
     <color name="eta_red_widget_surface">#FFFFFF</color>
     <color name="eta_red_widget_border">#ECE6E4</color>
-    <color name="eta_red_widget_text">#1B1717</color>
     <color name="eta_red_widget_muted">#978D8A</color>
     <color name="eta_red_widget_accent">#E5322D</color>
 
     <!-- And for Eta Dunkel, mirroring EtaRedDarkColors. -->
     <color name="eta_red_dark_widget_surface">#1E1A1B</color>
     <color name="eta_red_dark_widget_border">#372E2F</color>
-    <color name="eta_red_dark_widget_text">#F5F0EF</color>
     <color name="eta_red_dark_widget_muted">#857A78</color>
     <color name="eta_red_dark_widget_accent">#EB4640</color>
 

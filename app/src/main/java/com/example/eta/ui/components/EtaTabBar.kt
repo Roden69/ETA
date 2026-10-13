@@ -19,8 +19,8 @@ import androidx.compose.foundation.rememberScrollState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -67,7 +67,7 @@ fun EtaTabBar(
     // Measured rather than estimated: the labels are different lengths, so the
     // only honest way to bring one into view is to know where it landed.
     val positions = remember { mutableStateMapOf<String, IntRange>() }
-    var viewportWidth by remember { mutableStateOf(0) }
+    var viewportWidth by remember { mutableIntStateOf(0) }
 
     LaunchedEffect(selectedId, positions[selectedId], viewportWidth) {
         val bounds = positions[selectedId] ?: return@LaunchedEffect

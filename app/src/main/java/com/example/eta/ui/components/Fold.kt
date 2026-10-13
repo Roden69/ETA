@@ -9,6 +9,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.edit
 
 /**
  * Whether one section of a screen is open, remembered for good.
@@ -30,7 +31,7 @@ class Fold internal constructor(
 
     fun toggle() {
         open = !open
-        prefs?.edit()?.putBoolean(key, open)?.apply()
+        prefs?.edit { putBoolean(key, open) }
     }
 }
 
