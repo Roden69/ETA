@@ -1,0 +1,42 @@
+name: Feature wünschen
+description: Eine neue Funktion vorschlagen, die es in der App noch nicht gibt.
+title: "[Feature] "
+labels: [feature]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ein Feature ergänzt eine bisher nicht vorhandene Funktion.
+        Wünsche können hier für später gesammelt werden; ein Issue ist noch kein Umsetzungsauftrag.
+        Dieses Repository ist öffentlich. Bitte keine privaten Termine, Nutzerdaten oder Zugangsdaten veröffentlichen.
+  - type: textarea
+    id: desired-feature
+    attributes:
+      label: Welche neue Funktion wünschst du dir?
+      description: Beschreibe das Ziel; technische Details musst du nicht festlegen.
+    validations:
+      required: true
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Wobei würde dir die Funktion helfen?
+      description: Optional. Ein konkretes Beispiel aus deinem Alltag hilft bei der Einordnung.
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Woran erkennst du, dass die Funktion fertig ist?
+      description: Falls schon klar, nenne überprüfbare Erfolgskriterien.
+      placeholder: |
+        - Ich kann …
+        - Wenn …, dann …
+    validations:
+      required: false
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Grenzen und weitere Hinweise
+      description: Optional. Was soll unverändert bleiben oder ausdrücklich nicht dazugehören?
+    validations:
+      required: false
