@@ -10,33 +10,7 @@ import com.example.eta.data.backup.BackupService
 import com.example.eta.data.calendar.GoogleAuth
 import com.example.eta.data.calendar.GoogleCalendarApi
 import com.example.eta.data.local.EtaDatabase
-import com.example.eta.data.local.MIGRATION_1_2
-import com.example.eta.data.local.MIGRATION_2_3
-import com.example.eta.data.local.MIGRATION_3_4
-import com.example.eta.data.local.MIGRATION_4_5
-import com.example.eta.data.local.MIGRATION_5_6
-import com.example.eta.data.local.MIGRATION_6_7
-import com.example.eta.data.local.MIGRATION_7_8
-import com.example.eta.data.local.MIGRATION_8_9
-import com.example.eta.data.local.MIGRATION_10_11
-import com.example.eta.data.local.MIGRATION_11_12
-import com.example.eta.data.local.MIGRATION_12_13
-import com.example.eta.data.local.MIGRATION_13_14
-import com.example.eta.data.local.MIGRATION_14_15
-import com.example.eta.data.local.MIGRATION_15_16
-import com.example.eta.data.local.MIGRATION_16_17
-import com.example.eta.data.local.MIGRATION_17_18
-import com.example.eta.data.local.MIGRATION_18_19
-import com.example.eta.data.local.MIGRATION_19_20
-import com.example.eta.data.local.MIGRATION_20_21
-import com.example.eta.data.local.MIGRATION_21_22
-import com.example.eta.data.local.MIGRATION_22_23
-import com.example.eta.data.local.MIGRATION_23_24
-import com.example.eta.data.local.MIGRATION_24_25
-import com.example.eta.data.local.MIGRATION_25_26
-import com.example.eta.data.local.MIGRATION_26_27
-import com.example.eta.data.local.MIGRATION_27_28
-import com.example.eta.data.local.MIGRATION_9_10
+import com.example.eta.data.local.ETA_DATABASE_MIGRATIONS
 import com.example.eta.data.repository.CalendarImportService
 import com.example.eta.data.repository.CalendarRepository
 import com.example.eta.data.repository.CalendarSyncService
@@ -96,7 +70,7 @@ class AppContainer(
                 EtaDatabase::class.java,
                 EtaDatabase.NAME,
             )
-            .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4, MIGRATION_4_5, MIGRATION_5_6, MIGRATION_6_7, MIGRATION_7_8, MIGRATION_8_9, MIGRATION_9_10, MIGRATION_10_11, MIGRATION_11_12, MIGRATION_12_13, MIGRATION_13_14, MIGRATION_14_15, MIGRATION_15_16, MIGRATION_16_17, MIGRATION_17_18, MIGRATION_18_19, MIGRATION_19_20, MIGRATION_20_21, MIGRATION_21_22, MIGRATION_22_23, MIGRATION_23_24, MIGRATION_24_25, MIGRATION_25_26, MIGRATION_26_27, MIGRATION_27_28)
+            .addMigrations(*ETA_DATABASE_MIGRATIONS)
             .build()
     }
 

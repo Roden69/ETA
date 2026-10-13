@@ -242,14 +242,17 @@ release/copy script; this list is the whole toolchain.
   set on update with `copy(updatedAt = clock.now())`. Computed properties need
   `@get:Ignore`.
 - **Changing the schema:**
-  1. Bump `version` in `EtaDatabase.kt` (currently 21) and add
+  1. Bump `version` in `EtaDatabase.kt` and add
      `val MIGRATION_<n>_<n+1>` there.
-  2. Register it in `AppContainer` `.addMigrations(…)`.
+  2. Register it in the shared `ETA_DATABASE_MIGRATIONS` list used by
+     `AppContainer`.
   3. Build, so KSP (`room.schemaLocation = $projectDir/schemas`) exports the new
      `<n+1>.json`.
   4. Diff the hand-written SQL against that JSON. A mismatch crashes when the
      database opens.
-  5. Add a row to `r/database.md`.
+  5. Run the JVM Room migration tests; each migration must pass Room's schema
+     validation and the legacy-data test.
+  6. Add a row to `r/database.md`.
 
 ### Traps
 
@@ -331,13 +334,13 @@ release/copy script; this list is the whole toolchain.
 ## Testing & QA
 
 - **Scope:** JUnit 4.13.2 unit tests on the JVM in
-  `app/src/test/java/com/example/eta/`: 46 files in `domain/`, plus
-  `ui/AppDesignTest.kt` and `ui/FormattingTest.kt`. 467 `@Test`s; the last run
-  (2026-10-06) passed with 0 failures. They cover pure functions: domain rules,
-  the design maths, the formatting.
-- **No test infrastructure:** no fakes, mocks, Robolectric or coroutines-test, no
-  shared helpers or test resources, no `testOptions`. `androidTest` holds only the
-  template `ExampleInstrumentedTest`.
+  `app/src/test/java/com/example/eta/`: domain-rule tests, UI design and
+  formatting tests, and Room migration tests. The migration suite uses
+  `MigrationTestHelper` with Robolectric and exported schemas from `app/schemas`.
+- **Test infrastructure:** no fakes or mocks. `testOptions` enables Android
+  resources for Robolectric; tests stage schemas in a temporary test-only APK
+  archive for Room's asset loader, so schema JSON never enters the release APK.
+  `androidTest` holds only the template `ExampleInstrumentedTest`.
 - **House style:** a `<Subject>Test` class, backticked sentence names, private
   per-class factories (`todo(…)`, `block(…)`) that build real models via
   `Item.newTodo(…)`, and fixed dates:
@@ -352,8 +355,6 @@ release/copy script; this list is the whole toolchain.
 
 - **Testability:** move logic into a pure `domain/` function and test that.
 - **Gaps worth closing:**
-  - migration tests with `MigrationTestHelper` (`room3-testing` is already
-    `testImplementation`, unused)
   - repository and service tests on an in-memory Room
   - Compose UI, alarms, receivers, Calendar
 - **Open product gaps:** nothing lets the user set an `ItemRole`; there is no
