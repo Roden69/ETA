@@ -15,7 +15,8 @@ Room stores enums by name in a TEXT column.
 JVM migration tests use `MigrationTestHelper` to apply the shared
 `ETA_DATABASE_MIGRATIONS` list one version at a time and let Room validate each
 result against its exported schema. They also migrate a version-1 item through
-the full chain to check data preservation and defaults.
+the full chain and exercise the fork's alternate version-28 layout with stored
+night corrections and an existing task.
 
 | version (each `MIGRATION_<from>_<to>`) | adds |
 | --- | --- |
@@ -51,6 +52,14 @@ the full chain to check data preservation and defaults.
 | 31→32 | `items.color` (`INTEGER`, nullable: a colour of the task's own, null being its category's) — see *Step 46* |
 | 32→33 | `user_setup.nightOverrides` (`TEXT NOT NULL DEFAULT ''`): the nights that differ from their standing pattern, `DAY=bedPrep,sleep,wake` joined by `;` in week order; empty for every existing row — see *First setup* in `setup.md` |
 | 19→20 | `user_setup.taskAnnouncement` (`TEXT NOT NULL DEFAULT 'SOUND'`, an enum by name) and `speakNotes` (0) — see *Reading a task's name aloud* |
+
+**The two shipped version-28 layouts converge at version 33.** The exported
+schemas 28–32 retain upstream's history. `MIGRATION_28_33` inspects the setup
+columns, adds missing flexibility switches for the fork layout, applies the
+upstream additions through version 32, and adds `nightOverrides` only when absent.
+Existing fork corrections and tasks are retained. Room uses this direct route
+for an upgrade from 28 to 33; the ordinary adjacent migrations remain available
+and independently validated against each historical upstream schema.
 
 `items.endSound` defaults to 0 for existing rows on purpose: the setup's frame —
 Morgenzeit, Pause, Freizeit — would otherwise start chiming all day, and nobody

@@ -83,8 +83,9 @@ night or any correction is configured.
   configuration the tutorial uses.
 - **Schema 33** adds `user_setup.nightOverrides` (`TEXT NOT NULL DEFAULT ''`):
   `DAY=bedPrep,sleep,wake` entries joined by `;` in week order
-  (`encodeNightOverrides` / `decodeNightOverrides`, two converters). Empty for every
-  existing row, so each night keeps following the pattern it had. See `database.md`.
+  (`encodeNightOverrides` / `decodeNightOverrides`, the same converter pair as
+  `nightsByDay`). Upstream rows start with no corrections; the direct fork-28 upgrade
+  retains existing corrections. See `database.md`.
 - **`UserSetup`** remains the single-row Room entity (`SETUP_ID = 0`). Its encoded
   answers (`MealPlan`, `HousekeepingPlan`, `MindfulnessPlan`, `WorkSchedule`,
   `WeeklySlot`, `DailySlot`) and the settings' sleep/planning pages remain supported.
@@ -142,7 +143,7 @@ corrected night's morning, alarm and weekly sleep covered.
 
 ### Verification
 
-The first page, the calendar and the stored result were exercised on a physical
+Before the upstream rebase, the first page, calendar and stored result were exercised on a physical
 phone using a temporary, in-process instrumentation configuration and
 `AppContainer(sandbox = true)`: weekday/weekend sleep, a selected suggestion and a
 custom routine, the weekend-day picker, opening a night's editor, a correction and its
@@ -156,3 +157,10 @@ through actual taps on the clock dial, verified that other nights did not change
 reset the correction, and refused completion after a 41-hour sleep-free interval.
 It then saved a valid corrected night and checked planner shading, the next wake
 time and the settings save guard against the stored Room row.
+
+After the rebase, a temporary Robolectric smoke exercised the real
+`AppContainer(sandbox = true)` and Room schema 33: completing a Sport routine at
+Tuesday 18:00, persisting a Wednesday-only sleep correction, completing again
+without duplicate occurrences, and saving a standing-night edit without losing
+the routine. The smoke source was removed. The merged Compose screens and
+device alarm behavior have not been checked on a physical device.

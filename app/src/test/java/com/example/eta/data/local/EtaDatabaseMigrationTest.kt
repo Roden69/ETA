@@ -66,7 +66,6 @@ class EtaDatabaseMigrationTest {
         assertTrue("No exported schema files found in $schemaDirectory", versions.isNotEmpty())
         assertEquals("Schema range must start at version 1", 1, firstVersion)
         assertEquals("There must be one schema for every version", (firstVersion..latestVersion).toList(), versions)
-        assertEquals("There must be one migration between each schema", latestVersion - firstVersion, ETA_DATABASE_MIGRATIONS.size)
 
         addSchemaAssets()
         instrumentation.targetContext.deleteDatabase(testDatabase.name)
@@ -103,6 +102,58 @@ class EtaDatabaseMigrationTest {
             assertEquals("migration-test-item", statement.getText(0))
             assertEquals("New growthDynamic rows default to false", 0L, statement.getLong(1))
             assertTrue("Only one matching row is expected", !statement.step())
+        }
+        migrated.close()
+    }
+
+    @Test
+    fun `fork version 28 preserves corrected nights and existing tasks on upgrade`() = runBlocking {
+        addSchemaAssets()
+        instrumentation.targetContext.deleteDatabase(testDatabase.name)
+        val connection = migrationHelper.createDatabase(28)
+        // The fork shipped a different version 28: night corrections, not flexibility switches.
+        connection.execSQL("ALTER TABLE user_setup DROP COLUMN allowPrioritySkip")
+        connection.execSQL("ALTER TABLE user_setup DROP COLUMN allowTodoBesideWeek")
+        connection.execSQL("ALTER TABLE user_setup ADD COLUMN nightOverrides TEXT NOT NULL DEFAULT ''")
+        connection.execSQL(
+            """INSERT INTO user_setup (
+                id, bedPrepTime, sleepTime, wakeTime, wakeAlarm, weekendDays, morningDuration,
+                meals, freeTime, socialTimePerWeek, work, dailyPlanningTime, weeklyPlanningDay,
+                weeklyPlanningTime, cancellationPenaltyPerHour, unplannedPenalty,
+                unplannedPenaltyPerHour, stillActiveReminder, stillActivePerDay, taskAnnouncement,
+                speakNotes, pointsSystem, growthTasks, contracts, rewards, completedAt, updatedAt,
+                nightOverrides
+            ) VALUES (
+                0, 82800, 82800, 25200, 1, 'SATURDAY,SUNDAY', 0,
+                'D:', '25200,0', 0, 'N', 72000, 'SUNDAY',
+                64800, 1.0, 1, 1.5, 0, 3, 'SOUND',
+                0, 1, 0, 0, 0, 1, 2, 'WEDNESDAY=1800,1800,30600'
+            )""",
+        )
+        connection.execSQL(
+            """INSERT INTO items (id, type, name, normalizedName, stage, createdAt, updatedAt,
+                endSound, growthDynamic, growthEvery, growthProgress, quantityEvery,
+                quantityProgress, routineMode)
+                VALUES ('fork-task', 'TODO', 'Keep me', 'keep me', 'COLLECTION', 1, 2,
+                    0, 0, 1, 0, 1, 0, 0)""",
+        )
+        connection.close()
+
+        val migrated = migrationHelper.runMigrationsAndValidate(latestVersion, ETA_DATABASE_MIGRATIONS.toList())
+        migrated.prepare(
+            "SELECT nightOverrides, wakeTime, wakeAlarm, allowPrioritySkip, allowTodoBesideWeek " +
+                "FROM user_setup WHERE id = 0",
+        ).use { statement ->
+            assertTrue(statement.step())
+            assertEquals("WEDNESDAY=1800,1800,30600", statement.getText(0))
+            assertEquals(25200L, statement.getLong(1))
+            assertEquals(1L, statement.getLong(2))
+            assertEquals(0L, statement.getLong(3))
+            assertEquals(0L, statement.getLong(4))
+        }
+        migrated.prepare("SELECT name FROM items WHERE id = 'fork-task'").use { statement ->
+            assertTrue(statement.step())
+            assertEquals("Keep me", statement.getText(0))
         }
         migrated.close()
     }

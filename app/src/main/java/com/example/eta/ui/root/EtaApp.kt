@@ -636,7 +636,7 @@ private fun rootViewModelFactory(container: AppContainer): ViewModelProvider.Fac
 
 private fun setupViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
     viewModelFactory {
-        initializer { SetupViewModel(container.setupRepository) }
+        initializer { SetupViewModel(container.setupRepository, clock = container.clock) }
     }
 
 internal fun dashboardViewModelFactory(container: AppContainer): ViewModelProvider.Factory =

@@ -320,12 +320,11 @@ Never "repair" a migration by deleting or recreating a user database.
 - PRs cover one subject, ship the matching `.claude/rules` note and fill
   [`.github/pull_request_template.md`](.github/pull_request_template.md) (German):
   documentation review per mapped topic and only verification actually run.
-- **Schema divergence:** fork and upstream use DB version 28 for different
-  schemas (fork `MIGRATION_27_28` adds `user_setup.nightOverrides`; upstream's
-  adds `allowPrioritySkip`/`allowTodoBesideWeek`, and upstream reached 29 at
-  `631f097`). Reconcile the migration chain before merging `upstream/main` so each
-  version means one schema; a device that opened one variant crashes on the other.
-  Check: `git diff --stat main upstream/main -- app/schemas/`.
+- **Schema divergence:** the fork and upstream previously shipped different
+  version-28 layouts. The common schema is now version 33, with a direct upgrade
+  retaining fork night corrections and upstream additions. Preserve the historical
+  schema files and shared migration list; see
+  [the canonical migration notes](.claude/rules/database.md).
 - Never check out commits older than `a693750`: they track `local.properties` and
   `dist/`, overwriting the ignored local copies and deleting them on the way back.
 - APKs update an install only when signed with the same key; builds from this fork

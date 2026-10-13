@@ -1013,6 +1013,34 @@ val MIGRATION_32_33 = object : Migration(32, 33) {
 }
 
 /**
+ * Reconciles both shipped version-28 schemas without rewriting their history.
+ *
+ * The fork added night corrections where upstream added flexibility switches.
+ * Upgrade directly to the common schema so Room never validates a fork database
+ * against an incompatible intermediate upstream schema.
+ */
+val MIGRATION_28_33 = object : Migration(28, 33) {
+    override suspend fun migrate(connection: SQLiteConnection) {
+        var hasFlexibility = false
+        var hasNightCorrections = false
+        connection.prepare("PRAGMA table_info(`user_setup`)").use { statement ->
+            while (statement.step()) {
+                when (statement.getText(1)) {
+                    "allowPrioritySkip" -> hasFlexibility = true
+                    "nightOverrides" -> hasNightCorrections = true
+                }
+            }
+        }
+        if (!hasFlexibility) MIGRATION_27_28.migrate(connection)
+        MIGRATION_28_29.migrate(connection)
+        MIGRATION_29_30.migrate(connection)
+        MIGRATION_30_31.migrate(connection)
+        MIGRATION_31_32.migrate(connection)
+        if (!hasNightCorrections) MIGRATION_32_33.migrate(connection)
+    }
+}
+
+/**
  * The ordered migrations registered by the app and exercised by migration tests.
  * Keep this list as the single source of truth for both.
  */
@@ -1049,4 +1077,5 @@ internal val ETA_DATABASE_MIGRATIONS = arrayOf(
     MIGRATION_30_31,
     MIGRATION_31_32,
     MIGRATION_32_33,
+    MIGRATION_28_33,
 )
