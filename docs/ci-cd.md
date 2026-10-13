@@ -23,8 +23,21 @@ Default-Branch vorhanden ist. Auch ein manueller Start auf einem Tag erzeugt
 Download: [Actions](https://github.com/Roden69/ETA/actions) → erfolgreicher Lauf →
 **Artifacts → eta-debug-apk**. Im ZIP liegt `app-debug.apk`.
 Die Aufbewahrungsfrist richtet sich nach den Actions-Einstellungen des Repositories.
-Debug-Builds benötigen keine Repository-Secrets. GitHub-Runner erzeugen ihre eigenen
-Debug-Schlüssel; diese APKs können anders signierte lokale Installationen nicht ersetzen.
+Mit dem Actions-Secret `ANDROID_DEBUG_KEYSTORE_BASE64` signiert die CI Debug-APKs
+mit demselben Debug-Schlüssel wie Daniels lokale Builds (`~/.android/debug.keystore`,
+SHA-1 `9B:01:34:B2:…:5D:9B`) und bricht ab, wenn die APK anders signiert ist.
+Solche APKs aktualisieren lokal gebaute Debug-Installationen und umgekehrt; die
+Google-Calendar-Anmeldung läuft über den Android-OAuth-Client dieses Schlüssels.
+Fehlt das Secret, etwa bei Pull Requests aus fremden Forks, erzeugt der Runner pro
+Lauf einen Wegwerf-Schlüssel: Diese APKs können keine andere Installation
+aktualisieren, und die Kalender-Anmeldung schlägt fehl.
+
+Secret setzen oder erneuern (der Debug-Keystore hat das Standardpasswort `android`;
+wer das Secret kennt, kann APKs signieren, die diese Debug-Installationen ersetzen):
+
+```bash
+base64 -w0 ~/.android/debug.keystore | gh secret set ANDROID_DEBUG_KEYSTORE_BASE64 --repo Roden69/ETA
+```
 
 ## Neue Version veröffentlichen
 
