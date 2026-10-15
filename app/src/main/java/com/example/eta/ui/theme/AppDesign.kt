@@ -22,13 +22,13 @@ enum class AppDesign(val label: String, val hint: String) {
     /** Built around the app icon: white or near-black, and the icon's red as the accent. */
     ETA(
         label = "Eta",
-        hint = "Weiß oder fast schwarz, mit dem Rot des App-Icons.",
+        hint = "Weiß oder fast schwarz mit dem Rot des App-Icons.",
     ),
 
     /** The look the app had while it was called ERIK, untouched. */
     LEGACY(
         label = "Legacy",
-        hint = "Das bisherige Design, mit Indigo statt Rot.",
+        hint = "Bisheriges Design mit Indigo statt Rot.",
     );
 
     companion object {

@@ -282,7 +282,7 @@ val QUICKSTART_STEPS: List<TutorialStep> = listOf(
                     "gehört auf die zweite Seite der Box: Wische sie zur Seite oder " +
                     "tippe auf den zweiten Punkt oben rechts. Dort notierst du es."
             } else {
-                "Schreib beides in die Quick-Add-Box — ein Name genügt. Beginne mit " +
+                "Schreibe beides in die Quick-Add-Box — ein Name genügt. Beginne mit " +
                     "»Katzenstreu kaufen«. Danach darfst du es vergessen: Eta erinnert " +
                     "sich für dich. (Nur zur Übung — nichts davon landet in deinen " +
                     "eigenen Listen.)"
@@ -411,8 +411,8 @@ val QUICKSTART_STEPS: List<TutorialStep> = listOf(
         TutorialStage.REEVALUATION,
         "Die Abrechnung",
         "So rechnet Eta den Tag ab: Punkte für erledigte Aufgaben, Abzüge für " +
-            "Abgesagtes und für Zeit, die gar nicht verplant war — zwei Stunden am Tag " +
-            "dürfen leer bleiben, was darüber liegt, kostet. Gebucht wird erst beim " +
+            "Abgesagtes und für Zeit, die gar nicht verplant war — bis zu zwei Stunden am Tag " +
+            "dürfen leer bleiben; was darüber liegt, kostet. Gebucht wird erst beim " +
             "Abschließen.",
     ),
     TutorialStep(

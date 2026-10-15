@@ -188,9 +188,9 @@ fun TimerTickDialog(
 
     EtaDialog(title = "Wirklich abhaken?", onDismiss = onDismiss) {
         EtaText(
-            text = "»${entry.item.name}« ist eine Timer-Task: Sie zählt die Zeit, die du " +
-                "investierst — ${goal.formatShort()} sind vorgesehen. Der Timer wurde nie " +
-                "gestartet. Soll sie trotzdem als voll gewertet werden?",
+            text = "»${entry.item.name}« ist eine Timer-Task und zählt die investierte Zeit — " +
+                "${goal.formatShort()} sind vorgesehen. Der Timer wurde nie gestartet. " +
+                "Soll sie trotzdem voll gewertet werden?",
             style = EtaTheme.typography.body,
             color = EtaTheme.colors.textSecondary,
         )

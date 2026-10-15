@@ -219,7 +219,7 @@ fun SetupWeekReview(
 private val WEEK_REVIEW_NOTES = listOf(
     "Dein Wochenplan" to
         "Das ist deine feste Woche, so wie du sie gerade eingerichtet hast: ein Wochentag " +
-        "pro Seite, die Nacht schattiert. Wische zur Seite oder tippe oben auf einen Tag. " +
+        "pro Seite, die Nacht ist schattiert. Wische zur Seite oder tippe oben auf einen Tag. " +
         "Tippst du einen Block an, zeigt er seinen Namen.",
     "Das Schloss" to
         "Oben rechts steht »Gesperrt«. Tippe auf das Schloss, um die wiederkehrenden Tasks " +

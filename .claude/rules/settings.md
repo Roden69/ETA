@@ -62,6 +62,15 @@ page of its own below it. **The menu keeps its scroll position** across a page
 and back (`menuScroll`, *Step 44*). The tab also holds the Alarme card (*The planning alarm*), the ignored calendar
 events, vacation mode, the open-days catch-up and the debug reset.
 
+**Audio** applies immediately through SharedPreferences. A phone on silent or
+vibrate replaces task sounds and speech with vibration; the app's **Still** mode
+and DND without an override suppress vibration as well. The DND override never
+unmutes the ringer. The speech probe follows the same policy without mistaking a
+muted phone for a missing speech engine. See [the audio policy](alarms.md).
+The Audio page and its sound/vibration explanations were checked on a Pixel 8
+emulator, including the speech probe in vibration mode without a false
+missing-engine message. Physical-device audio remains a separate check.
+
 **Where the data lives.** `BackupService` writes the whole database to a file the
 user picks and reads it back. The live database does **not** move, and the screen
 says so: scoped storage hands out document URIs and SQLite needs a path it can lock,

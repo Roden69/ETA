@@ -314,7 +314,7 @@ class WeekTabViewModel(
         if (!state.canMoveOccurrence(entry)) return
         if (entry.item.isGrowthTask && entry.item.growthDynamic && !entry.block.flexible) {
             _notice.value = "»${entry.item.name}« wird dynamisch eingeplant und rückt von selbst " +
-                "an ihren Platz. Mach den Termin im Tagesplaner »Flexibel«, um ihn zu verschieben."
+                "an ihren Platz. Im Tagesplaner den Termin auf »Flexibel« setzen, um ihn zu verschieben."
             return
         }
         val start = minuteToLocalTime(startMinute)

@@ -268,12 +268,11 @@ fun CompleteItemDialog(
         if (owesAnswers) {
             EtaText(
                 text = if (pointsVisible) {
-                    "Diese Karte ist nie ausgefüllt worden. Wofür sie zählt und wie " +
-                        "lange sie gedauert hat, entscheidet die Punkte — also bitte beides " +
-                        "noch nachtragen."
+                    "Diese Karte ist nie ausgefüllt worden. Kategorie und Dauer entscheiden " +
+                        "die Punkte — bitte beides noch nachtragen."
                 } else {
-                    "Diese Karte ist nie ausgefüllt worden. Bitte noch nachtragen, wofür " +
-                        "sie zählt und wie lange sie gedauert hat."
+                    "Diese Karte ist nie ausgefüllt worden. Bitte noch nachtragen, welche " +
+                        "Kategorie sie hat und wie lange sie gedauert hat."
                 },
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.warning,

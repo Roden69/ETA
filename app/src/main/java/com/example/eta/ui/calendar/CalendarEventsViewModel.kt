@@ -233,8 +233,7 @@ class CalendarEventsViewModel(
                 // Re-checked at the moment it is applied, not at import: an
                 // earlier answer in this same dialog can have taken the stretch.
                 _conflicts.value = _conflicts.value?.copy(
-                    refusal = "Dort ist inzwischen kein Platz mehr — " +
-                        "der Zeitraum ist anderweitig belegt.",
+                    refusal = "Der Zeitraum ist inzwischen anderweitig belegt.",
                 )
             }
         }

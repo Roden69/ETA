@@ -92,8 +92,7 @@ fun ConflictBox(
                 style = EtaTheme.typography.body,
             )
             EtaText(
-                text = "Ignorieren gilt nur für diesen Tag — morgen wird wieder gefragt. " +
-                    "Lösen öffnet die Planung dieses Tages.",
+                text = "Ignorieren gilt nur für diesen Tag. Lösen öffnet dessen Planung.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
             )

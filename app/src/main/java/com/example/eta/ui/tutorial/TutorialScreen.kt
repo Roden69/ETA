@@ -303,7 +303,7 @@ private fun TutorialChoiceScreen(onStart: (TutorialId) -> Unit, onSkip: () -> Un
                 Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
                     EtaText(text = "Einzelne Themen", style = EtaTheme.typography.heading)
                     EtaText(
-                        text = "Kurze Tutorials zu dem, was über den Alltag hinausgeht. Am " +
+                        text = "Kurze Tutorials zu allem, was über den Alltag hinausgeht. Am " +
                             "besten nach dem Quickstart.",
                         style = EtaTheme.typography.caption,
                         color = EtaTheme.colors.textSecondary,

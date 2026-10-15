@@ -2,12 +2,42 @@
 doc_type: guide
 status: current
 owner: eta-maintainers
-summary: Lokale Einrichtung, Validierung und sichere Release-Arbeit für Eta.
+summary: Aufgaben über GitHub Issues, lokale Einrichtung, Validierung und sichere Release-Arbeit für Eta.
 ---
 
 # Entwicklung
 
 Diese Anleitung beschreibt den Android-Entwicklungsablauf im Repository. Für aktuelle Toolchain-, Schema- und Projektinventardaten siehe den [Dokumentationseinstieg](README.md), der auf die generierte Referenz verweist. Versions- und Zählwerte werden hier absichtlich nicht dupliziert.
+
+## Aufgaben über GitHub Issues
+
+Die [GitHub Issues dieses Forks](https://github.com/Roden69/ETA/issues) sind die zentrale Aufgabenliste. Es gibt keine zusätzlich gepflegten Bug- oder Feature-Dateien. Ein Issue beschreibt ein unabhängig bearbeitbares Thema; zusammenhängende Symptome dürfen gemeinsam erfasst werden.
+
+Beim [Anlegen eines Issues](https://github.com/Roden69/ETA/issues/new/choose) stehen drei deutschsprachige Formulare bereit:
+
+| Typ | Bedeutung | Vorlage und automatisches Label |
+| --- | --- | --- |
+| Bug | Eine vorhandene Funktion verhält sich fehlerhaft. | [Bug melden](../.github/ISSUE_TEMPLATE/01-bug.yml), `bug` |
+| Feature | Eine neue, bisher nicht vorhandene Funktion wird gewünscht. | [Feature wünschen](../.github/ISSUE_TEMPLATE/02-feature.yml), `feature` |
+| Change | Vorhandenes Verhalten, Darstellung oder ein Ablauf soll angepasst werden, ohne zwingend fehlerhaft zu sein. | [Change vorschlagen](../.github/ISSUE_TEMPLATE/03-change.yml), `change` |
+
+Nur die Kernbeschreibung ist Pflicht; Zusatzangaben können später ergänzt werden. Technische Ursachen oder betroffene Dateien müssen beim Erfassen noch nicht bekannt sein. Das Repository und seine Issues sind öffentlich: Screenshots, Termine und Fehlermeldungen vor dem Veröffentlichen von privaten Daten und Geheimnissen bereinigen.
+
+Ein erfasstes Issue ist noch kein Umsetzungsauftrag oder zugesagter Termin. Besonders Feature-Wünsche können zunächst im Backlog bleiben. Beauftrage die Bearbeitung mit der Issue-Nummer, zum Beispiel:
+
+```text
+Behebe Issue #42 vollständig.
+Implementiere das Feature aus Issue #43.
+Setze den Change aus Issue #44 um.
+Untersuche Issue #45 nur und schlage eine Lösung vor; ändere noch nichts.
+```
+
+Die Umsetzung erfolgt auf einem Themenbranch und wird im zugehörigen Pull Request mit dem Issue verknüpft. Der Abschluss nennt die Änderung, tatsächlich ausgeführte Prüfungen und gegebenenfalls noch offene Geräteprüfungen. Ein Issue wird erst geschlossen, wenn die beauftragte Arbeit abgeschlossen ist; ein bloßer Vorschlag oder erfolgreicher Build reicht nicht.
+
+Die Formulare sind unter `.github/ISSUE_TEMPLATE/` versioniert und werden nach der Integration in den GitHub-Standardbranch verfügbar. In den Repository-Einstellungen müssen Issues aktiviert sein und die Labels `bug`, `feature` und `change` existieren; die Formular-Dateien allein erzeugen keine Labels. Die [Auswahlkonfiguration](../.github/ISSUE_TEMPLATE/config.yml) lenkt Meldungen auf die drei Vorlagen. GitHub erlaubt Personen mit Schreibrechten weiterhin leere Issues; dort muss der Typ manuell als Label gesetzt werden.
+
+Issues halten Arbeitsaufträge und Entscheidungen fest. Dauerhaft gültige Anforderungen und Implementierungsnotizen bleiben in den bestehenden kanonischen Dokumentationsquellen; ihre Pflege beschreibt der [Dokumentationsworkflow](workflow.md).
+
 
 ## Lokale Voraussetzungen und SDK
 

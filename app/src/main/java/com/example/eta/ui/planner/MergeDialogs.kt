@@ -96,7 +96,7 @@ fun MergePromptDialog(
             onDismiss = onDismiss,
         ) {
             EtaText(
-                text = "»${dragged.item.name}« und »${target.item.name}« werden eine Aufgabe " +
+                text = "»${dragged.item.name}« und »${target.item.name}« werden zu einer Aufgabe " +
                     "mit zwei Schritten. Die Dauern werden addiert; die Wege dazwischen fallen " +
                     "weg.",
                 style = EtaTheme.typography.body,

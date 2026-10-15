@@ -120,7 +120,7 @@ fun RewardsScreen(viewModel: RewardsViewModel) {
                     onReorder = viewModel::reorder,
                 )
                 EtaText(
-                    text = "Antippen zum Bearbeiten, am ≡ ziehen zum Umsortieren, gedrückt " +
+                    text = "Antippen zum Bearbeiten, zum Umsortieren am ≡ ziehen, gedrückt " +
                         "halten zum Löschen. Erarbeitete Punkte bleiben bei ihrer Belohnung. " +
                         "Die Reihenfolge zählt für ungebundene Belohnungen; gebundene " +
                         "sammeln an jeder Stelle.",

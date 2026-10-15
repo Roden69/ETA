@@ -23,13 +23,9 @@ import androidx.core.content.getSystemService
 /**
  * Every sound Eta makes, played by Eta rather than by a notification channel.
  *
- * The user's rule, and it is a different rule from Android's: **"Nicht stören"
- * silences the app, and so does a phone switched to silent or vibrate** (the
- * second since step 44) — the notification *volume* does not. A notification
- * channel's sound rides whatever
- * stream its usage names and is scaled by that stream's volume, so turning the
- * notification volume down to nothing used to silence the task start along with
- * every chat app — which is exactly what the user does *not* want to happen.
+ * Silent and vibrate ringer modes replace sounds with vibration. Do-Not-Disturb
+ * suppresses both unless the user enables [ignoresDoNotDisturb]; that override
+ * never overrides a muted ringer. The notification volume does not govern Eta.
  *
  * So the channels are silent and this plays the file itself:
  *
@@ -38,12 +34,8 @@ import androidx.core.content.getSystemService
  *   same however the notification slider was left. The price is that it follows
  *   the *alarm* slider instead, and that is said in the settings.
  * - **Checked against Do-Not-Disturb first.** The alarm stream deliberately cuts
- *   through most DND configurations, so without this check the sounds would
- *   ignore the one switch the user *does* want to silence them. Any interruption
- *   filter other than "all" counts as on — priority-only, alarms-only, total
- *   silence — since each of them is the user having asked for quiet. The user
- *   can switch the check off ([ignoresDoNotDisturb]); what plays then is up to
- *   the phone, which lets the alarm stream through everything but total silence.
+ *   through most DND configurations, so Eta checks the interruption filter itself.
+ *   [ignoresDoNotDisturb] bypasses only that check, not the ringer mode.
  *
  * A useful side effect: the sound no longer depends on the notification
  * permission. A refused permission costs the banner, and no longer the sound.
@@ -119,19 +111,6 @@ object EtaSound {
         return audio.ringerMode != AudioManager.RINGER_MODE_NORMAL
     }
 
-    /**
-     * Whether a sound should stay unplayed right now: quiet was asked for, and
-     * is respected.
-     *
-     * Two ways of asking. **Do-Not-Disturb**, which the user may tell Eta to
-     * play through ([ignoresDoNotDisturb]) — and while it is on, that switch
-     * alone decides, since most phones report the ringer as silent under it and
-     * the switch would otherwise do nothing. And the **ringer on silent or
-     * vibrate**, which has no way round it. The wake alarm asks neither.
-     */
-    fun isSilenced(context: Context): Boolean =
-        if (isDoNotDisturbOn(context)) !ignoresDoNotDisturb(context) else isRingerMuted(context)
-
     private fun prefs(context: Context) =
         context.applicationContext.getSharedPreferences("sound", Context.MODE_PRIVATE)
 
@@ -147,17 +126,19 @@ object EtaSound {
         prefs(context).edit().putString(KEY_MODE, mode.name).apply()
     }
 
-    /**
-     * One short buzz in place of a sound.
-     *
-     * Not under Do-Not-Disturb unless the user said to play through it, and not
-     * on a phone switched fully silent — vibrate mode is the phone asking for
-     * exactly this, silent mode is it asking for nothing at all.
-     */
+    /** One policy for sounds and speech; a DND override never unmutes the phone. */
+    internal fun effectiveMode(context: Context): AudioMode {
+        val selected = mode(context)
+        if (selected == AudioMode.SILENT ||
+            (isDoNotDisturbOn(context) && !ignoresDoNotDisturb(context))
+        ) {
+            return AudioMode.SILENT
+        }
+        return if (isRingerMuted(context)) AudioMode.VIBRATE else selected
+    }
+
+    /** One short buzz, after [effectiveMode] has allowed it. */
     private fun vibrate(context: Context) {
-        val audio: AudioManager? = context.getSystemService()
-        if (isDoNotDisturbOn(context) && !ignoresDoNotDisturb(context)) return
-        if (audio?.ringerMode == AudioManager.RINGER_MODE_SILENT) return
         runCatching {
             val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
                 context.getSystemService<VibratorManager>()?.defaultVibrator
@@ -175,15 +156,14 @@ object EtaSound {
         }
     }
 
-    /** Plays [sound] once, unless the phone was asked for quiet — see [isSilenced]. Never throws. */
+    /** Announces [sound] once using the effective sound, vibration or silent mode. Never throws. */
     fun play(context: Context, @RawRes sound: Int) {
         val app = context.applicationContext
-        when (mode(app)) {
+        when (effectiveMode(app)) {
             AudioMode.SILENT -> return
             AudioMode.VIBRATE -> return vibrate(app)
             AudioMode.SOUND -> Unit
         }
-        if (isSilenced(app)) return
         val audio: AudioManager? = app.getSystemService()
 
         runCatching {

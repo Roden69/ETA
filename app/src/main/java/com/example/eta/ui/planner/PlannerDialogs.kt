@@ -798,8 +798,7 @@ fun NewEntryKindDialog(
                 )
                 if (!canCreateTodo) {
                     EtaText(
-                        text = "Du hast noch Aufgaben in deiner Woche, die du zuerst " +
-                            "abzuarbeiten hast.",
+                        text = "Zuerst die Aufgaben deiner Woche abarbeiten.",
                         style = EtaTheme.typography.caption,
                         color = EtaTheme.colors.warning,
                     )

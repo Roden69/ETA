@@ -110,7 +110,7 @@ val LIST_STEPS: List<TutorialStep> = listOf(
         text = {
             "Halte die Überschrift »Sammelliste« gedrückt: Es öffnet sich ein " +
                 "Fenster für ein neues, fertig ausgefülltes ToDo. Gib einen Namen " +
-                "ein und sichere es. Das Fenster verdeckt diese Leiste; danach geht " +
+                "ein und speichere es. Das Fenster verdeckt diese Leiste; danach geht " +
                 "es hier weiter."
         },
         kind = StepKind.TASK,
@@ -138,7 +138,7 @@ val LIST_STEPS: List<TutorialStep> = listOf(
     text(
         TutorialStage.LISTS,
         "Wiederkehrende Aufgaben",
-        "Dein fester Wochenplan, mit der Skizze der Woche: Grün ist frei, Grau " +
+        "Dein fester Wochenplan, mit der Skizze der Woche: Grün ist frei, grau " +
             "belegt. Überschrift gedrückt halten legt eine neue wiederkehrende " +
             "Aufgabe an. Ein Eintrag öffnet die Aufgabe mit all ihren Wochentagen — " +
             "zum Bearbeiten oder, wenn sie nicht mehr passt, zum Beenden.",
@@ -318,9 +318,9 @@ val GROWTH_STEPS: List<TutorialStep> = listOf(
     text(
         TutorialStage.GROWTH,
         "Die Reihenfolge",
-        "Antippen öffnet eine Aufgabe zum Bearbeiten. Lange drücken und ziehen " +
+        "Antippen öffnet eine Aufgabe zum Bearbeiten. Gedrückt halten und ziehen " +
             "ändert die Reihenfolge: Wollen zwei dynamische Aufgaben denselben Platz, " +
-            "bekommt ihn die weiter oben. $WHERE_TO_SWITCH",
+            "bekommt ihn die, die weiter oben steht. $WHERE_TO_SWITCH",
     ),
 )
 

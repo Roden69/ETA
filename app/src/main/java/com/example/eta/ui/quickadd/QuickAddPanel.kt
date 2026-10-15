@@ -224,7 +224,7 @@ private fun FeedbackLine(feedback: QuickAddFeedback?) {
 
         is QuickAddFeedback.Blocked -> EtaText(
             text = "»${feedback.name}« steht auf der Sperrliste — " +
-                "wieder möglich ab ${feedback.until.formatLong()}.",
+                "erst ab ${feedback.until.formatLong()} wieder möglich.",
             style = EtaTheme.typography.caption,
             color = EtaTheme.colors.danger,
         )

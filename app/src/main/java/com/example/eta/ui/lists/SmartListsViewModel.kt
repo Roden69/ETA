@@ -274,7 +274,7 @@ class SmartListsViewModel(
                     } else {
                         _notice.value = "»$name« liegt in der Sammelliste. In der Wochenliste " +
                             (if (owed.size == 1) "wartet noch ein Ziel" else "warten noch ${owed.size} Ziele") +
-                            " aus der letzten Woche — erst wenn die abgearbeitet oder " +
+                            " aus der letzten Woche — erst wenn sie abgearbeitet oder " +
                             "zurückgegeben sind, nimmt die Woche Neues auf."
                     }
                 }

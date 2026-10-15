@@ -149,7 +149,7 @@ fun SleepStep(
 
             EtaField(
                 label = "Schlafrhythmus",
-                hint = "Ob jede Nacht gleich ist. Das Wochenende sind die Nächte von Freitag " +
+                hint = "Ob jede Nacht gleich ist. Als Wochenende gelten die Nächte von Freitag " +
                     "auf Samstag und von Samstag auf Sonntag.",
             ) {
                 EtaChoice(
@@ -172,10 +172,9 @@ fun SleepStep(
             if (confirmingPerDay) {
                 ConfirmDialog(
                     title = "Jeden Wochentag anders?",
-                    message = "Davon wird abgeraten: Für den Schlafrhythmus ist es nicht " +
-                        "empfohlen, an jedem Tag zu anderen Zeiten zu schlafen. Wenn es sich " +
-                        "nicht vermeiden lässt, achte auf Schlafausgleich und plane " +
-                        "gegebenenfalls einen Mittagsschlaf ein.",
+                    message = "Davon wird abgeraten: Jeden Tag zu anderen Zeiten zu schlafen belastet den " +
+                        "Schlafrhythmus. Lässt es sich nicht vermeiden, achte auf Schlafausgleich und " +
+                        "plane gegebenenfalls einen Mittagsschlaf ein.",
                     confirm = "Trotzdem",
                     onDismiss = { confirmingPerDay = false },
                     onConfirm = {

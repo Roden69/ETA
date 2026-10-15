@@ -662,7 +662,7 @@ private fun ClockAlarmsBox(setup: UserSetup, dirty: Boolean) {
                 )
 
                 result == true -> EtaText(
-                    text = "An die Uhr-App übergeben. Sieh dort einmal nach, ob die Wecker stehen.",
+                    text = "An die Uhr-App übergeben. Prüfe dort, ob die Wecker angelegt sind.",
                     style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.success,
                 )
@@ -780,10 +780,12 @@ private fun AudioModeBox() {
             )
             EtaText(
                 text = when (mode) {
-                    AudioMode.SOUND -> "Töne oder Ansage, wie unten gewählt."
+                    AudioMode.SOUND ->
+                        "Töne oder Ansage, wie unten gewählt. Steht das Handy auf »Lautlos« " +
+                            "oder »Vibration«, vibriert Eta stattdessen."
                     AudioMode.VIBRATE ->
-                        "Statt eines Tons vibriert das Handy kurz. Vorgelesen wird nichts. " +
-                            "Steht das Handy auf »Lautlos«, bleibt auch die Vibration aus."
+                        "Statt eines Tons vibriert das Handy kurz, auch bei »Lautlos«. " +
+                            "Vorgelesen wird nichts."
 
                     AudioMode.SILENT -> "Kein Ton und keine Vibration — nur die Benachrichtigung."
                 },
@@ -833,7 +835,9 @@ private fun TaskAnnouncementBox(setup: UserSetup, onChange: OnSetupChange) {
                     style = EtaButtonStyle.Secondary,
                     onClick = {
                         scope.launch {
-                            noEngine = !EtaSpeech.speak(context, "Jetzt: Beispielaufgabe.")
+                            val spoken = EtaSpeech.speak(context, "Jetzt: Beispielaufgabe.")
+                            noEngine = !spoken && EtaSound.effectiveMode(context) == AudioMode.SOUND
+                            if (!spoken) EtaSound.play(context, com.example.eta.R.raw.task_start)
                         }
                     },
                 )
@@ -888,7 +892,7 @@ private fun AdvancedFeaturesBox(setup: UserSetup, onChange: OnSetupChange) {
                 checked = setup.growthTasks,
                 onCheckedChange = { on -> onChange { it.copy(growthTasks = on) } },
                 label = "Timer-Tasks und Ziele",
-                hint = "Der Reiter »Ziele«, und die Option, eine wiederkehrende Aufgabe " +
+                hint = "Der Reiter »Ziele« und die Option, eine wiederkehrende Aufgabe " +
                     "zur Timer-Task zu machen — mit Start-Knopf, Puffer und Zielzeit.",
             )
             CheckRow(
@@ -1063,8 +1067,8 @@ private fun BreakCheckerBox(setup: UserSetup, onChange: OnSetupChange) {
                 }
                 EtaField(
                     label = "Längste Strecke ohne Pause",
-                    hint = "Liegen zwischen zwei Pausen — oder vor der ersten, nach der " +
-                        "letzten — mehr Aufgaben als das, weist der Planer darauf hin.",
+                    hint = "Liegen zwischen zwei Pausen (oder vor der ersten und nach der " +
+                        "letzten) mehr Aufgaben als das, weist der Planer darauf hin.",
                 ) {
                     EtaDurationPicker(
                         value = setup.breakMaxStretch,
@@ -1136,9 +1140,9 @@ private fun CancellationBox(setup: UserSetup, onChange: OnSetupChange) {
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = "Absagen", style = EtaTheme.typography.heading)
             EtaText(
-                text = "Ein abgesagter Termin kostet seine Stunden an Punkten, abends " +
-                    "mit dem Tag abgerechnet. Höhere Gewalt lässt sich im Rückblick " +
-                    "angeben; verzichtete Freizeit ist ausgenommen.",
+                text = "Absagen werden abends mit dem eingestellten Punktesatz je Stunde " +
+                    "abgerechnet. Höhere Gewalt lässt sich im Rückblick angeben; " +
+                    "verzichtete Freizeit ist ausgenommen.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
             )
@@ -1245,7 +1249,7 @@ private fun DataBox(onExport: () -> Unit, onImport: () -> Unit) {
             EtaText(
                 text = "Eta speichert alles auf diesem Gerät, nichts geht nach außen. " +
                     "Wohin gesichert wird, bestimmst du — die Datei enthält den " +
-                    "kompletten Bestand.",
+                    "vollständigen Bestand.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
             )
@@ -1551,8 +1555,8 @@ private fun WakeAlarmBox(setup: UserSetup, onChange: OnSetupChange) {
             }
             EtaText(
                 text = "Eta weckt dich $hours — dieselbe " +
-                    "Aufstehzeit, die oben im Schlaf steht. Der Weckruf klingelt über den " +
-                    "Sperrbildschirm und läutet, bis du ihn beendest oder zehn Minuten " +
+                    "Aufstehzeit, die oben im Schlaf steht. Der Weckruf erscheint auf dem " +
+                    "Sperrbildschirm und klingelt, bis du ihn beendest oder zehn Minuten " +
                     "schlummerst.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
@@ -1606,9 +1610,10 @@ private fun AlarmBox(alarms: AlarmSchedule) {
             val muted = remember(probe) { EtaSound.isRingerMuted(context) }
             EtaText(
                 text = when {
-                    !dndOn && muted ->
-                        "Das Handy ist gerade stumm oder auf Vibration — solange bleiben " +
-                            "Etas Töne still. Benachrichtigungen erscheinen trotzdem."
+                    muted && (!dndOn || ignoreDnd) ->
+                        "Das Handy ist gerade stumm oder auf Vibration — Eta vibriert " +
+                            "statt Tönen oder Ansagen. Im Audiomodus »Still« bleibt auch " +
+                            "die Vibration aus. Benachrichtigungen erscheinen trotzdem."
                     dndOn && ignoreDnd ->
                         "„Nicht stören“ ist gerade an — Etas Töne spielen trotzdem, " +
                             "solange das Handy Wecker durchlässt."
@@ -1618,11 +1623,11 @@ private fun AlarmBox(alarms: AlarmSchedule) {
                     ignoreDnd ->
                         "Etas Töne laufen über die Wecker-Lautstärke, unabhängig von der " +
                             "Lautstärke für Benachrichtigungen, auch bei „Nicht stören“. Steht " +
-                            "das Handy stumm oder auf Vibration, bleiben sie still."
+                            "das Handy stumm oder auf Vibration, vibriert Eta stattdessen."
                     else ->
                         "Etas Töne laufen über die Wecker-Lautstärke, unabhängig von der " +
-                            "Lautstärke für Benachrichtigungen. Still sind sie bei „Nicht stören“ " +
-                            "und wenn das Handy stumm oder auf Vibration steht."
+                            "Lautstärke für Benachrichtigungen. Bei „Nicht stören“ bleibt Eta " +
+                            "still; bei stummem Handy oder Vibration vibriert Eta stattdessen."
                 },
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
@@ -1632,7 +1637,7 @@ private fun AlarmBox(alarms: AlarmSchedule) {
                 label = "Bei „Nicht stören“",
                 hint = "Gilt sofort, für Töne und Ansagen. Bei „Lautlos komplett“ " +
                     "schaltet das Handy auch Wecker stumm — daran kann Eta nichts ändern. " +
-                    "Der Weckalarm klingelt ohnehin immer.",
+                    "Der Weckruf klingelt ohnehin immer.",
             ) {
                 EtaChoice(
                     options = listOf(false to "Still bleiben", true to "Trotzdem spielen"),
@@ -1653,7 +1658,7 @@ private fun AlarmBox(alarms: AlarmSchedule) {
             ReadinessRow(
                 label = "Exakte Alarme",
                 ok = readiness.exactAlarmsAllowed,
-                whenMissing = "Ohne sie kommen Alarme irgendwann im Zeitfenster — " +
+                whenMissing = "Ohne sie kommen Alarme irgendwann innerhalb eines Zeitfensters — " +
                     "im Doze-Modus auch deutlich später.",
                 onFix = { context.startActivity(AlarmSettingsIntents.exactAlarms(context)) },
             )

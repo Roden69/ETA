@@ -720,7 +720,7 @@ private fun RewardStep(settlement: DailySettlement?) {
                 if (settlement.crowned) {
                     EtaText(
                         text = "👑 ${formatPoints(settlement.legacyGross)} erarbeitet, " +
-                            "gutgeschrieben werden höchstens 2.",
+                            "höchstens 2 werden gutgeschrieben.",
                         style = EtaTheme.typography.caption,
                         color = EtaTheme.colors.warning,
                     )
@@ -731,7 +731,7 @@ private fun RewardStep(settlement: DailySettlement?) {
             }
             if (settlement.wakeBonus != 0.0) LedgerLine("Pünktlich aufgestanden", settlement.wakeBonus)
             if (settlement.bedBonus != 0.0) {
-                LedgerLine("Pünktlich schlafen gegangen (Vortag)", settlement.bedBonus)
+                LedgerLine("Pünktlich ins Bett (Vortag)", settlement.bedBonus)
             }
             if (settlement.cancellationPenalty != 0.0) {
                 LedgerLine("Abgesagt", -settlement.cancellationPenalty)

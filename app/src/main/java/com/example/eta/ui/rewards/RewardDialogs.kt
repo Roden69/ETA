@@ -145,10 +145,10 @@ internal fun BindingDialog(
 ) {
     EtaDialog(title = "Aufgabenbindung", onDismiss = onDone) {
         EtaText(
-            text = "Angehakt füllen nur diese wiederkehrenden Aufgaben die Belohnung — " +
+            text = "Nur die hier angekreuzten wiederkehrenden Aufgaben füllen die Belohnung — " +
                 "an jeder Stelle der Liste. Eine Aufgabe gehört zu genau einer " +
-                "Belohnung und zählt dann für keine andere. Ohne Haken zählt jede " +
-                "abgehakte Aufgabe, die nirgends gebunden ist.",
+                "Belohnung und zählt dann für keine andere. Ohne Kreuz zählt jede " +
+                "erledigte Aufgabe, die nirgends gebunden ist.",
             style = EtaTheme.typography.caption,
             color = EtaTheme.colors.textMuted,
         )

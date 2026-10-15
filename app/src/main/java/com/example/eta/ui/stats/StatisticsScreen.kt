@@ -79,7 +79,7 @@ fun StatisticsScreen(viewModel: StatisticsViewModel) {
             Column {
                 EtaText(text = "Statistiken", style = EtaTheme.typography.title)
                 EtaText(
-                    text = "Gezählt werden abgeschlossene Tage — heute läuft noch.",
+                    text = "Gezählt werden abgeschlossene Tage; der heutige läuft noch.",
                     style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.textSecondary,
                 )

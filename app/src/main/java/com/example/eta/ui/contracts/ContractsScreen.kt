@@ -385,7 +385,7 @@ private fun ExpiringBox(contract: Contract, onExtend: () -> Unit, onEnd: () -> U
             )
             EtaText(text = contract.title, style = EtaTheme.typography.bodyStrong)
             EtaText(
-                text = "Verlängern oder beenden — beendet wird ohne Sperre, das ist kein Bruch.",
+                text = "Verlängern oder beenden. Beenden ohne Sperre ist kein Bruch.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textSecondary,
             )

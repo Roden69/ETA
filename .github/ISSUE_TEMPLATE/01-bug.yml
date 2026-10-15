@@ -1,0 +1,61 @@
+name: Bug melden
+description: Fehler melden, bei denen die App nicht wie erwartet funktioniert.
+title: "[Bug] "
+labels: [bug]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ein Bug ist fehlerhaftes Verhalten einer vorhandenen Funktion.
+        Beschreibe ein unabhängig bearbeitbares Problem; du musst die Ursache nicht kennen.
+        Dieses Repository ist öffentlich. Bitte keine privaten Termine, Nutzerdaten oder Zugangsdaten veröffentlichen.
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Was passiert tatsächlich?
+      description: Wo in der App fällt der Fehler auf und was beobachtest du?
+    validations:
+      required: true
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Was sollte stattdessen passieren?
+      description: Beschreibe das erwartete Verhalten.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Schritte zum Fehler
+      description: Falls bekannt. Bei Planungsfehlern bitte auch Aufgabentyp sowie relevantes Datum und Uhrzeit nennen.
+      placeholder: |
+        1. … öffnen
+        2. … auswählen
+        3. … beobachten
+    validations:
+      required: false
+  - type: dropdown
+    id: frequency
+    attributes:
+      label: Wie häufig tritt der Fehler auf?
+      options:
+        - Immer
+        - Gelegentlich
+        - Einmal beobachtet
+        - Noch unklar
+    validations:
+      required: false
+  - type: input
+    id: environment
+    attributes:
+      label: App-Version, Android-Version und Gerät
+      description: Falls bekannt; fehlende Angaben verhindern die Meldung nicht.
+    validations:
+      required: false
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Screenshots, Fehlermeldungen oder weitere Hinweise
+      description: Optional. Bilder können hier angehängt werden; private Inhalte vorher entfernen.
+    validations:
+      required: false

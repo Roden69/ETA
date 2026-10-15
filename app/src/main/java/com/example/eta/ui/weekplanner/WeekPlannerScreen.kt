@@ -377,8 +377,8 @@ private fun PlanStep(state: WeekPlannerUiState, viewModel: WeekPlannerViewModel,
                 )
                 EtaText(
                     text = "Aus der letzten Woche liegen noch ${state.unfinished.size} " +
-                        "unverplante Ziele in der Wochenliste. Die Wochenliste nimmt erst " +
-                        "wieder Neues auf, wenn sie verplant oder zurückgegeben sind.",
+                        "unverplante Ziele in der Wochenliste. Neues wird erst aufgenommen, wenn sie " +
+                        "verplant oder zurückgegeben sind.",
                     style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.textSecondary,
                 )

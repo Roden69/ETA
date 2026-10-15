@@ -66,22 +66,23 @@ sound from a resource or a content URI, so they are **copied** into
 `app/src/main/res/raw/` — `sounds/` stays the source folder, `res/raw/` is what
 ships. Re-copy after changing one; nothing watches the folder.
 
-**Since step 46 there is a mode above all of it** — Ton, Vibration, Still
-(`AudioMode`, the "Audio" page) — see *Step 46*.
+**Audio policy (issue 48):** `EtaSound.effectiveMode` decides once for both mp3s
+and speech. The selected **Still** mode always suppresses sound and vibration.
+**Do-Not-Disturb** suppresses both unless "Trotzdem spielen" is enabled.
+Otherwise a phone on **silent or vibrate** replaces the announcement with a short
+vibration, even when Eta's selected mode is **Ton**. The DND override bypasses
+only DND, never the muted ringer. With a normal ringer, **Ton** plays the selected
+sound or speech and **Vibration** only buzzes. The separate wake alarm is unchanged.
 
-**Since step 44 a phone on silent or vibrate silences Eta as well** — see
-*Step 44*; the paragraph below is the rule as it stood, and still describes DND.
+`EtaSpeech.speak` returns false for the vibration outcome so the task coordinator
+uses `EtaSound.play` as its vibration fallback; requested silence is handled
+without falling back. The speech probe uses the same fallback without reporting
+a missing engine when the phone is merely muted. Speech checks the policy again
+after binding, since the phone can be muted while the engine starts.
 
-**Only Do-Not-Disturb silences Eta — and since step 30 not even that, if the user
-says so.** "Bei „Nicht stören“ → Trotzdem spielen" in the Alarme card sets
-`EtaSound.ignoresDoNotDisturb`, and `isSilenced` — what `play` and `EtaSpeech.speak`
-ask — is then false. It is the app's *own* check being switched off, nothing more:
-no permission is involved, and what the phone itself mutes stays muted. The alarm
-stream gets through priority-only and alarms-only; **total silence mutes it too**,
-and overriding that would need notification-policy access and changing the user's
-filter, which was not built. The switch lives in `SharedPreferences` ("sound"),
-because `EtaSound` is called from receivers with a context and nothing else — so it
-applies at once and does not travel in a backup.
+The DND override remains in SharedPreferences ("sound"), applies immediately and
+is not included in a backup. It changes only Eta's own check: Android can still
+suppress playback or vibration under its system policy.
 
 `alarm/EtaSound.kt` plays every file itself
 with `MediaPlayer` on `USAGE_ALARM`, so the notification volume is irrelevant and
@@ -144,11 +145,12 @@ for the next flow change.
 
 Two limits worth knowing: **doze throttles `setExactAndAllowWhileIdle`** to about
 one alarm every nine minutes per app, so two blocks closer together than that can
-have the second announcement arrive late on a sleeping device. And nobody has heard
-a sound through `EtaSound`, including whether a receiver's process lives long
-enough for `task_start.mp3` to finish — it is 24 seconds long and `goAsync` returns
-long before that. `MediaPlayer` renders in the media server, which should carry it;
-test that on the phone first.
+have the second announcement arrive late on a sleeping device. A Pixel 8 emulator
+smoke exercised task starts and ends with sounds and speech, both muted ringer
+modes, and DND overrides: no audio player was created, and Android recorded
+finished vibrations when permitted. That does not prove audible playback, receiver
+process lifetime or Xiaomi-specific behavior on a physical phone; `task_start.mp3`
+is 24 seconds long and `goAsync` returns long before that.
 
 ### Reading a task's name aloud (step 28)
 
@@ -160,10 +162,10 @@ turns, the still-active question. `speakNotes` adds the notes. Both sit in the
 - **Only the task alarm.** The planning alarm, the Erinnerungen tab and the wake
   alarm keep their sounds: none of them has a task's name to read. A reminder's
   own text would be the natural next thing to read out, and nobody asked yet.
-- **`alarm/EtaSpeech.kt` follows `EtaSound`'s rules**, because it stands in for
-  it: `USAGE_ALARM`, so the alarm slider governs it, silent under Do-Not-Disturb
-  and under nothing else, music ducked for the sentence. German voice where the
-  engine has one; otherwise the engine's own rather than silence.
+- **`alarm/EtaSpeech.kt` follows `EtaSound`'s effective mode**, because it stands in
+  for it: `USAGE_ALARM` when audible, vibration instead when the ringer is muted,
+  and silence under DND unless overridden. Music ducks for the sentence. German
+  voice where the engine has one; otherwise the engine's own rather than silence.
 - **Every task is named**, unlike the sounds' one-per-kind: the name is the point.
   `spokenAnnouncement` in `domain/planning/TaskAnnouncement.kt` builds the
   sentence and is what `TaskAnnouncementTest` pins.

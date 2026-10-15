@@ -55,8 +55,7 @@ fun DeferDialog(
 
                 EtaField(
                     label = "Um wie viele Stunden?",
-                    hint = "Höchstens $MAX_EMERGENCY_HOURS — weiter zu schieben hieße, " +
-                        "die Phase ausfallen zu lassen.",
+                    hint = "Höchstens $MAX_EMERGENCY_HOURS Stunden, sonst fällt die Phase aus.",
                 ) {
                     EtaStepper(
                         value = if (hours == 1) "1 Stunde" else "$hours Stunden",

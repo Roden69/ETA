@@ -74,8 +74,7 @@ fun CalendarEventsSection(
     ) {
         EtaText(text = "Termine", style = EtaTheme.typography.heading)
         EtaText(
-            text = "Was im Google-Kalender steht, bevor der Rest verplant wird — " +
-                "so entstehen Terminkonflikte gar nicht erst.",
+            text = "Übernimm zuerst Termine aus dem Google-Kalender, dann plane den Rest.",
             style = EtaTheme.typography.caption,
             color = EtaTheme.colors.textMuted,
         )
@@ -93,7 +92,7 @@ fun CalendarEventsSection(
                         color = EtaTheme.colors.danger,
                     )
                     EtaButton(
-                        text = "Nochmal versuchen",
+                        text = "Erneut versuchen",
                         style = EtaButtonStyle.Secondary,
                         onClick = viewModel::refresh,
                     )
@@ -103,8 +102,8 @@ fun CalendarEventsSection(
 
         when {
             !state.connected && !state.syncing -> EtaText(
-                text = "Kein Google-Kalender verbunden. Das geht in den Einstellungen — " +
-                    "ohne Verbindung ändert dieser Schritt nichts.",
+                text = "Kein Google-Kalender verbunden. Verbinde ihn in den Einstellungen; " +
+                    "sonst bleibt dieser Schritt ohne Wirkung.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
             )
@@ -116,8 +115,7 @@ fun CalendarEventsSection(
             )
 
             state.events.isEmpty() -> EtaText(
-                text = "Keine neuen Termine. Alles, was der Kalender hergibt, ist " +
-                    "entweder übernommen oder bewusst ignoriert.",
+                text = "Keine neuen Termine. Alle Termine sind übernommen oder ignoriert.",
                 style = EtaTheme.typography.body,
                 color = EtaTheme.colors.textMuted,
             )
@@ -263,8 +261,8 @@ private fun ConflictDialog(
 ) {
     EtaDialog(title = "Terminkonflikt", onDismiss = onDismiss) {
         EtaText(
-            text = "»${prompt.appointment}« liegt auf bereits verplanter Zeit. " +
-                "Der Termin bleibt stehen — was soll mit dem Rest geschehen?",
+            text = "»${prompt.appointment}« überschneidet sich mit geplanten Aufgaben. " +
+                "Der Termin bleibt; was soll mit den Aufgaben geschehen?",
             style = EtaTheme.typography.body,
             color = EtaTheme.colors.textSecondary,
         )
@@ -347,7 +345,7 @@ private fun ConflictCard(
             }
             if (conflict.shortened != null || conflict.pushed != null) {
                 EtaText(
-                    text = "Die Aktivität selbst ändert sich — Anfahrt, Rückweg und Pause " +
+                    text = "Nur die Aktivität ändert sich. Anfahrt, Rückweg und Pause " +
                         "behalten ihre Länge.",
                     style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.textMuted,
@@ -367,7 +365,7 @@ private fun ConflictCard(
                 )
             }
             EtaText(
-                text = "»Fällt aus« sagt die Aktivität ab — im Voraus kostet das nichts. " +
+                text = "»Fällt aus« sagt die Aktivität im Voraus kostenlos ab. " +
                     "»In die Woche« legt sie als Nachholen-Karte in die Wochenliste.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,

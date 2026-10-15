@@ -1,0 +1,49 @@
+name: Change vorschlagen
+description: Vorhandenes Verhalten, Darstellung oder einen bestehenden Ablauf ändern.
+title: "[Change] "
+labels: [change]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Ein Change passt etwas Vorhandenes an, das nicht zwingend fehlerhaft ist.
+        Ist eine bestehende Funktion defekt, nutze Bug; fehlt die Funktion bisher ganz, nutze Feature.
+        Dieses Repository ist öffentlich. Bitte keine privaten Termine, Nutzerdaten oder Zugangsdaten veröffentlichen.
+  - type: textarea
+    id: current-behavior
+    attributes:
+      label: Was soll an Bestehendem geändert werden?
+      description: Nenne den Bereich und beschreibe das aktuelle Verhalten oder die aktuelle Darstellung.
+    validations:
+      required: true
+  - type: textarea
+    id: desired-behavior
+    attributes:
+      label: Wie soll es danach sein?
+      description: Beschreibe die gewünschte Änderung.
+    validations:
+      required: true
+  - type: textarea
+    id: motivation
+    attributes:
+      label: Warum ist die Änderung hilfreich?
+      description: Optional. Welches Problem im Alltag würde die Änderung lösen?
+    validations:
+      required: false
+  - type: textarea
+    id: acceptance-criteria
+    attributes:
+      label: Woran erkennst du, dass die Änderung fertig ist?
+      description: Falls schon klar, nenne überprüfbare Erfolgskriterien.
+      placeholder: |
+        - Wenn …, dann …
+        - … bleibt unverändert.
+    validations:
+      required: false
+  - type: textarea
+    id: constraints
+    attributes:
+      label: Was darf sich nicht ändern?
+      description: Optional. Nenne bestehende Abläufe oder Daten, die erhalten bleiben müssen.
+    validations:
+      required: false

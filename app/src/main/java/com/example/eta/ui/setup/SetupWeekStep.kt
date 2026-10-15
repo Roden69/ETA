@@ -183,7 +183,7 @@ internal fun SetupWeekStep(
             }
             val extra = conflicts.size - 2
             EtaText(
-                text = shown + if (extra > 0) "\nund $extra weitere Überschneidungen" else "",
+                text = shown + if (extra > 0) "\nWeitere Überschneidungen: $extra" else "",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.warning,
             )

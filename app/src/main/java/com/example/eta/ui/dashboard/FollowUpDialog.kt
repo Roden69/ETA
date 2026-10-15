@@ -80,8 +80,8 @@ fun FollowUpDialog(
                 )
             }
             EtaText(
-                text = "Vorgezogen wird nur diese eine Aufgabe, und nur so weit, wie sie passt — " +
-                    "der Rest des Tages bleibt, wo er ist.",
+                text = "Nur diese Aufgabe wird vorgezogen, und nur so weit, wie sie passt. " +
+                    "Der Rest des Tages bleibt unverändert.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
             )

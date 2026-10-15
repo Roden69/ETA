@@ -16,9 +16,9 @@ import kotlinx.coroutines.withTimeoutOrNull
 /**
  * Eta's voice: a task's name read out where a sound would have played.
  *
- * It follows the rules [EtaSound] set, because it stands in for it: the **alarm
- * stream**, so the notification volume is irrelevant, and **silent under "Nicht
- * stören"** and under nothing else. Music ducks for the length of a sentence.
+ * It follows [EtaSound.effectiveMode]: a muted phone uses the vibration fallback,
+ * and Do-Not-Disturb suppresses announcements unless overridden. Audible speech
+ * uses the alarm stream, with music ducked for the length of a sentence.
  *
  * A process-wide object rather than something a receiver owns. The speech engine
  * is another app's service, bound asynchronously, and a receiver is gone long
@@ -57,19 +57,27 @@ object EtaSpeech {
     private class Utterance(val done: CompletableDeferred<Unit>, val focus: Any?)
 
     /**
-     * Reads [text] out. False when it could not — no speech engine, or one that
-     * refused — so the caller can fall back to the sound: late or plain beats
-     * silent. True under Do-Not-Disturb, which is silence that was asked for.
+     * Reads [text] out. False when vibration is needed or the engine cannot speak,
+     * so the caller falls back to [EtaSound.play]. True when silence was requested,
+     * so the caller does not announce the same event again.
      */
     suspend fun speak(context: Context, text: String): Boolean {
         val app = context.applicationContext
-        // Vibration or silence was chosen: nothing is read out, and the caller
-        // falls back to `EtaSound.play`, which buzzes or stays quiet as asked.
-        if (EtaSound.mode(app) != AudioMode.SOUND) return false
-        if (text.isBlank() || EtaSound.isSilenced(app)) return true
+        if (text.isBlank()) return true
+        when (EtaSound.effectiveMode(app)) {
+            AudioMode.SILENT -> return true
+            AudioMode.VIBRATE -> return false
+            AudioMode.SOUND -> Unit
+        }
 
         val available = withTimeoutOrNull(BIND_TIMEOUT) { bind(app).await() } ?: false
         val tts = engine
+        // Binding may take seconds; respect a phone muted while it was in flight.
+        when (EtaSound.effectiveMode(app)) {
+            AudioMode.SILENT -> return true
+            AudioMode.VIBRATE -> return false
+            AudioMode.SOUND -> Unit
+        }
         if (!available || tts == null) return false
 
         val audio: AudioManager? = app.getSystemService()

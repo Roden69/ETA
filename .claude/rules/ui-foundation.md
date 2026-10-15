@@ -81,3 +81,14 @@ icons** — a Sperrliste or a self-contract has no icon that would not have to b
 invented and then explained. Tab screens pass `bottomInset = false` to `EtaScreen`:
 the bar already sits over the navigation bar, and insetting twice leaves a gap.
 
+
+### Visible German copy
+
+User-facing German text stays in the existing Kotlin literals and widget string
+resources. Use correct spelling and grammar, and keep explanations as short as
+their necessary information allows. Preserve established feature names and
+distinguish task selection from task completion in reward-binding help.
+Shortening must retain costs, timing, scope and exceptions; cancellation help
+describes the configured hourly rate, not a fixed price. Count summaries can use
+`Weitere Überschneidungen: …` to remain grammatical for both one and several.
+These are wording changes only: no behavior, layout or persistence changes.
