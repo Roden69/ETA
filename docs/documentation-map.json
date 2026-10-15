@@ -60,7 +60,7 @@
     {"id": "build-and-ci", "paths": ["*.gradle.kts", "gradle/**", "gradle.properties", "gradlew", "gradlew.bat", ".github/workflows/**", "app/build.gradle.kts"], "documents": ["docs/development.md", "docs/ci-cd.md"]},
     {"id": "issue-workflow", "paths": [".github/ISSUE_TEMPLATE/**"], "documents": ["docs/development.md"]},
     {"id": "documentation", "paths": ["docs/**", "Eta_doc/**", ".claude/rules/**", "scripts/**", "zensical.toml", "requirements-docs.txt", "README.md", "AGENTS.md", ".gitignore", ".github/pull_request_template.md"], "documents": ["docs/workflow.md", "docs/decisions/0001-docs-as-code.md"]},
-    {"id": "repository-notes", "paths": ["patchnotes/**", "update.txt", "LICENSE", "CLAUDE.md", ".omp/**"], "documents": ["docs/workflow.md", "docs/README.md"]},
+    {"id": "repository-notes", "paths": ["patchnotes/**", "update.txt", "LICENSE", "CLAUDE.md", "CLAUDE.md.old", ".omp/**"], "documents": ["docs/workflow.md", "docs/README.md"]},
     {"id": "application-fallback", "fallback": true, "paths": ["app/**"], "documents": ["docs/architecture.md", "docs/development.md"]}
   ]
 }
