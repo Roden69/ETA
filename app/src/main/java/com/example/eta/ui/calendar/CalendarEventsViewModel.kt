@@ -10,10 +10,21 @@ import com.example.eta.data.repository.CalendarImportService
 import com.example.eta.data.repository.CalendarRepository
 import com.example.eta.data.repository.CalendarSyncService
 import com.example.eta.data.repository.ConflictingBlock
+import com.example.eta.data.repository.PlanRepository
 import com.example.eta.data.repository.ScheduleMaintenance
+import com.example.eta.data.repository.SeriesOutcome
 import com.example.eta.data.repository.SyncOutcome
+import com.example.eta.domain.calendar.SeriesPattern
+import com.example.eta.domain.calendar.SeriesReading
+import com.example.eta.domain.calendar.pendingClashes
+import com.example.eta.domain.model.BlockOrigin
 import com.example.eta.domain.model.CalendarEvent
+import com.example.eta.domain.planning.MINUTES_PER_DAY
+import com.example.eta.domain.planning.endMinute
+import com.example.eta.domain.planning.minuteOfDay
+import com.example.eta.domain.planning.minuteToLocalTime
 import com.example.eta.ui.attributes.AppointmentAttributes
+import com.example.eta.ui.format.formatClock
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -33,16 +44,25 @@ import kotlinx.datetime.LocalDate
  */
 data class ConflictPrompt(
     val appointment: String,
+    /** The appointment's hours, "12:00–13:00", so each collision can name its own. */
+    val time: String,
     val conflicts: List<ConflictingBlock>,
     /**
      * Why the last answer did not take, if it did not.
      *
-     * Only "verschieben" can fail, and only for one reason: answering an earlier
-     * conflict filled the stretch this one was going to move into. Saying so
-     * beats moving the block somewhere nobody chose.
+     * Only "verschieben" and "aufteilen" can fail, and only for a reason the screen
+     * can name: answering an earlier conflict filled the stretch this one was going
+     * to move into, or the block already has a catch-up. Saying so beats moving the
+     * block somewhere nobody chose.
      */
     val refusal: String? = null,
 )
+
+/** A series the user asked to take on, once Google has said how it repeats. */
+data class SeriesOffer(val event: CalendarEvent, val pattern: SeriesPattern)
+
+/** Why a series could not be taken on, shown on the card it was asked from. */
+data class SeriesNotice(val eventId: String, val reason: String)
 
 data class CalendarStepUiState(
     val connected: Boolean = false,
@@ -51,6 +71,11 @@ data class CalendarStepUiState(
     val events: List<CalendarEvent> = emptyList(),
     /** Why the last sync did not work, if it did not. */
     val error: String? = null,
+    /**
+     * For each undecided appointment that lands on planned time: the blocks it
+     * would clash with, as the card names them. Only clashing events are keys.
+     */
+    val clashes: Map<String, List<String>> = emptyMap(),
 ) {
     /** Nothing left to decide — everything the calendar offers is accounted for. */
     val settled: Boolean get() = !syncing && events.isEmpty()
@@ -59,11 +84,11 @@ data class CalendarStepUiState(
 /**
  * The calendar step, in both the places it appears.
  *
- * The weekly planning runs it over the week it is about to lay out; the evening
- * runs it over tomorrow, to catch what was put in the calendar during the day.
- * They differ only in [from] and [to] — the question, "what does the calendar
- * offer that this app has never been told about", is the same one, and the answer
- * is the same query.
+ * The weekly planning runs it over the stretch it reads — today through the day
+ * before the next planning day — and the evening runs it over tomorrow, to catch
+ * what was put in the calendar during the day. They differ only in [from] and
+ * [to]: the question, "what does the calendar offer that this app has never been
+ * told about", is the same one, and the answer is the same query.
  *
  * It runs **before** the day or the week is filled with ToDos, which is the whole
  * reason it exists as a step rather than as a background sync: an appointment
@@ -73,6 +98,7 @@ data class CalendarStepUiState(
 @OptIn(ExperimentalCoroutinesApi::class)
 class CalendarEventsViewModel(
     private val calendarRepository: CalendarRepository,
+    private val planRepository: PlanRepository,
     private val syncService: CalendarSyncService,
     private val importService: CalendarImportService,
     private val scheduleMaintenance: ScheduleMaintenance,
@@ -92,17 +118,27 @@ class CalendarEventsViewModel(
     private val _conflicts = MutableStateFlow<ConflictPrompt?>(null)
     val conflicts: StateFlow<ConflictPrompt?> = _conflicts.asStateFlow()
 
+    private val _seriesOffer = MutableStateFlow<SeriesOffer?>(null)
+
+    /** The series dialog, once Google has said how the series repeats. */
+    val seriesOffer: StateFlow<SeriesOffer?> = _seriesOffer.asStateFlow()
+
+    private val _seriesNotice = MutableStateFlow<SeriesNotice?>(null)
+    val seriesNotice: StateFlow<SeriesNotice?> = _seriesNotice.asStateFlow()
+
     val uiState: StateFlow<CalendarStepUiState> = combine(
         calendarRepository.observePending(from, to),
+        planRepository.observeRange(from, to),
         syncing,
         connected,
         error,
-    ) { events, isSyncing, isConnected, failure ->
+    ) { events, blocks, isSyncing, isConnected, failure ->
         CalendarStepUiState(
             connected = isConnected,
             syncing = isSyncing,
             events = events,
             error = failure,
+            clashes = pendingClashes(events, blocks).mapValues { (_, entries) -> entries.map { it.describe() } },
         )
     }.stateIn(
         scope = viewModelScope,
@@ -171,25 +207,68 @@ class CalendarEventsViewModel(
     /**
      * Turns the event into a card on its day — and, if that lands on something,
      * asks what should happen to what was there.
+     *
+     * [origin] is [BlockOrigin.CALENDAR_BLOCKER] for "Als Zeitblocker (ohne
+     * Punkte)": the same appointment, holding its time, paying nothing.
      */
-    fun import(event: CalendarEvent, attributes: AppointmentAttributes) {
+    fun import(
+        event: CalendarEvent,
+        attributes: AppointmentAttributes,
+        origin: BlockOrigin = BlockOrigin.CALENDAR_IMPORT,
+    ) {
         viewModelScope.launch {
             val result = importService.import(
                 event = event,
-                details = AppointmentDetails(
-                    category = attributes.category,
-                    start = attributes.start,
-                    duration = attributes.duration,
-                    travelBefore = attributes.travelBefore,
-                    returnAfter = attributes.returnAfter,
-                    breakAfter = attributes.breakAfter,
-                    endSound = attributes.endSound,
-                    extras = attributes.extras,
-                ),
+                details = attributes.toDetails(),
+                origin = origin,
             )
             if (result.conflicts.isNotEmpty()) {
-                _conflicts.value = ConflictPrompt(event.title, result.conflicts)
+                _conflicts.value = ConflictPrompt(
+                    appointment = event.title,
+                    time = event.hours(),
+                    conflicts = result.conflicts,
+                )
             }
+        }
+    }
+
+    /**
+     * Asks Google how the series of [event] repeats, and offers to take it on.
+     *
+     * Only asked on demand: the sync does not read masters. A series Eta cannot
+     * represent answers with the reason, and nothing is made.
+     */
+    fun requestSeries(event: CalendarEvent) {
+        val seriesId = event.seriesId ?: return
+        viewModelScope.launch {
+            _seriesNotice.value = null
+            when (val outcome = syncService.readSeries(event.calendarId, seriesId)) {
+                is SeriesOutcome.Ok -> when (val reading = outcome.reading) {
+                    is SeriesReading.Repeats -> _seriesOffer.value = SeriesOffer(event, reading.pattern)
+                    is SeriesReading.Unsupported ->
+                        _seriesNotice.value = SeriesNotice(event.id, reading.reason)
+                }
+
+                is SeriesOutcome.NeedsConsent -> _consent.value = outcome.pendingIntent
+                is SeriesOutcome.Failed -> _seriesNotice.value = SeriesNotice(event.id, outcome.reason)
+            }
+        }
+    }
+
+    fun dismissSeries() {
+        _seriesOffer.value = null
+    }
+
+    /**
+     * Makes the series into recurring tasks, one per weekday, with the hour and
+     * length the form gives. The offer is cleared first, so a second tap cannot
+     * make the same cards twice.
+     */
+    fun adoptSeries(attributes: AppointmentAttributes) {
+        val offer = _seriesOffer.value ?: return
+        _seriesOffer.value = null
+        viewModelScope.launch {
+            importService.adoptSeries(offer.event, offer.pattern, attributes.toDetails())
         }
     }
 
@@ -239,6 +318,24 @@ class CalendarEventsViewModel(
         }
     }
 
+    /**
+     * The fifth: the part before the appointment stays, the part behind it becomes
+     * a catch-up in the week list. The series is not touched.
+     */
+    fun splitConflict(conflict: ConflictingBlock) {
+        val shortened = conflict.shortened ?: return
+        val back = conflict.split ?: return
+        viewModelScope.launch {
+            if (importService.splitConflicting(conflict.entry, shortened.plannedDuration, back)) {
+                dropConflict(conflict.entry)
+            } else {
+                _conflicts.value = _conflicts.value?.copy(
+                    refusal = "Für diese Aufgabe gibt es schon ein Nachholen. Wähle eine andere Antwort.",
+                )
+            }
+        }
+    }
+
     /** Leaving one alone is allowed; two things at once is sometimes simply true. */
     fun keepConflict(entry: BlockWithItem) = dropConflict(entry)
 
@@ -252,4 +349,24 @@ class CalendarEventsViewModel(
     fun dismissConflicts() {
         _conflicts.value = null
     }
+
+    private fun AppointmentAttributes.toDetails() = AppointmentDetails(
+        category = category,
+        start = start,
+        duration = duration,
+        travelBefore = travelBefore,
+        returnAfter = returnAfter,
+        breakAfter = breakAfter,
+        endSound = endSound,
+        extras = extras,
+    )
 }
+
+/** "12:00–13:00". An appointment running past midnight is shown as ending at midnight. */
+internal fun CalendarEvent.hours(): String {
+    val end = (start.minuteOfDay() + duration.inWholeMinutes.toInt()).coerceAtMost(MINUTES_PER_DAY - 1)
+    return start.formatClock() + "–" + minuteToLocalTime(end).formatClock()
+}
+
+private fun BlockWithItem.describe(): String =
+    item.name + " " + block.start.formatClock() + "–" + minuteToLocalTime(block.endMinute()).formatClock()

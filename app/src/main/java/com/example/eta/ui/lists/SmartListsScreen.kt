@@ -925,5 +925,6 @@ private fun rowLabel(row: RecurringWeekdayRow): String = buildString {
         Rhythm.Weekly -> Unit
         is Rhythm.Biweekly -> append(if (rhythm.parity == WeekParity.EVEN) " · gerade KW" else " · ungerade KW")
         is Rhythm.Monthly -> append(" · ${rhythm.weekOfMonth}. im Monat")
+        is Rhythm.EveryWeeks -> append(" · alle ${rhythm.weeks} Wochen")
     }
 }

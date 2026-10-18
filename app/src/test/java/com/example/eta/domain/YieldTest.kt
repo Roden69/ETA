@@ -83,6 +83,20 @@ class YieldTest {
     }
 
     @Test
+    fun `a calendar time blocker holds the hour and yields nothing`() {
+        val item = todo(Category.FOKUS)
+        val blocker = block(item.id, planned = 2.hours, origin = BlockOrigin.CALENDAR_BLOCKER)
+        assertEquals(0.0, yieldOf(item, blocker), 0.0001)
+    }
+
+    @Test
+    fun `a blocker yields nothing whatever its category would pay`() {
+        val item = todo(Category.FOKUS)
+        val blocker = block(item.id, planned = 3.hours, origin = BlockOrigin.CALENDAR_BLOCKER, actual = 3.hours)
+        assertEquals(0.0, yieldOf(item, blocker), 0.0001)
+    }
+
+    @Test
     fun `custom earn adds points and custom spend removes them`() {
         val earn = Item.newSpend("Bonus", CUSTOM_EARN_POINTS_PER_HOUR, now)
         val spend = Item.newSpend("Serie schauen", CUSTOM_SPEND_POINTS_PER_HOUR, now)

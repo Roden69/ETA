@@ -114,6 +114,10 @@
             android:name=".alarm.ReminderAlarmReceiver"
             android:exported="false" />
 
+        <receiver
+            android:name=".alarm.CalendarRefreshReceiver"
+            android:exported="false" />
+
         <!--
             The ringing screen. `singleInstance` so the full-screen intent and a
             tap on the notification cannot end up with two of them, and excluded

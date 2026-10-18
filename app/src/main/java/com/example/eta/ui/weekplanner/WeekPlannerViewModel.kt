@@ -9,6 +9,7 @@ import com.example.eta.data.repository.ScheduleMaintenance
 import com.example.eta.data.repository.SetupRepository
 import com.example.eta.data.repository.WeekPlanningService
 import com.example.eta.data.repository.WeekScope
+import com.example.eta.domain.calendar.DateWindow
 import com.example.eta.domain.model.Category
 import com.example.eta.domain.model.Item
 import com.example.eta.domain.model.withExtras
@@ -101,6 +102,18 @@ class WeekPlannerViewModel(
      * reading it at construction would have asked about the wrong cycle.
      */
     private val cycleStart = MutableStateFlow(weekPlanningService.today())
+
+    private val _calendarWindow = MutableStateFlow<DateWindow?>(null)
+
+    /**
+     * The stretch the calendar step reads for this planning: today through the day
+     * before the next weekly planning day. Null until the setup has been read.
+     */
+    val calendarWindow: StateFlow<DateWindow?> = _calendarWindow.asStateFlow()
+
+    init {
+        viewModelScope.launch { _calendarWindow.value = weekPlanningService.calendarWindow() }
+    }
 
     private val _inflation = MutableStateFlow<InflationPreview?>(null)
     val inflation: StateFlow<InflationPreview?> = _inflation.asStateFlow()

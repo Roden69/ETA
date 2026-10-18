@@ -324,16 +324,15 @@ private fun MainScaffold(
                     key = "week-$dateKey",
                     factory = weekPlannerViewModelFactory(container, WeekScope.SCHEDULED),
                 )
+                val calendarWindow by weekViewModel.calendarWindow.collectAsStateWithLifecycle()
                 WeekPlannerScreen(
                     viewModel = weekViewModel,
-                    calendarViewModel = viewModel(
-                        key = "calendar-week-$dateKey",
-                        factory = calendarViewModelFactory(
-                            container = container,
-                            from = weekViewModel.weekStart,
-                            to = weekViewModel.weekEnd,
-                        ),
-                    ),
+                    calendarViewModel = calendarWindow?.let { window ->
+                        viewModel(
+                            key = "calendar-week-$dateKey",
+                            factory = calendarViewModelFactory(container, window.from, window.to),
+                        )
+                    },
                     onClose = { flow = null },
                     weekAdjust = { onBack -> WeekAdjustScreen(container, weekViewModel.weekStart, dateKey, onBack) },
                 )
@@ -345,16 +344,15 @@ private fun MainScaffold(
                     key = "week-topup-$dateKey",
                     factory = weekPlannerViewModelFactory(container, WeekScope.MIDWEEK),
                 )
+                val calendarWindow by weekViewModel.calendarWindow.collectAsStateWithLifecycle()
                 WeekPlannerScreen(
                     viewModel = weekViewModel,
-                    calendarViewModel = viewModel(
-                        key = "calendar-topup-$dateKey",
-                        factory = calendarViewModelFactory(
-                            container = container,
-                            from = weekViewModel.weekStart,
-                            to = weekViewModel.weekEnd,
-                        ),
-                    ),
+                    calendarViewModel = calendarWindow?.let { window ->
+                        viewModel(
+                            key = "calendar-topup-$dateKey",
+                            factory = calendarViewModelFactory(container, window.from, window.to),
+                        )
+                    },
                     onClose = { flow = null },
                     weekAdjust = { onBack -> WeekAdjustScreen(container, weekViewModel.weekStart, dateKey, onBack) },
                 )
@@ -419,6 +417,7 @@ private fun MainScaffold(
                     ),
                 ),
                 onDone = { flow = AppFlow.EveningPlanner },
+                onBack = { flow = AppFlow.Concretize },
             )
 
             AppFlow.Vacation -> VacationScreen(
@@ -700,6 +699,7 @@ private fun rootViewModelFactory(container: AppContainer): ViewModelProvider.Fac
                 container.planningAlarmCoordinator,
                 container.taskStartCoordinator,
                 container.reminderCoordinator,
+                container.calendarRefreshCoordinator,
                 container.scheduleMaintenance,
                 container.weekPlanningService,
                 container.tutorialStore,
@@ -853,6 +853,7 @@ private fun weekTabViewModelFactory(
                 itemRepository = container.itemRepository,
                 clock = container.clock,
                 from = from,
+                calendarRepository = container.calendarRepository,
             )
         }
     }
@@ -892,6 +893,7 @@ private fun calendarViewModelFactory(
         initializer {
             CalendarEventsViewModel(
                 calendarRepository = container.calendarRepository,
+                planRepository = container.planRepository,
                 syncService = container.calendarSyncService,
                 importService = container.calendarImportService,
                 scheduleMaintenance = container.scheduleMaintenance,

@@ -40,7 +40,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.eta.domain.planning.TimelineDraft
 import androidx.compose.ui.graphics.Color
 import com.example.eta.data.local.BlockWithItem
-import com.example.eta.domain.model.BlockOrigin
+import com.example.eta.ui.planner.OccupiedSpan
 import com.example.eta.domain.planning.minuteToLocalTime
 import com.example.eta.domain.planning.nightDateAt
 import com.example.eta.domain.setup.allNights
@@ -219,6 +219,7 @@ fun WeekTabScreen(
             entries = weekLegendEntries(
                 blocks = WEEK.flatMap { shown(it) },
                 sleep = WEEK.any { state.sleepOn(it, view).isNotEmpty() },
+                pending = WEEK.flatMap { state.occupiedOn(it, view, appointments) },
             ),
             modifier = Modifier.padding(horizontal = EtaTheme.spacing.lg),
         )
@@ -237,6 +238,7 @@ fun WeekTabScreen(
             ) {
                 DayTimeline(
                     blocks = shown(pageDay),
+                    occupied = state.occupiedOn(pageDay, view, appointments),
                     sleep = state.sleepOn(pageDay, view),
                     // "Aktuell" changes one night of this week, "Generell" the
                     // weekday's rule. A night over midnight is one night either way:
@@ -866,24 +868,33 @@ private sealed interface NightTarget {
 /**
  * The colours the week shows, each with what it means — the colours the timeline
  * draws: a task's own colour, else its category's; the calendar's ochre for an
- * imported appointment; the night's shade; free time as the plain ground.
+ * imported appointment or blocker; an undecided appointment's outline, in the
+ * danger colour where it lands on planned time; the night's shade; free time as
+ * the plain ground.
  */
 @Composable
-private fun weekLegendEntries(blocks: List<BlockWithItem>, sleep: Boolean): List<LegendEntry> {
+private fun weekLegendEntries(
+    blocks: List<BlockWithItem>,
+    sleep: Boolean,
+    pending: List<OccupiedSpan>,
+): List<LegendEntry> {
     val entries = mutableListOf<LegendEntry>()
-    blocks.filter { it.item.color != null && it.block.origin != BlockOrigin.CALENDAR_IMPORT }
+    blocks.filter { it.item.color != null && !it.block.origin.isCalendarEvent }
         .groupBy { it.item.color!! }
         .forEach { (argb, same) ->
             entries += LegendEntry(Color(argb), same.map { it.item.name }.distinct().joinToString(", "))
         }
-    blocks.filter { it.item.color == null && it.block.origin != BlockOrigin.CALENDAR_IMPORT }
+    blocks.filter { it.item.color == null && !it.block.origin.isCalendarEvent }
         .map { it.item.category }
         .distinct()
         .forEach { category ->
             entries += LegendEntry(colorOf(category), category?.let(::categoryLabel) ?: "Ohne Kategorie")
         }
-    if (blocks.any { it.block.origin == BlockOrigin.CALENDAR_IMPORT }) {
+    if (blocks.any { it.block.origin.isCalendarEvent } || pending.any { !it.clashes }) {
         entries += LegendEntry(EtaTheme.colors.calendar, "Google-Termin")
+    }
+    if (pending.any { it.clashes }) {
+        entries += LegendEntry(EtaTheme.colors.danger, "Termin überschneidet sich mit dem Plan")
     }
     if (sleep) entries += LegendEntry(EtaTheme.colors.sleep, "Schlaf")
     entries += LegendEntry(EtaTheme.colors.surface, "Frei", outlined = true)

@@ -3,8 +3,12 @@ package com.example.eta.ui.week
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.eta.data.local.BlockWithItem
+import com.example.eta.domain.planning.MINUTES_PER_DAY
+import com.example.eta.domain.planning.minuteOfDay
+import com.example.eta.ui.planner.OccupiedSpan
 import com.example.eta.alarm.TaskStartCoordinator
 import com.example.eta.alarm.WakeAlarmCoordinator
+import com.example.eta.data.repository.CalendarRepository
 import com.example.eta.data.repository.ItemRepository
 import com.example.eta.data.repository.NightService
 import com.example.eta.data.repository.PlanRepository
@@ -12,7 +16,9 @@ import com.example.eta.data.repository.RecurringTaskService
 import com.example.eta.data.repository.SetupRepository
 import com.example.eta.data.repository.SubtaskRepository
 import com.example.eta.domain.growth.isGrowthTask
+import com.example.eta.domain.calendar.pendingClashes
 import com.example.eta.domain.model.BlockOrigin
+import com.example.eta.domain.model.CalendarEvent
 import com.example.eta.domain.model.Item
 import com.example.eta.domain.model.NightOverride
 import com.example.eta.domain.model.Subtask
@@ -63,6 +69,9 @@ enum class WeekView(val label: String) {
     GENERAL("Generell"),
 }
 
+/** An undecided calendar appointment in this week, and whether it lands on planned time. */
+data class WeekAppointment(val event: CalendarEvent, val clashes: Boolean)
+
 data class WeekTabUiState(
     val today: LocalDate,
     /** The Monday of the week [today] lies in. */
@@ -76,7 +85,31 @@ data class WeekTabUiState(
     val foldable: List<Item> = emptyList(),
     /** Nights changed for one date — shown in "Aktuell", which is this week as it is. */
     val nightOverrides: Map<LocalDate, NightOverride> = emptyMap(),
+    /** Appointments the calendar still offers in this week. Not blocks: they show their hours only. */
+    val pendingAppointments: List<WeekAppointment> = emptyList(),
 ) {
+
+    /**
+     * The undecided appointments [day] shows, as spans of the day.
+     *
+     * In "Aktuell" they are always there, since that is this week as it is. In
+     * "Generell" they come with "Termine anzeigen", the same switch that brings
+     * the imported ones.
+     */
+    fun occupiedOn(day: DayOfWeek, view: WeekView, withAppointments: Boolean): List<OccupiedSpan> {
+        if (view == WeekView.GENERAL && !withAppointments) return emptyList()
+        val date = dateOf(day)
+        return pendingAppointments.filter { it.event.date == date }.map { (event, clashes) ->
+            val start = event.start.minuteOfDay()
+            OccupiedSpan(
+                label = event.title,
+                startMinute = start,
+                endMinute = (start + event.duration.inWholeMinutes.toInt()).coerceAtMost(MINUTES_PER_DAY),
+                clashes = clashes,
+            )
+        }
+    }
+
     /**
      * The date [day] falls on in the seven days from [weekStart].
      *
@@ -120,7 +153,7 @@ data class WeekTabUiState(
         WeekView.GENERAL -> standingBlocksOn(day, dateOf(day), definitions, unlocked = false).map { entry ->
             entry.copy(block = entry.block.copy(flexible = unlocked && canReschedule(entry)))
         } + if (appointments) {
-            blocks[dateOf(day)].orEmpty().filter { it.block.origin == BlockOrigin.CALENDAR_IMPORT }
+            blocks[dateOf(day)].orEmpty().filter { it.block.origin.isCalendarEvent }
         } else {
             emptyList()
         }
@@ -221,6 +254,8 @@ class WeekTabViewModel(
      * the week it is laying out.
      */
     from: LocalDate? = null,
+    /** The undecided calendar appointments of the week, shown next to the blocks. */
+    private val calendarRepository: CalendarRepository,
 ) : ViewModel() {
 
     val today: LocalDate = clock.todayIn(timeZone)
@@ -235,10 +270,15 @@ class WeekTabViewModel(
     val uiState: StateFlow<WeekTabUiState> = combine(
         recurringTaskService.observeDefinitions(),
         setupRepository.observe(),
-        planRepository.observeRange(weekStart, weekStart.plus(DatePeriod(days = WEEK.size - 1))),
+        combine(
+            planRepository.observeRange(weekStart, weekStart.plus(DatePeriod(days = WEEK.size - 1))),
+            calendarRepository.observePending(weekStart, weekStart.plus(DatePeriod(days = WEEK.size - 1))),
+            ::Pair,
+        ),
         combine(subtaskRepository.observeByItem(), itemRepository.observeFoldCandidates(), ::Pair),
         nightService.observeOverrides(),
-    ) { definitions, setup, blocks, (subtasks, foldable), overrides ->
+    ) { definitions, setup, (blocks, pending), (subtasks, foldable), overrides ->
+        val clashing = pendingClashes(pending, blocks).keys
         WeekTabUiState(
             today = today,
             weekStart = weekStart,
@@ -248,6 +288,7 @@ class WeekTabViewModel(
             subtasks = subtasks,
             foldable = foldable,
             nightOverrides = overrides,
+            pendingAppointments = pending.map { WeekAppointment(it, clashes = it.id in clashing) },
         )
     }.stateIn(
         scope = viewModelScope,

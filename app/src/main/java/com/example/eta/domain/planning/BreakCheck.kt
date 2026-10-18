@@ -43,7 +43,7 @@ fun BlockWithItem.breakKind(): BreakKind = when {
     item.category == Category.ACHTSAM -> BreakKind.REST
     item.role == ItemRole.BED_PREP || item.role == ItemRole.MORNING -> BreakKind.NEUTRAL
     item.category != null || item.role != null -> BreakKind.TASK
-    block.origin == BlockOrigin.CALENDAR_IMPORT -> BreakKind.TASK
+    block.origin.isCalendarEvent -> BreakKind.TASK
     else -> BreakKind.NEUTRAL
 }
 

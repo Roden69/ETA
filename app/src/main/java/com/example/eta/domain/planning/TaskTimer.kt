@@ -226,7 +226,7 @@ fun timerOverflow(
         next = next,
         shortenedGoal = (frameEnd - nowMinute).takeIf { it >= MIN_TIMER_GOAL.inWholeMinutes }?.minutes,
         pushedNext = next?.block
-            ?.takeIf { it.origin != BlockOrigin.CALENDAR_IMPORT }
+            ?.takeIf { !it.origin.isCalendarEvent }
             ?.trimmedAfter(projectedEnd),
     )
 }

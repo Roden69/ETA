@@ -1,6 +1,7 @@
 package com.example.eta.domain.model
 
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalDate
 
 enum class WeekParity { EVEN, ODD }
 
@@ -29,17 +30,41 @@ sealed class RecurrenceRule {
         val weekOfMonth: Int,
     ) : RecurrenceRule()
 
+    /**
+     * Every [weeks]-th week on [weekday], counted from [anchor].
+     *
+     * [anchor] is the first occurrence and falls on [weekday]; the weeks between
+     * are counted in whole weeks from it, so a fortnightly rule anchored on one
+     * Monday and a three-weekly one anchored on another are both exact, with no
+     * ISO week-number parity to drift at a year's end. [weeks] is at least 2: one
+     * week is [Weekly].
+     */
+    data class EveryWeeks(
+        val weekday: DayOfWeek,
+        val weeks: Int,
+        val anchor: LocalDate,
+    ) : RecurrenceRule() {
+        init {
+            require(weeks >= 2) { "EveryWeeks needs at least two weeks, got $weeks" }
+            require(anchor.dayOfWeek == weekday) { "The anchor $anchor is not a $weekday" }
+        }
+    }
+
     fun encode(): String = when (this) {
         is Daily -> "D"
         is Weekly -> "W:$weekday"
         is Biweekly -> "B:$weekday:$parity"
         is Monthly -> "M:$weekday:$weekOfMonth"
+        is EveryWeeks -> "E:$weekday:$weeks:$anchor"
     }
 
     companion object {
         fun decode(value: String): RecurrenceRule {
             val parts = value.split(':')
             if (parts[0] == "D") return Daily
+            if (parts[0] == "E") {
+                return EveryWeeks(DayOfWeek.valueOf(parts[1]), parts[2].toInt(), LocalDate.parse(parts[3]))
+            }
             val weekday = DayOfWeek.valueOf(parts[1])
             return when (parts[0]) {
                 "W" -> Weekly(weekday)

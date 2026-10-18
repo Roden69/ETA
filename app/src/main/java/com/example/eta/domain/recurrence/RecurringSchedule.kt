@@ -126,11 +126,17 @@ sealed interface Rhythm {
     data class Biweekly(val parity: WeekParity) : Rhythm
     data class Monthly(val weekOfMonth: Int) : Rhythm
 
+    /** Every [weeks] weeks, counted from [anchor]; see [RecurrenceRule.EveryWeeks]. */
+    data class EveryWeeks(val weeks: Int, val anchor: LocalDate) : Rhythm
+
     /** The rules this rhythm asks for on [weekdays], in week order. */
     fun rulesFor(weekdays: Set<DayOfWeek>): List<RecurrenceRule> = when (this) {
         Weekly -> rulesForWeekdays(weekdays)
         is Biweekly -> WEEK.filter { it in weekdays }.map { RecurrenceRule.Biweekly(it, parity) }
         is Monthly -> WEEK.filter { it in weekdays }.map { RecurrenceRule.Monthly(it, weekOfMonth) }
+        is EveryWeeks -> WEEK.filter { it in weekdays }.map { day ->
+            RecurrenceRule.EveryWeeks(day, weeks, firstEveryWeeksDate(anchor, weeks, day))
+        }
     }
 
     companion object {
@@ -138,6 +144,7 @@ sealed interface Rhythm {
             RecurrenceRule.Daily, is RecurrenceRule.Weekly -> Weekly
             is RecurrenceRule.Biweekly -> Biweekly(rule.parity)
             is RecurrenceRule.Monthly -> Monthly(rule.weekOfMonth)
+            is RecurrenceRule.EveryWeeks -> EveryWeeks(rule.weeks, rule.anchor)
         }
     }
 }

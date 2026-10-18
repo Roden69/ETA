@@ -29,6 +29,9 @@ import com.example.eta.ui.theme.EtaTheme
  * The evening's calendar step: what was put in the calendar for tomorrow since
  * the last time anyone looked.
  *
+ * System Back goes to the concretizing step it came from; "Weiter" is the only
+ * way forward, so a stray Back cannot skip the planning's own decisions.
+ *
  * It sits between the concretizing step and the planner, for the reason the whole
  * feature exists: an appointment decided **before** the day is filled is part of
  * the picture, and one decided after it is a collision.
@@ -45,6 +48,8 @@ fun CalendarStepScreen(
     viewModel: CalendarEventsViewModel,
     modifier: Modifier = Modifier,
     onDone: () -> Unit = {},
+    /** System Back: the step before this one, not the planner ahead of it. */
+    onBack: () -> Unit = {},
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val conflicts by viewModel.conflicts.collectAsStateWithLifecycle()
@@ -56,7 +61,7 @@ fun CalendarStepScreen(
         onDone()
     }
 
-    BackHandler { onDone() }
+    BackHandler { onBack() }
 
     EtaScreen(modifier = modifier) {
         Column(Modifier.fillMaxSize()) {

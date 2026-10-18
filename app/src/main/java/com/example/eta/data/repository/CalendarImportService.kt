@@ -1,22 +1,24 @@
 package com.example.eta.data.repository
 
 import com.example.eta.data.local.BlockWithItem
+import com.example.eta.domain.calendar.SeriesPattern
 import com.example.eta.domain.model.BlockOrigin
 import com.example.eta.domain.model.CalendarEvent
 import com.example.eta.domain.model.Category
 import com.example.eta.domain.model.Item
-import com.example.eta.domain.model.ItemType
 import com.example.eta.domain.model.ItemExtras
+import com.example.eta.domain.model.ItemType
 import com.example.eta.domain.model.PlannedBlock
-import com.example.eta.domain.model.stampedWith
-import com.example.eta.domain.model.withExtras
 import com.example.eta.domain.model.Priority
 import com.example.eta.domain.model.Stage
+import com.example.eta.domain.model.stampedWith
+import com.example.eta.domain.model.withExtras
 import com.example.eta.domain.planning.canPlace
 import com.example.eta.domain.planning.claimsItsSlot
-import com.example.eta.domain.planning.shortenedBefore
-import com.example.eta.domain.planning.startedAfter
 import com.example.eta.domain.planning.overlaps
+import com.example.eta.domain.planning.shortenedBefore
+import com.example.eta.domain.planning.splitAround
+import com.example.eta.domain.planning.startedAfter
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlinx.datetime.LocalTime
@@ -38,21 +40,25 @@ data class AppointmentDetails(
  * One thing the appointment landed on, and every way out of that.
  *
  * The two whole-activity answers — call it off, carry it into the week — always
- * apply. The two partial ones do not, and whether they do is arithmetic rather
- * than taste, so it is worked out here instead of being offered and then refused:
+ * apply. The partial ones do not, and whether they do is arithmetic rather than
+ * taste, so it is worked out here instead of being offered and then refused:
  *
  * - [shortened] exists when the block begins before the appointment does, so
  *   there is a stretch worth keeping in front of it.
  * - [pushed] exists when it runs past the appointment's end *and* the new
  *   position is free of everything else on the day.
+ * - [split] exists when the appointment runs through the middle of the block:
+ *   [shortened] keeps the front, and [split] is how long the stretch behind the
+ *   appointment is. It becomes a catch-up card, never a second block.
  *
- * Both are null for a block the appointment swallows whole — the case the user
- * named: there is nothing to shorten *to* and nothing to wait *for*.
+ * All null for a block the appointment swallows whole — the case the user named:
+ * there is nothing to shorten *to*, nothing to wait *for* and nothing behind it.
  */
 data class ConflictingBlock(
     val entry: BlockWithItem,
     val shortened: PlannedBlock?,
     val pushed: PlannedBlock?,
+    val split: Duration? = null,
 )
 
 /**
@@ -84,6 +90,7 @@ class CalendarImportService(
     private val itemRepository: ItemRepository,
     private val planRepository: PlanRepository,
     private val calendarRepository: CalendarRepository,
+    private val recurringTaskService: RecurringTaskService,
     private val dayClosingService: DayClosingService,
     private val weekPlanningService: WeekPlanningService,
     private val clock: Clock = Clock.System,
@@ -98,11 +105,20 @@ class CalendarImportService(
      * planner, though its time can still be corrected in the edit dialog, exactly
      * as a recurring occurrence can.
      *
-     * The Sperrliste is not consulted. It exists to stop an idea being hoarded and
-     * retyped; an appointment somebody put in a calendar is a fact about the
+     * [origin] is [BlockOrigin.CALENDAR_BLOCKER] for "Als Zeitblocker (ohne
+     * Punkte)": the same time, the same immovability, and no points — `yieldOf`
+     * decides that from the origin alone.
+     *
+     * The Sperrliste is not consulted. It exists to stop an idea being hoarded
+     * and retyped; an appointment somebody put in a calendar is a fact about the
      * world, and refusing to show it would not make it go away.
      */
-    suspend fun import(event: CalendarEvent, details: AppointmentDetails): ImportResult {
+    suspend fun import(
+        event: CalendarEvent,
+        details: AppointmentDetails,
+        origin: BlockOrigin = BlockOrigin.CALENDAR_IMPORT,
+    ): ImportResult {
+        require(origin.isCalendarEvent) { "An appointment is imported as a calendar origin, not $origin" }
         val now = clock.now()
 
         val item = Item(
@@ -131,7 +147,7 @@ class CalendarImportService(
             date = event.date,
             start = details.start,
             plannedDuration = details.duration,
-            origin = BlockOrigin.CALENDAR_IMPORT,
+            origin = origin,
             travelBefore = details.travelBefore,
             returnAfter = details.returnAfter,
             breakAfter = details.breakAfter,
@@ -166,10 +182,50 @@ class CalendarImportService(
                     } else {
                         null
                     },
+                    split = if (open) entry.block.splitAround(block)?.back else null,
                 )
             }
 
         return ImportResult(item = item, block = block, conflicts = conflicts)
+    }
+
+    /**
+     * Makes a recurring task of a Google series, one card per weekday, and links
+     * the series to them.
+     *
+     * The cards take the rhythm the series' rule gives ([SeriesPattern.rhythm]) and
+     * the hour, length and journeys of the form — the same answers an ordinary
+     * import asks for, so the card is an ordinary standing task afterwards and is
+     * edited like one. Every undecided occurrence of the series is taken off the
+     * list by [CalendarRepository.adoptSeries], and later ones are taken as they
+     * arrive. Changes Google makes to the series afterwards are not followed.
+     *
+     * Returns the ids of the cards made.
+     */
+    suspend fun adoptSeries(
+        event: CalendarEvent,
+        pattern: SeriesPattern,
+        details: AppointmentDetails,
+    ): List<String> {
+        val seriesId = requireNotNull(event.seriesId) { "Only an occurrence of a series can be adopted" }
+        val ids = recurringTaskService.createGroup(
+            edit = RecurringEdit(
+                name = event.title,
+                note = null,
+                category = details.category,
+                weekdays = pattern.weekdays,
+                startTime = details.start,
+                duration = details.duration,
+                travelBefore = details.travelBefore,
+                returnAfter = details.returnAfter,
+                breakAfter = details.breakAfter,
+                endSound = details.endSound,
+                extras = details.extras,
+            ),
+            rhythm = pattern.rhythm,
+        )
+        calendarRepository.adoptSeries(event.calendarId, seriesId, ids)
+        return ids
     }
 
     /**
@@ -187,6 +243,40 @@ class CalendarImportService(
         val fresh = planRepository.findBlock(entry.block.id) ?: return false
         planRepository.addBlock(
             fresh.copy(plannedDuration = to, actualDuration = null, updatedAt = clock.now()),
+        )
+        return true
+    }
+
+    /**
+     * Keeps the part in front of the appointment and turns the part behind it into
+     * a catch-up card in the week list.
+     *
+     * The block stays one block, shortened to [front]; the remainder of [back] is
+     * a new card made by `Item.newMakeUpTodo`, which is the one way to put more
+     * of an activity on another day without a second block for the same
+     * `(itemId, date)`. The standing series is not touched. Idempotent in the
+     * sense that matters: a block that already has a catch-up (`makeUpItemId`)
+     * is refused, so a split can never be answered twice into two cards.
+     *
+     * Returns false when the row is gone or already carries a catch-up.
+     */
+    suspend fun splitConflicting(entry: BlockWithItem, front: Duration, back: Duration): Boolean {
+        val fresh = planRepository.findBlock(entry.block.id) ?: return false
+        if (fresh.makeUpItemId != null) return false
+
+        val now = clock.now()
+        val remainder = Item.newMakeUpTodo(entry.item, now).copy(estimatedDuration = back)
+        itemRepository.takeIntoWeek(remainder, weekPlanningService.cycleStart())
+        // Written after the card exists, from a fresh read, so the shortening and
+        // the link to the card land on the same row.
+        val current = planRepository.findBlock(entry.block.id) ?: return false
+        planRepository.addBlock(
+            current.copy(
+                plannedDuration = front,
+                actualDuration = null,
+                makeUpItemId = remainder.id,
+                updatedAt = now,
+            ),
         )
         return true
     }
