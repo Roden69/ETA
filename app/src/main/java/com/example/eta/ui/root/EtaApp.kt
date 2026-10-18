@@ -95,6 +95,12 @@ import com.example.eta.ui.week.WeekTabViewModel
 import com.example.eta.ui.weekplanner.WeekPlannerScreen
 import com.example.eta.ui.weekplanner.WeekPlannerViewModel
 import com.example.eta.widget.QuickAddWidgetProvider
+import com.example.eta.ui.evening.EveningScreen
+import com.example.eta.ui.evening.EveningViewModel
+import com.example.eta.ui.reevaluation.CatchUpBanner
+import com.example.eta.ui.reevaluation.CatchUpBannerViewModel
+import com.example.eta.ui.reevaluation.CatchUpRun
+import androidx.compose.runtime.saveable.listSaver
 import kotlinx.datetime.todayIn
 
 /**
@@ -242,6 +248,17 @@ private fun MainScaffold(
     LaunchedEffect(flow) {
         if (flow != AppFlow.PlannerToday) plannerFocus = null
     }
+    // The missed evenings being caught up, oldest first, and whether today's planning
+    // is still owed once they are behind. Kept while the catch-up is on screen.
+    var catchUpDays by rememberSaveable(stateSaver = DAYS_SAVER) { mutableStateOf<List<LocalDate>>(emptyList()) }
+    var catchUpPlanToday by rememberSaveable { mutableStateOf(false) }
+    val beginCatchUp: (CatchUpRun) -> Unit = { run ->
+        if (run.days.isNotEmpty()) {
+            catchUpDays = run.days
+            catchUpPlanToday = run.planToday
+            flow = AppFlow.CatchUp
+        }
+    }
 
     // Answering the alarm lands in the phase itself. Dropping the user on the
     // dashboard would make them do the navigating they were interrupted for.
@@ -258,6 +275,10 @@ private fun MainScaffold(
     // rebuilds them when it rolls over, so an app left open overnight does not
     // spend the morning showing yesterday.
     val dateKey = rememberDateKey()
+    // The dashboard's offer to catch up missed evenings. Not in the tutorial's sandbox:
+    // its days are practice days, and nothing in them is owed.
+    val catchUpSlot: @Composable () -> Unit = { CatchUpOffer(container, dateKey, beginCatchUp) }
+    val catchUpBanner = if (container.sandbox) null else catchUpSlot
 
     // Back leaves a flow first, then returns to the first tab.
     BackHandler(enabled = flow != null) { flow = null }
@@ -273,12 +294,15 @@ private fun MainScaffold(
 
     if (flow != null) {
         when (flow) {
-            AppFlow.Planner -> DayPlannerScreen(
+            AppFlow.Planner, AppFlow.EveningPlanner -> DayPlannerScreen(
                 viewModel = viewModel(
                     key = "planner-$dateKey",
                     factory = plannerViewModelFactory(container, PlannerDay.TOMORROW),
                 ),
-                onClose = { flow = null },
+                onClose = {
+                    // The day planner that closes the evening leads on to the evening's own screens.
+                    flow = if (flow == AppFlow.EveningPlanner && !container.sandbox) AppFlow.Evening else null
+                },
                 onTopUpWeek = { flow = AppFlow.WeekTopUp },
             )
 
@@ -343,6 +367,38 @@ private fun MainScaffold(
                 onClose = { flow = AppFlow.Concretize },
             )
 
+            // The missed evenings, one after another, oldest first. Each is closed the way the
+            // evening closes it, or left unsettled when it is skipped.
+            AppFlow.CatchUp -> {
+                val day = catchUpDays.firstOrNull()
+                val advance: () -> Unit = {
+                    catchUpDays = catchUpDays.drop(1)
+                    flow = when {
+                        catchUpDays.isNotEmpty() -> AppFlow.CatchUp
+                        catchUpPlanToday -> AppFlow.PlannerToday
+                        else -> null
+                    }
+                }
+                if (day == null) {
+                    LaunchedEffect(Unit) { flow = null }
+                } else {
+                    ReevaluationScreen(
+                        viewModel = viewModel(
+                            key = "catchup-$day",
+                            factory = reevaluationViewModelFactory(container, day),
+                        ),
+                        onClose = advance,
+                        onSkip = advance,
+                    )
+                }
+            }
+
+            // The evening after the planner that closes the day: wake question, then wind-down.
+            AppFlow.Evening -> EveningScreen(
+                viewModel = viewModel(key = "evening-$dateKey", factory = eveningViewModelFactory(container)),
+                onClose = { flow = null },
+            )
+
             AppFlow.Concretize -> ConcretizeScreen(
                 viewModel = viewModel(key = "concretize-$dateKey", factory = concretizeViewModelFactory(container)),
                 onDone = { flow = AppFlow.Calendar },
@@ -362,7 +418,7 @@ private fun MainScaffold(
                         to = currentDate().plus(DatePeriod(days = 1)),
                     ),
                 ),
-                onDone = { flow = AppFlow.Planner },
+                onDone = { flow = AppFlow.EveningPlanner },
             )
 
             AppFlow.Vacation -> VacationScreen(
@@ -398,6 +454,7 @@ private fun MainScaffold(
                         key = "feature-suggestion-$dateKey",
                         factory = featureSuggestionViewModelFactory(container),
                     ),
+                    catchUpBanner = catchUpBanner,
                     weekPage = {
                         WeekTabScreen(
                             viewModel = viewModel(
@@ -580,6 +637,11 @@ private val FLOW_SAVER: Saver<AppFlow?, Any> = Saver(
     restore = { runCatching { AppFlow.valueOf(it as String) }.getOrNull() },
 )
 
+private val DAYS_SAVER: Saver<List<LocalDate>, Any> = listSaver<List<LocalDate>, String>(
+    save = { days -> days.map { it.toString() } },
+    restore = { saved -> saved.map { LocalDate.parse(it) } },
+)
+
 /** Things you are in the middle of. They cover the bar until they are done. */
 private enum class AppFlow {
     Planner,
@@ -592,6 +654,12 @@ private enum class AppFlow {
     Reevaluation,
     Concretize,
     Vacation,
+    /** Missed evenings caught up one after another, from the dashboard's offer. */
+    CatchUp,
+    /** The planner that closes the day when it is done in the evening: its end leads to [Evening]. */
+    EveningPlanner,
+    /** The evening after the day closing: the wake question, then the wind-down hint. */
+    Evening,
 }
 
 /**
@@ -855,6 +923,7 @@ private fun settingsViewModelFactory(container: AppContainer): ViewModelProvider
                 taskStartCoordinator = container.taskStartCoordinator,
                 planRepository = container.planRepository,
                 reminderRepository = container.reminderRepository,
+                eveningStore = container.eveningStore,
             )
         }
     }
@@ -938,15 +1007,58 @@ internal fun contractsViewModelFactory(container: AppContainer): ViewModelProvid
         initializer { ContractsViewModel(container.contractRepository, clock = container.clock) }
     }
 
-internal fun reevaluationViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
+/**
+ * The reevaluation of [date]: the day being lived when none is given, or an earlier
+ * evening that is being caught up.
+ */
+internal fun reevaluationViewModelFactory(container: AppContainer, date: LocalDate? = null): ViewModelProvider.Factory =
     viewModelFactory {
         initializer {
             ReevaluationViewModel(
+                date = date ?: container.clock.todayIn(TimeZone.currentSystemDefault()),
                 reevaluationService = container.reevaluationService,
                 planRepository = container.planRepository,
                 itemRepository = container.itemRepository,
                 dayClosingService = container.dayClosingService,
                 subtaskRepository = container.subtaskRepository,
+                clock = container.clock,
+            )
+        }
+    }
+
+/** The dashboard's offer: its own view model, so the dashboard's stays as it was. */
+@Composable
+private fun CatchUpOffer(container: AppContainer, dateKey: String, onRun: (CatchUpRun) -> Unit) {
+    val offer: CatchUpBannerViewModel = viewModel(
+        key = "catchup-banner-$dateKey",
+        factory = catchUpBannerViewModelFactory(container),
+    )
+    val days by offer.days.collectAsStateWithLifecycle()
+    if (days.isNotEmpty()) {
+        CatchUpBanner(days = days, onStart = { offer.start(onRun) })
+    }
+}
+
+private fun catchUpBannerViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
+    viewModelFactory {
+        initializer {
+            CatchUpBannerViewModel(
+                catchUpService = container.catchUpService,
+                planRepository = container.planRepository,
+                clock = container.clock,
+            )
+        }
+    }
+
+private fun eveningViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
+    viewModelFactory {
+        initializer {
+            EveningViewModel(
+                setupRepository = container.setupRepository,
+                nightService = container.nightService,
+                planRepository = container.planRepository,
+                subtaskRepository = container.subtaskRepository,
+                eveningStore = container.eveningStore,
                 clock = container.clock,
             )
         }

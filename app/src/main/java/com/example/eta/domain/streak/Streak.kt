@@ -4,7 +4,7 @@ import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
 
-/** How far back a day may still be made up after a technical failure. */
+/** How far back a day may still be made up. The last week is offered on the dashboard; older days need the phrase. */
 const val CATCH_UP_WINDOW_DAYS = 30
 
 /** The phrase the settings field demands before a past day can be resolved. */
@@ -27,7 +27,8 @@ data class Streak(
  * showed zero every morning would say nothing.
  *
  * Yesterday unsettled means the run is over — that is the whole point of the
- * mechanic, and the only way back is the catch-up in the settings.
+ * mechanic, and the only way back is the catch-up: on the dashboard for the last
+ * week, in the settings for older days.
  */
 fun streakOf(settled: Set<LocalDate>, today: LocalDate): Streak {
     val todaySettled = today in settled

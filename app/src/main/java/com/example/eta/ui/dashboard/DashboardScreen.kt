@@ -102,6 +102,11 @@ fun DashboardScreen(
      * as in the tutorial, which has nothing to offer.
      */
     featureSuggestion: FeatureSuggestionViewModel? = null,
+    /**
+     * The offer to catch up the evenings that were missed, drawn under the header.
+     * Null where there is nothing to offer, such as the tutorial's practice days.
+     */
+    catchUpBanner: (@Composable () -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val editFeedback by viewModel.blockEditFeedback.collectAsStateWithLifecycle()
@@ -135,6 +140,7 @@ fun DashboardScreen(
                             onPlanTomorrow = onPlanTomorrow,
                             onReplanToday = onReplanToday,
                             featureSuggestion = featureSuggestion,
+                            catchUp = catchUpBanner,
                         )
 
                         DashboardPage.TOMORROW -> TomorrowPage(state, onPlanTomorrow, onPlanWeek)
@@ -218,6 +224,7 @@ private fun TodayPage(
     onPlanTomorrow: () -> Unit,
     onReplanToday: () -> Unit,
     featureSuggestion: FeatureSuggestionViewModel?,
+    catchUp: (@Composable () -> Unit)?,
 ) {
     // Held as an id and resolved against the list as it is now: the row may
     // have been ticked off or called off while the dialog stood open.
@@ -231,6 +238,7 @@ private fun TodayPage(
         verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.lg),
     ) {
         PageHeader(title = "Heute", subtitle = state.today.formatLong())
+        catchUp?.invoke()
         featureSuggestion?.let { FeatureSuggestionCard(it) }
 
         // First of all, because two things at the same time is the one thing on

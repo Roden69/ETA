@@ -4,6 +4,7 @@ import android.content.Context
 import com.example.eta.data.repository.NightService
 import com.example.eta.data.repository.SetupRepository
 import com.example.eta.domain.planning.WAKE_SNOOZE
+import com.example.eta.domain.planning.etaRingsWakeAlarm
 import com.example.eta.domain.planning.nextWake
 import kotlin.time.Clock
 import kotlinx.datetime.TimeZone
@@ -21,6 +22,11 @@ import kotlinx.coroutines.launch
  * each night's wake time is the hour, so the alarm cannot drift away from the hour the
  * planner shades as the end of the night.
  *
+ * Who rings is the route in [EveningStore]: Eta by default, or the clock app. With
+ * the clock app as route and that app installed, Eta arms nothing; the evening asks
+ * instead whether to set the alarm there (see `ui/evening`). Without the app Eta
+ * rings after all, so the alarm is never lost.
+ *
  * Rescheduling follows the same rule as everything else in `alarm/` — it happens
  * on every path, ringing included. An alarm clock that forgets to arm tomorrow
  * has failed silently, which is the worst way for an alarm clock to fail.
@@ -28,6 +34,7 @@ import kotlinx.coroutines.launch
 class WakeAlarmCoordinator(
     private val context: Context,
     private val setupRepository: SetupRepository,
+    private val preferences: EveningStore,
     private val clock: Clock = Clock.System,
     private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
     /**
@@ -48,7 +55,8 @@ class WakeAlarmCoordinator(
         val due = setup?.let {
             nextWake(it, clock.now().toLocalDateTime(timeZone), nightService?.overrides().orEmpty())
         }
-        if (due == null) {
+        val etaRings = etaRingsWakeAlarm(preferences.wakeRoute(), preferences.clockAppAvailable())
+        if (due == null || !etaRings) {
             scheduler.cancel()
             // Turning the alarm off while it is ringing has to silence it too,
             // or the switch would look broken at the only moment it matters.

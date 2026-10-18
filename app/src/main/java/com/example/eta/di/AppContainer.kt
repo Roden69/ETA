@@ -5,6 +5,7 @@ import androidx.room3.Room
 import com.example.eta.alarm.PlanningAlarmCoordinator
 import com.example.eta.alarm.ReminderCoordinator
 import com.example.eta.alarm.TaskStartCoordinator
+import com.example.eta.alarm.EveningStore
 import com.example.eta.alarm.WakeAlarmCoordinator
 import com.example.eta.data.backup.BackupService
 import com.example.eta.data.calendar.GoogleAuth
@@ -294,10 +295,14 @@ class AppContainer(
         enabled = !sandbox,
     )
 
-    /** Off unless the setup says otherwise; rings at the setup's wake time. */
+    /** The evening's choices: where the wake alarm rings, and whether the wind-down hint shows. */
+    val eveningStore: EveningStore = EveningStore(appContext)
+
+    /** Off unless the setup says otherwise; rings at the setup's wake time, or leaves it to the clock app. */
     val wakeAlarmCoordinator: WakeAlarmCoordinator = WakeAlarmCoordinator(
         context = appContext,
         setupRepository = setupRepository,
+        preferences = eveningStore,
         clock = clock,
         enabled = !sandbox,
         nightService = nightService,

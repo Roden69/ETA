@@ -5,6 +5,7 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.eta.alarm.TaskStartCoordinator
 import com.example.eta.alarm.WakeAlarmCoordinator
+import com.example.eta.alarm.EveningStore
 import com.example.eta.data.repository.PlanRepository
 import com.example.eta.data.repository.ReminderRepository
 import com.example.eta.data.backup.BackupResult
@@ -18,7 +19,9 @@ import com.example.eta.domain.setup.longestAwakeMinutes
 import com.example.eta.domain.planning.nextTaskEvent
 import com.example.eta.domain.reminder.nextReminderAlarm
 import com.example.eta.domain.planning.PlanningPhase
+import com.example.eta.domain.planning.WakeRoute
 import com.example.eta.domain.planning.nextWake
+import com.example.eta.domain.planning.etaRingsWakeAlarm
 import com.example.eta.domain.streak.CATCH_UP_PHRASE
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -70,9 +73,30 @@ class SettingsViewModel(
     private val taskStartCoordinator: TaskStartCoordinator,
     private val planRepository: PlanRepository,
     private val reminderRepository: ReminderRepository,
+    private val eveningStore: EveningStore,
     private val clock: Clock = Clock.System,
     private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) : ViewModel() {
+
+    /** Where the wake alarm rings: Eta, or the clock app. Kept on the phone, not in the setup. */
+    private val _wakeRoute = MutableStateFlow(eveningStore.wakeRoute())
+    val wakeRoute: StateFlow<WakeRoute> = _wakeRoute.asStateFlow()
+
+    /** Whether the calm hint shows after the day closing. */
+    private val _windDown = MutableStateFlow(eveningStore.windDownEnabled())
+    val windDown: StateFlow<Boolean> = _windDown.asStateFlow()
+
+    /** Switches where the wake alarm rings, and arms or drops Eta's own at once. */
+    fun chooseWakeRoute(route: WakeRoute) {
+        eveningStore.chooseWakeRoute(route)
+        _wakeRoute.value = route
+        viewModelScope.launch { wakeAlarmCoordinator.reschedule() }
+    }
+
+    fun setWindDown(enabled: Boolean) {
+        eveningStore.setWindDownEnabled(enabled)
+        _windDown.value = enabled
+    }
 
     /**
      * The stored answers, loaded once into an editable draft.
@@ -188,6 +212,7 @@ class SettingsViewModel(
             daily = phaseService.nextDue(PlanningPhase.DAILY),
             weekly = phaseService.nextDue(PlanningPhase.WEEKLY),
             wake = setup
+                ?.takeIf { etaRingsWakeAlarm(eveningStore.wakeRoute(), eveningStore.clockAppAvailable()) }
                 ?.let { nextWake(it, clock.now().toLocalDateTime(timeZone)) }
                 ?.toInstant(timeZone),
         )

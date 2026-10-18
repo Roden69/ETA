@@ -254,3 +254,12 @@ follow the same corrected night. Settings save reschedules the alarm as before.
 The next wake time for an individually edited night was checked on a physical phone;
 no ringing or sound was triggered by that smoke scenario.
 
+**Who rings: the route (#18).** `EveningStore.wakeRoute()` (SharedPreferences `evening`)
+is Eta by default. With *Uhr-App* and that app installed, `WakeAlarmCoordinator.reschedule`
+arms nothing: `etaRingsWakeAlarm` decides, and a vanished clock app gives the alarm back
+to Eta, so it is never lost. The hand-over is the evening's one-shot question
+(`ClockAppAlarms.setOnce`, see `streak-reevaluation.md`), not a repeating alarm. Eta still
+cannot read, change or delete the alarms a clock app holds. The Settings choice "Wecken
+über" is shown only while the Weckruf is on, and the wake time shown as due is Eta's own,
+so it is empty while the clock app holds the alarm.
+
