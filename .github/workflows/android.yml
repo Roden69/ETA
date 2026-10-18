@@ -66,7 +66,7 @@ jobs:
           fi
           echo "ETA_DEBUG_KEYSTORE=$KEYSTORE_DIR/debug.keystore" >> "$GITHUB_ENV"
       - name: Run debug validation
-        run: bash ./gradlew --console=plain --stacktrace testDebugUnitTest lint assembleDebug
+        run: bash ./gradlew --console=plain --stacktrace testDebugUnitTest lint assembleDebug assembleFork
       - name: Verify debug APK signer
         run: |
           set -euo pipefail
@@ -75,17 +75,26 @@ jobs:
           fi
 
           EXPECTED="$(keytool -exportcert -keystore "$ETA_DEBUG_KEYSTORE" -alias androiddebugkey -storepass android | sha256sum | cut -d ' ' -f 1)"
-          ACTUAL="$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs app/build/outputs/apk/debug/app-debug.apk | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
-          if [[ "$ACTUAL" != "$EXPECTED" ]]; then
-            echo "::error::Debug APK signer ${ACTUAL:-unknown} does not match the shared debug keystore ($EXPECTED)."
-            exit 1
-          fi
-          echo "Debug APK is signed with the shared debug key ($EXPECTED)."
+          for APK in app/build/outputs/apk/debug/app-debug.apk app/build/outputs/apk/fork/app-fork.apk; do
+            ACTUAL="$("$ANDROID_HOME/build-tools/36.0.0/apksigner" verify --print-certs "$APK" | sed -n 's/^Signer #1 certificate SHA-256 digest: //p')"
+            if [[ "$ACTUAL" != "$EXPECTED" ]]; then
+              echo "::error::$APK signer ${ACTUAL:-unknown} does not match the shared debug keystore ($EXPECTED)."
+              exit 1
+            fi
+            echo "$APK is signed with the shared debug key ($EXPECTED)."
+          done
       - name: Upload debug APK
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: eta-debug-apk
           path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          compression-level: 0
+      - name: Upload fork APK
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: eta-fork-apk
+          path: app/build/outputs/apk/fork/app-fork.apk
           if-no-files-found: error
           compression-level: 0
       - name: Upload failure reports

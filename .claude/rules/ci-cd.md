@@ -45,3 +45,20 @@ Operational instructions: `docs/ci-cd.md`.
   own secrets. Never create production version tags merely to test the pipeline.
   Existing releases are not overwritten by re-runs. Release runs are not cancelled
   when other versions are pushed.
+- The debug job also runs `assembleFork` (build type `fork`: application-id suffix
+  `.fork`, `app_name` "Eta Fork", debug signing) and uploads `eta-fork-apk`
+  (`app/build/outputs/apk/fork/app-fork.apk`). Its signer is verified against the
+  shared debug key like the debug APK. The default debug and release identity is
+  unchanged. Testers: `docs/ci-cd.md` ("Für Tester").
+- Issue-Bot: `issue-triage.yml` (opened/edited/reopened) only reads the issue through
+  the API: duplicate search on title words (two shared words needed), repro checklist
+  for `bug` issues, one bot comment, labels `possible-duplicate` and `needs-repro`
+  (created on demand). `issue-fix.yml` runs only on the label `fix-freigegeben`, and
+  only for actors with admin, maintain or write permission. Without the secret
+  `ANTHROPIC_API_KEY` it comments the setup and stops. Otherwise
+  `anthropics/claude-code-action` (pinned to v1.0.252, commit f27be6b6…) works on
+  `fix/issue-<N>` and opens a PR against `main`. Issue text is untrusted data; it never
+  enters a shell step, and the tool allow-list permits pushes only to `fix/issue-*`.
+  Nothing is pushed to `main` by the workflow; that protection is a branch ruleset.
+  Pull requests created with `GITHUB_TOKEN` start no `pull_request` workflows, so the
+  Android run for such a PR is started by hand on its branch.
