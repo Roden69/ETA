@@ -96,6 +96,7 @@ class AppContainer(
     val planRepository: PlanRepository = PlanRepository(
         database.plannedBlockDao(),
         database.dayPlanDao(),
+        database.itemDao(),
         clock = clock,
     )
 

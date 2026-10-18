@@ -2,6 +2,7 @@ package com.example.eta.data.repository
 
 import com.example.eta.data.local.BlockWithItem
 import com.example.eta.data.local.DayPlanDao
+import com.example.eta.data.local.ItemDao
 import com.example.eta.data.local.PlannedBlockDao
 import com.example.eta.domain.model.DayPlan
 import com.example.eta.domain.model.Item
@@ -20,6 +21,7 @@ import kotlinx.datetime.todayIn
 class PlanRepository(
     private val blockDao: PlannedBlockDao,
     private val dayPlanDao: DayPlanDao,
+    private val itemDao: ItemDao,
     private val clock: Clock = Clock.System,
     private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) {
@@ -130,11 +132,20 @@ class PlanRepository(
                 updatedAt = now,
             ),
         )
+        // Checking a card off releases the follow-up that waits for it — see FollowUps.kt.
+        itemDao.applyFollowUpTransition(block.itemId, finished = true, now = now)
     }
 
     suspend fun reopen(block: PlannedBlock) {
-        blockDao.upsert(block.copy(completedAt = null, updatedAt = clock.now()))
+        val now = clock.now()
+        blockDao.upsert(block.copy(completedAt = null, updatedAt = now))
+        // Ticking it back makes an untaken follow-up wait again.
+        itemDao.applyFollowUpTransition(block.itemId, finished = false, now = now)
     }
+
+    /** A card finished without a check-off on its block (the Listen tab's "Erledigt"). */
+    suspend fun finishFollowUpsOf(itemId: String) =
+        itemDao.applyFollowUpTransition(itemId, finished = true, now = clock.now())
 
     /**
      * Calls an occurrence off in advance, without removing it.

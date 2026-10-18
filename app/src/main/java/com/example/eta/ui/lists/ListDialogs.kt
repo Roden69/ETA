@@ -400,6 +400,7 @@ fun ItemEditDialog(
                 value = todo,
                 onChange = { todo = it },
                 today = today,
+                offerFollowUps = true,
                 groupName = name,
                 onGroupName = { name = it },
                 foldCandidates = foldCandidates,
@@ -479,6 +480,7 @@ fun TodoCreateDialog(
             value = attributes,
             onChange = { attributes = it },
             today = today,
+            offerFollowUps = true,
             groupName = name,
             onGroupName = { name = it },
             foldCandidates = foldCandidates,
@@ -518,9 +520,14 @@ fun RecurringCreateDialog(
      * length of the box that was shaped there; everything else is the default.
      */
     initial: RecurringAttributes = RecurringAttributes(),
+    /** The heading; a second time slot of a routine says so. */
+    title: String = "Neue wiederkehrende Aufgabe",
+    /** What the name and note open on: a second slot starts as a copy of its routine. */
+    initialName: String = "",
+    initialNote: String = "",
 ) {
-    var name by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf(initialName) }
+    var note by remember { mutableStateOf(initialNote) }
     var attributes by remember { mutableStateOf(initial) }
 
     val overlaps = remember(attributes, definitions) {
@@ -531,7 +538,7 @@ fun RecurringCreateDialog(
     }
     val booked = remember(definitions, setup) { weekOccupancy(definitions, setup) }
 
-    ListDialog(title = "Neue wiederkehrende Aufgabe", onDismiss = onDismiss) {
+    ListDialog(title = title, onDismiss = onDismiss) {
         EtaText(
             text = "Kommt in den festen Wochenplan; die Termine werden sofort angelegt.",
             style = EtaTheme.typography.caption,
@@ -623,6 +630,11 @@ fun RecurringGroupDialog(
     onEnd: () -> Unit,
     morningSteps: List<SubtaskDraft>? = null,
     onMorningSteps: (List<SubtaskDraft>) -> Unit = {},
+    /**
+     * A second time slot for the same routine on the same days — Achtsamkeit at
+     * noon as well as in the morning. Null leaves the action out.
+     */
+    onAddSlot: (() -> Unit)? = null,
 ) {
     val item = group.representative
     var confirmingEnd by remember(group.ids) { mutableStateOf(false) }
@@ -685,6 +697,7 @@ fun RecurringGroupDialog(
                 onClick = { if (confirmingEnd) onEnd() else confirmingEnd = true },
             )
             Spacer(Modifier.weight(1f))
+            onAddSlot?.let { EtaButton(text = "Weiterer Zeitplatz", style = EtaButtonStyle.Secondary, onClick = it) }
             EtaButton(text = "Bearbeiten", onClick = onEdit)
         }
     }

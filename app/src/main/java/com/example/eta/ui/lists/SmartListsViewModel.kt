@@ -32,6 +32,7 @@ import com.example.eta.domain.recurrence.RecurringGroup
 import com.example.eta.domain.recurrence.groupRecurring
 import com.example.eta.domain.setup.UserSetup
 import com.example.eta.domain.staging.daysUntilBan
+import com.example.eta.domain.chain.isOfferedFollowUp
 import com.example.eta.ui.attributes.RecurringAttributes
 import com.example.eta.ui.attributes.TodoAttributes
 import kotlin.time.Clock
@@ -57,6 +58,7 @@ import kotlinx.datetime.todayIn
 data class CollectionEntry(
     val item: Item,
     val daysLeft: Int?,
+    val predecessorName: String? = null,
 )
 
 /** A banned ToDo and the day it may be written down again. */
@@ -83,6 +85,8 @@ data class SmartListsUiState(
      * that finishing one happens with the free hours of the week in view.
      */
     val incompleteRecurring: List<CollectionEntry> = emptyList(),
+    /** Follow-ups their predecessor has released: due now, offered for the week. */
+    val offered: List<Item> = emptyList(),
     val week: List<Item> = emptyList(),
     val todayBlocks: List<BlockWithItem> = emptyList(),
     val tomorrowBlocks: List<BlockWithItem> = emptyList(),
@@ -140,10 +144,17 @@ class SmartListsViewModel(
         itemRepository.observeStage(Stage.LOCKED),
         itemRepository.observeStage(Stage.COLLECTION),
         itemRepository.observeStage(Stage.WEEK),
-    ) { locked, collection, week ->
+        itemRepository.observeFollowUpPredecessorNames(),
+    ) { locked, collection, week, predecessors ->
         Triple(
             locked.map { LockedEntry(it, it.lockedUntil?.toLocalDateTime(timeZone)?.date) },
-            collection.map { CollectionEntry(it, it.daysUntilBan(clock.now(), timeZone)) },
+            collection.map {
+                CollectionEntry(
+                    item = it,
+                    daysLeft = it.daysUntilBan(clock.now(), timeZone),
+                    predecessorName = it.followUpOfId?.let(predecessors::get),
+                )
+            },
             week,
         )
     }
@@ -204,6 +215,7 @@ class SmartListsViewModel(
             locked = staged.first,
             collection = staged.second.filter { it.item.type != ItemType.RECURRING },
             incompleteRecurring = staged.second.filter { it.item.type == ItemType.RECURRING },
+            offered = staged.second.map { it.item }.filter { it.isOfferedFollowUp() },
             week = staged.third,
             todayBlocks = dayLists.todayBlocks,
             tomorrowBlocks = dayLists.tomorrowBlocks,
@@ -258,6 +270,7 @@ class SmartListsViewModel(
                 ).withExtras(attributes.extras),
                 subtasks = attributes.subtasks,
                 folded = attributes.foldedItemIds,
+                followUps = attributes.followUps,
             )
             when (result) {
                 is AddItemResult.BlockedByLock -> {
@@ -278,6 +291,25 @@ class SmartListsViewModel(
                             "zurückgegeben sind, nimmt die Woche Neues auf."
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * Takes an offered follow-up into the week — the step that is due now. Same gate
+     * as every other way into the week: while goals of an earlier cycle are open, it
+     * stays in the Sammelliste and the notice says why.
+     */
+    fun takeOfferedIntoWeek(item: Item) {
+        viewModelScope.launch {
+            val cycleStart = weekPlanningService.cycleStart()
+            val owed = itemRepository.observeUnfinishedWeekGoals(cycleStart).first()
+            if (owed.isEmpty()) {
+                itemRepository.takeIntoWeek(item, cycleStart)
+            } else {
+                _notice.value = "»${item.name}« ist jetzt dran, bleibt aber in der Sammelliste. " +
+                    (if (owed.size == 1) "Erst das offene Ziel" else "Erst die ${owed.size} offenen Ziele") +
+                    " aus der letzten Woche verplanen oder zurückgeben."
             }
         }
     }
@@ -317,6 +349,9 @@ class SmartListsViewModel(
                 subtasks = attributes.subtasks,
                 folded = attributes.foldedItemIds,
             )
+            if (attributes.followUps.any { it.isNotBlank() }) {
+                itemRepository.appendFollowUps(item.id, attributes.followUps)
+            }
         }
     }
 
@@ -439,6 +474,7 @@ class SmartListsViewModel(
                 updatedAt = now,
             )
             planRepository.addBlock(block)
+            planRepository.finishFollowUpsOf(item.id)
             // What the evening would have done anyway: a one-shot ToDo whose
             // occurrence is done leaves the active lists.
             itemRepository.retireCompletedTodos(today)
