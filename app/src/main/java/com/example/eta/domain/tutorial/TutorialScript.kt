@@ -236,7 +236,9 @@ val QUICKSTART_STEPS: List<TutorialStep> = listOf(
     text(
         TutorialStage.DASHBOARD,
         "Das Dashboard",
-        "Das ist der Tab »Heute«. Hier siehst du alles, was kurzfristig ansteht. " +
+        "Das ist das Dashboard, Seite »Heute«. Hier siehst du alles, was kurzfristig " +
+            "ansteht; oben wechselst du zu »Morgen«. In der echten App kommt dort noch " +
+            "»Woche« dazu: deine Woche als Stundenplan, auf Wunsch mit Google-Terminen. " +
             "Für das Tutorial ist es 10:30 Uhr, und Eta hat dir einen Beispieltag angelegt.",
     ),
     TutorialStep(
@@ -569,10 +571,11 @@ val QUICKSTART_STEPS: List<TutorialStep> = listOf(
         stage = TutorialStage.WEEK,
         title = "Wochenplanung",
         text = {
-            "Einmal pro Woche planst du die nächsten sieben Tage. Zuerst der " +
-                "Wertverfall: Angesparte Punkte verlieren jede Woche 30 % — sie sind " +
-                "zum Ausgeben da. Dann ein kurzer Rückblick. Tippe im Fenster zweimal " +
-                "auf »Weiter«."
+            "Einmal pro Woche planst du die Tage bis zur nächsten Wochenplanung. Zuerst " +
+                "der Wertverfall: Jede Woche verlierst du 30 % deiner angesparten Punkte, " +
+                "sie sind zum Ausgeben da. Dann ein kurzer Rückblick. In der echten App " +
+                "folgen danach deine Google-Termine, damit die Woche um sie herum entsteht; " +
+                "hier fehlt der Kalender. Tippe im Fenster zweimal auf »Weiter«."
         },
         kind = StepKind.FOLLOW,
         ready = { it.signals[TutorialSignal.WEEK_STEP] == "PLAN" },
@@ -581,11 +584,12 @@ val QUICKSTART_STEPS: List<TutorialStep> = listOf(
         stage = TutorialStage.WEEK,
         title = "Was kommt in die Woche?",
         text = { facts ->
-            "Links liegen die ToDos, die noch in keiner Woche stecken. Wiederkehrende " +
-                "Aufgaben fehlen hier: Sie sind ohnehin jede Woche eingeplant. An jeder " +
-                "Karte steht ihre Dauer. Tippe auf ${facts.todoLabel} und beobachte " +
-                "die freien Stunden. Fällt dir beim Planen noch etwas ein, legst du " +
-                "es mit »ToDo anlegen« gleich hier an."
+            "Links in der Sammelliste liegen die ToDos, die noch in keiner Woche stecken. " +
+                "Wiederkehrende Aufgaben fehlen hier: Sie sind ohnehin jede Woche " +
+                "eingeplant. An jeder Karte steht ihre Dauer, und was gerade nicht in " +
+                "die Woche darf, nennt unten seinen Grund. Tippe auf ${facts.todoLabel} " +
+                "und beobachte die freien Stunden. Fällt dir beim Planen noch etwas ein, " +
+                "legst du es mit »ToDo anlegen« gleich hier an."
         },
         kind = StepKind.TASK,
         checks = { listOf(TutorialCheck("Ein ToDo in »Diese Woche« schieben", it.weekGoals > 0)) },
@@ -593,7 +597,11 @@ val QUICKSTART_STEPS: List<TutorialStep> = listOf(
     TutorialStep(
         stage = TutorialStage.WEEK,
         title = "Die Woche steht",
-        text = { "Super! Jetzt fehlt nur noch der morgige Tag. Tippe auf »Woche steht«." },
+        text = {
+            "Super! In der echten App öffnet »Anpassungen vornehmen« die Woche als " +
+                "Stundenplan, um wiederkehrende Aufgaben nur für diese Woche zu " +
+                "verschieben. Jetzt fehlt nur noch der morgige Tag. Tippe auf »Woche steht«."
+        },
         kind = StepKind.FOLLOW,
         // Nothing to read off: leaving the screen is the step.
         ready = { false },
@@ -635,8 +643,8 @@ val QUICKSTART_STEPS: List<TutorialStep> = listOf(
             "ist für das, was keine Aufgabe abbildet, und bringt 1,5 Punkte pro " +
             "Stunde. Ausgeben ist dein Lohn: eine Stunde Serie oder Spielen kostet " +
             "5 Punkte. Beide Sätze lassen sich beim Einplanen anpassen. Ausgeben " +
-            "geht nur mit Guthaben — bei einem Punktestand von 0 oder darunter ist " +
-            "der Knopf gesperrt.",
+            "kannst du nur mit Guthaben: Bei einem Punktestand von 0 oder darunter " +
+            "ist der Knopf gesperrt.",
     ),
     text(
         TutorialStage.PLANNER,

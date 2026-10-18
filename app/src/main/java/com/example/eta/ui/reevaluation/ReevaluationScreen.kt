@@ -522,9 +522,9 @@ private fun BlockRow(
             } else if (excusable) {
                 EtaText(
                     text = if (pointsVisible) {
-                        "Kostet Punkte. Halten für »höhere Gewalt«."
+                        "Kostet Punkte. Gedrückt halten, wenn höhere Gewalt im Spiel war."
                     } else {
-                        "Halten für »höhere Gewalt«."
+                        "Gedrückt halten, wenn höhere Gewalt im Spiel war."
                     },
                     style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.warning,
@@ -671,9 +671,9 @@ private fun ContractQuestion(
         if (onProbation) {
             EtaText(
                 text = if (pointsVisible) {
-                    "Weitergeführt nach dem Bruch — die Frage bleibt, die Punkte nicht."
+                    "Nach dem Bruch weitergeführt: Die Frage bleibt, die Punkte nicht."
                 } else {
-                    "Weitergeführt nach dem Bruch — die Frage bleibt."
+                    "Nach dem Bruch weitergeführt: Die Frage bleibt."
                 },
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.danger,

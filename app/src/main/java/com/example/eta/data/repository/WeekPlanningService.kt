@@ -20,6 +20,7 @@ import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
+import com.example.eta.ui.format.formatPoints
 
 /**
  * Which stretch the weekly planner is looking at.
@@ -148,7 +149,7 @@ class WeekPlanningService(
                 amount = -preview.loss,
                 reason = PointsReason.INFLATION,
                 occurredAt = clock.now(),
-                note = "30% von ${preview.balance}",
+                note = "30 % von ${formatPoints(preview.balance)} Punkten",
             ),
         )
         return preview.loss

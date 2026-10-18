@@ -1106,8 +1106,8 @@ private fun InflationBox(setup: UserSetup, onChange: OnSetupChange) {
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = "Wertverfall", style = EtaTheme.typography.heading)
             EtaText(
-                text = "Einmal pro Woche verlieren gesparte Punkte 30 %. Der Abzug wird beim " +
-                    "ersten Öffnen nach diesem Tag gebucht — auch ohne Wochenplanung.",
+                text = "Einmal pro Woche verlierst du 30 % deiner gesparten Punkte. Der Abzug wird " +
+                    "beim ersten Öffnen nach diesem Tag gebucht, auch ohne Wochenplanung.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
             )

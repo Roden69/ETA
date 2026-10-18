@@ -259,7 +259,7 @@ private fun InflationStep(preview: InflationPreview?, banned: Int?) {
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = "Inflation", style = EtaTheme.typography.heading)
             EtaText(
-                text = "Jede Woche verlieren 30 % der angesparten Punkte ihren Wert. " +
+                text = "Jede Woche verlierst du 30 % deiner angesparten Punkte. " +
                     "Punkte sind zum Ausgeben da.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
@@ -380,8 +380,8 @@ private fun PlanStep(state: WeekPlannerUiState, viewModel: WeekPlannerViewModel,
                     color = EtaTheme.colors.warning,
                 )
                 EtaText(
-                    text = "Aus der letzten Woche liegen noch ${state.unfinished.size} " +
-                        "unverplante Ziele in der Wochenliste. Neues wird erst aufgenommen, wenn sie " +
+                    text = "Aus der letzten Woche sind noch ${state.unfinished.size} Ziele " +
+                        "nicht verplant. Neues kommt erst in die Wochenliste, wenn diese " +
                         "verplant oder zurückgegeben sind.",
                     style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.textSecondary,
@@ -434,8 +434,8 @@ private fun PlanStep(state: WeekPlannerUiState, viewModel: WeekPlannerViewModel,
     )
 
     EtaText(
-        text = "Tippen schiebt eine Karte in die andere Spalte. Verplant wird sie erst " +
-            "in der Tagesplanung.",
+        text = "Ein Tipp verschiebt eine Karte in die andere Spalte. Verplant wird sie " +
+            "erst in der Tagesplanung.",
         style = EtaTheme.typography.caption,
         color = EtaTheme.colors.textMuted,
     )
@@ -477,8 +477,8 @@ private fun BudgetBox(budget: WeekBudget) {
                     color = EtaTheme.colors.warning,
                 )
                 EtaText(
-                    text = "Das darf so sein — der Verzicht wird ja vergütet. Es sollte nur " +
-                        "eine Entscheidung sein und kein Versehen.",
+                    text = "Das ist in Ordnung, der Verzicht wird ja vergütet. Wichtig ist nur, " +
+                        "dass es eine bewusste Entscheidung ist und kein Versehen.",
                     style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.textMuted,
                 )

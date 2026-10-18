@@ -135,7 +135,7 @@ fun SubtaskBuilderDialog(
     setting: SubtaskSetting,
     onDismiss: () -> Unit,
     onSave: (SubtaskSetting) -> Unit,
-    title: String = "Subtasks",
+    title: String = "Schritte",
     saveLabel: String = "Sichern",
     /**
      * Tasks that can be folded in as steps. Empty hides the offer, which is what a
@@ -185,7 +185,7 @@ fun SubtaskBuilderDialog(
         }
 
         EtaText(
-            text = "Subtasks bestehen nur aus Name und Notiz — keine Dauer, keine Kategorie, " +
+            text = "Schritte bestehen nur aus Name und Notiz — keine Dauer, keine Kategorie, " +
                 "keine Punkte. Antippen zum Bearbeiten, gedrückt halten und ziehen zum Sortieren.",
             style = EtaTheme.typography.caption,
             color = EtaTheme.colors.textSecondary,
@@ -193,7 +193,7 @@ fun SubtaskBuilderDialog(
 
         if (rows.isEmpty()) {
             EtaText(
-                text = "Noch keine Subtasks.",
+                text = "Noch keine Schritte.",
                 style = EtaTheme.typography.body,
                 color = EtaTheme.colors.textSecondary,
             )
@@ -206,7 +206,7 @@ fun SubtaskBuilderDialog(
         }
 
         EtaButton(
-            text = "Weitere Subtask hinzufügen",
+            text = "Weiteren Schritt hinzufügen",
             style = EtaButtonStyle.Secondary,
             onClick = { adding = true },
         )
@@ -214,7 +214,7 @@ fun SubtaskBuilderDialog(
         val offered = candidates.filterNot { candidate -> folded.any { it.itemId == candidate.itemId } }
         if (offered.isNotEmpty()) {
             EtaButton(
-                text = "Task zur Subtask reduzieren",
+                text = "Aufgaben als Schritte übernehmen",
                 style = EtaButtonStyle.Secondary,
                 onClick = { reducing = true },
             )
@@ -230,8 +230,8 @@ fun SubtaskBuilderDialog(
         }
         if (folded.isNotEmpty()) {
             EtaText(
-                text = "Wird beim Sichern zu Subtasks: " + folded.joinToString(", ") { it.name } +
-                    " — diese Tasks verschwinden dann aus ihren Listen.",
+                text = "Wird beim Sichern zu Schritten: " + folded.joinToString(", ") { it.name } +
+                    " — diese Aufgaben verschwinden dann aus ihren Listen.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.warning,
             )
@@ -445,7 +445,7 @@ private fun SubtaskEditDialog(
     var note by remember { mutableStateOf(row?.note ?: "") }
 
     EtaDialog(
-        title = if (row == null) "Neue Subtask" else "Subtask bearbeiten",
+        title = if (row == null) "Neuer Schritt" else "Schritt bearbeiten",
         onDismiss = onDismiss,
     ) {
         EtaField(label = "Name") {

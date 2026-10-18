@@ -367,15 +367,15 @@ fun BlockEditDialog(
                 text = if (!pointsVisible) {
                     "Abgesagt bleibt der Termin am Tag stehen, und seine Stunden sind " +
                         "wieder frei." +
-                        if (cancellationCosts) " Gedrückt halten, wenn wegen höherer Gewalt." else ""
+                        if (cancellationCosts) " Bei höherer Gewalt gedrückt halten." else ""
                 } else if (cancellationCosts) {
-                    "Absagen kostet die abgesagten Stunden an Punkten. " +
+                    "Eine Absage kostet dich die abgesagten Stunden an Punkten. " +
                         if (entry.block.isHandPlaced) {
                             "»Vom Tag nehmen« nicht — die Aufgabe wandert zurück in die Woche. "
                         } else {
                             ""
                         } +
-                        "Gedrückt halten, wenn wegen höherer Gewalt."
+                        "Bei höherer Gewalt gedrückt halten."
                 } else {
                     "Der Tag läuft noch nicht — im Voraus abzusagen kostet nichts. " +
                         "Die Stunden sind dann wieder frei."
@@ -405,7 +405,7 @@ fun BlockEditDialog(
         // everything else in this dialog it writes on its own Sichern, the card
         // being one that already exists.
         EtaExpander(
-            label = "Subtasks",
+            label = "Schritte",
             hint = "Schritte innerhalb der Aufgabe. Gilt für die Aufgabe, nicht nur für heute.",
             summary = when (subtasks.size) {
                 0 -> "Keine"
@@ -421,7 +421,7 @@ fun BlockEditDialog(
                 )
             }
             EtaButton(
-                text = "Subtasks erstellen / bearbeiten",
+                text = "Schritte anlegen / bearbeiten",
                 style = EtaButtonStyle.Secondary,
                 modifier = Modifier.fillMaxWidth(),
                 onClick = { building = true },
@@ -578,9 +578,9 @@ fun ClearDayDialog(
             text = if (!LocalPointsVisible.current) {
                 "Die Stunden sind danach wieder frei."
             } else if (costs && cancelledHours > 0.0) {
-                "Der Tag läuft bereits: die Absagen kosten rund " +
+                "Der Tag läuft schon: Die Absagen kosten etwa " +
                     "${"%.1f".format(cancelledHours)} h an Punkten. " +
-                    "Der Abendrückblick lässt »höhere Gewalt« gelten."
+                    "Im Abendrückblick kannst du »höhere Gewalt« angeben."
             } else {
                 "Der Tag läuft noch nicht — im Voraus abzusagen kostet nichts."
             },
@@ -728,7 +728,7 @@ fun OverlapDialog(
             }
             if (callsOff && costs && pointsVisible) {
                 EtaText(
-                    text = "Der Tag läuft bereits: Absagen kostet die abgesagten Stunden an Punkten.",
+                    text = "Der Tag läuft schon: Eine Absage kostet dich die abgesagten Stunden an Punkten.",
                     style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.warning,
                 )
@@ -798,8 +798,8 @@ fun NewEntryKindDialog(
                 )
                 if (!canSpend) {
                     EtaText(
-                        text = "Ausgeben braucht Guthaben — dein Punktestand liegt bei 0 " +
-                            "oder darunter.",
+                        text = "Zum Ausgeben brauchst du Punkte. Dein Punktestand liegt gerade " +
+                            "bei 0 oder darunter.",
                         style = EtaTheme.typography.caption,
                         color = EtaTheme.colors.warning,
                     )

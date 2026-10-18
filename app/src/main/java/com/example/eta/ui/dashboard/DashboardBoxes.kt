@@ -109,7 +109,7 @@ fun CriticalBox(
                 color = EtaTheme.colors.danger,
             )
             EtaText(
-                text = "Wandert sonst für ein halbes Jahr auf die Sperrliste.",
+                text = "Sonst landet sie für ein halbes Jahr auf der Sperrliste.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textSecondary,
             )
