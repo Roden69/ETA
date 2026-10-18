@@ -163,7 +163,11 @@ has synced.
 **What the Google side needs, once:** a Cloud project with the **Calendar API**
 enabled, `.../auth/calendar.readonly` on the OAuth consent screen, the account on the
 **tester** list while the project is in testing, and an **Android** OAuth client
-carrying this app's package name (`com.example.erik_iteration_2`) and the SHA-1 of the
-keystore it is signed with. None of that is configured in the repository, which is the
-point of `AuthorizationClient`.
+carrying this app's package name (`com.example.erik_iteration_2`, or
+`com.example.erik_iteration_2.fork` for the fork build) and the SHA-1 of the keystore
+it is signed with. One client per package and SHA-1 pair. None of that is configured
+in the repository, which is the point of `AuthorizationClient`. The step-by-step
+guide for own builds is `docs/calendar-oauth.md`. When authorization fails,
+`GoogleAuth` shows a German hint (package, signature, tester) and the original
+Play Services message.
 
