@@ -724,6 +724,13 @@ private fun TimelineBlock(
     // tasks that share an hour on alternating weeks can both be read where the
     // standing week draws them on top of each other.
     val parity = (entry.item.recurrenceRule as? RecurrenceRule.Biweekly)?.parity
+    // The task's steps: listed in the block when every one fits the room below the
+    // name and time; otherwise counted, and the bubble that a tap opens lists them.
+    val counted = entry.item.quantityLabel() != null && height > 58.dp
+    val stepsListed = steps.isNotEmpty() &&
+        height > (if (counted) 76.dp else 58.dp) &&
+        ((height - (if (counted) 62.dp else 44.dp)) / 15.dp).toInt() >= steps.size
+    val stepCount = "${steps.size} Schritte".takeIf { steps.isNotEmpty() && !stepsListed }
 
     Box(
         modifier = Modifier
@@ -830,7 +837,7 @@ private fun TimelineBlock(
             ),
         ) {
             EtaText(
-                text = entry.item.name,
+                text = stepCount?.takeIf { height <= 34.dp }?.let { "${entry.item.name} · $it" } ?: entry.item.name,
                 style = EtaTheme.typography.bodyStrong,
                 color = if (cancelled) EtaTheme.colors.textMuted else EtaTheme.colors.textPrimary,
                 textDecoration = if (cancelled) TextDecoration.LineThrough else null,
@@ -858,6 +865,7 @@ private fun TimelineBlock(
                                 block.effectiveDuration.formatShort()
                             },
                         )
+                        stepCount?.let { append(" · $it") }
                         if (imported) append(" · Kalender")
                         if (cancelled) append(" · abgesagt")
                         else if (block.isCompleted) append(" · erledigt")
@@ -874,12 +882,11 @@ private fun TimelineBlock(
             // where the day's progress inside a task is visible at all.
             // The count comes before the steps and the note: it is the one number
             // the task is done with today, and it takes the first spare line.
-            val counted = entry.item.quantityLabel() != null && height > 58.dp
             if (counted) QuantityText(entry.item)
-            if (steps.isNotEmpty() && height > (if (counted) 76.dp else 58.dp)) {
-                val room = ((height - (if (counted) 62.dp else 44.dp)) / 15.dp).toInt().coerceAtLeast(1)
-                val shown = steps.sortedBy { it.position }.take(room)
-                shown.forEach { step ->
+            // Listed only when every step fits; otherwise the count stands in the
+            // time line, and a tap opens the bubble that lists them all.
+            if (stepsListed) {
+                steps.sortedBy { it.position }.forEach { step ->
                     EtaText(
                         text = stepLabel(step, step.id in checkedIds),
                         style = EtaTheme.typography.caption,
@@ -890,14 +897,6 @@ private fun TimelineBlock(
                         },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                if (steps.size > shown.size) {
-                    EtaText(
-                        text = "+${steps.size - shown.size} weitere",
-                        style = EtaTheme.typography.caption,
-                        color = EtaTheme.colors.textMuted,
-                        maxLines = 1,
                     )
                 }
             }

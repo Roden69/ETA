@@ -117,6 +117,12 @@ carries "Nebenbei" so that it pays and is still the meal.
 - **The questionnaire's own working day sets it off**: 09:00–12:30 is three and
   a half hours. That is the rule as given, with the default the user named.
 - Off in the tutorial's practice setup.
+- **Back-to-back hint** (issue #41): `backToBackPairs` names two task blocks that
+  meet with no time between them and no break after the first — the planner's own
+  containers decide, so a journey into the next task counts as the time between.
+  It rides on `BreakFindings.backToBack`, so the `breakChecker` switch silences it
+  too. Shown as `PlannerWarning.BACK_TO_BACK` in the same bar as the other two,
+  waved away per day. Pinned in `BackToBackTest`.
 
 **Verified by the compiler, the suite (626, 24 in `NightsAndBreaksTest`),
 `assembleRelease`, `lint` and the migration against `29.json`.** Nobody has seen
