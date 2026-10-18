@@ -154,6 +154,10 @@ night or any correction is configured.
 midnight; offsets before midnight are negative. A night **belongs to the day it
 ends on**. `UserSetup.weekendNight` is nullable; null means every night is alike.
 `weekendDays` identifies the days it ends on, defaulting to Saturday and Sunday.
+The setup's sleep card and the settings' "Schlaf und Morgen" share one picker
+("Welche Tage sind dein Wochenende?", `UserSetup.withWeekendDays`): any two to six
+days, never none or all seven. Choosing days never changes the mode; a day set
+reads as `WEEKEND` (`nightMode`), and leaving and returning to the rhythm keeps them.
 
 With a separate weekend night, an explicit `nightsByDay` schedule or any correction,
 bed preparation and morning definitions are split by wake day
@@ -169,8 +173,18 @@ wake-up and a reset to the standing pattern. The wake-alarm card says
 
 The after-midnight hint and weekday labels are derived from
 `NightTimes.sleepDays` / `bedPrepDays`: 01:00 on the night into Sunday is Sunday,
-not Saturday. `WeekendNightTest` keeps this boundary, the weekend wake alarm and a
-corrected night's morning, alarm and weekly sleep covered.
+not Saturday, and with custom weekend days the same holds for those days. A bedtime
+of exactly 00:00 gets its own hint (`afterMidnightHint`): midnight starts the wake
+day, so the night belongs to the evening before, and a calendar day runs 00:00 to
+23:59. The app day boundary is unchanged. `WeekendNightTest` keeps these boundaries,
+the weekend wake alarm and a corrected night's morning, alarm and weekly sleep covered.
+
+**A morning of zero minutes has no morning definition** (`UserSetup.hasMorningRoutine`,
+`recurringItems`), so nothing can hold steps. The settings and the Listen tab then
+hide the steps editor and show `MORNING_ROUTINE_OFF_HINT` instead; it is gated on the
+stored setup (`SetupRepository.observeMorningRoutineOn`), the state the repository
+writes to. `saveMorningSteps` returns `false` and writes nothing in that state; the
+settings then report it as a message.
 
 ### Verification
 

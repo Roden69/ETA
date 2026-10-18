@@ -26,6 +26,7 @@ import com.example.eta.domain.model.Item
 import com.example.eta.domain.model.ItemType
 import com.example.eta.ui.attributes.CheckRow
 import com.example.eta.ui.attributes.DEFAULT_MARGIN
+import com.example.eta.ui.attributes.MARGIN_STEP
 import com.example.eta.ui.attributes.MIN_MARGIN
 import com.example.eta.ui.attributes.TodoAttributeFields
 import com.example.eta.ui.attributes.TodoAttributes
@@ -504,6 +505,7 @@ private fun MarginField(
             EtaDurationPicker(
                 value = value,
                 onValueChange = onValueChange,
+                step = MARGIN_STEP,
                 minimum = MIN_MARGIN,
             )
         }

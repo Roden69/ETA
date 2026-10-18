@@ -17,7 +17,6 @@ import com.example.eta.domain.planning.checkBreaks
 import com.example.eta.domain.planning.nextWake
 import com.example.eta.domain.planning.nightDateAt
 import com.example.eta.domain.planning.sleepStretches
-import com.example.eta.domain.setup.DEFAULT_WEEKEND
 import com.example.eta.domain.setup.NightMode
 import com.example.eta.domain.setup.NightTimes
 import com.example.eta.domain.setup.UserSetup
@@ -107,15 +106,14 @@ class NightsAndBreaksTest {
     }
 
     @Test
-    fun `a weekend on other days, from before, reads as a night per weekday`() {
-        val legacy = draft.copy(
+    fun `a weekend on chosen days is still one weekend rhythm, not a night per weekday`() {
+        val chosen = draft.copy(
             weekendNight = draft.suggestedWeekendNight(),
             weekendDays = setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY),
         )
-        assertEquals(NightMode.PER_DAY, legacy.nightMode)
-        // And still sleeps as it did.
-        assertEquals(LocalTime(8, 0), legacy.nightEndingOn(DayOfWeek.MONDAY).wake)
-        assertEquals(LocalTime(7, 0), legacy.nightEndingOn(DayOfWeek.SATURDAY).wake)
+        assertEquals(NightMode.WEEKEND, chosen.nightMode)
+        assertEquals(LocalTime(8, 0), chosen.nightEndingOn(DayOfWeek.MONDAY).wake)
+        assertEquals(LocalTime(7, 0), chosen.nightEndingOn(DayOfWeek.SATURDAY).wake)
     }
 
     @Test
@@ -128,7 +126,7 @@ class NightsAndBreaksTest {
     }
 
     @Test
-    fun `going back to the weekend finds the weekend night again, on saturday and sunday`() {
+    fun `going back to the weekend finds the weekend night and its days again`() {
         val weekendNight = NightTimes(LocalTime(23, 0), LocalTime(23, 45), LocalTime(8, 0))
         val perDay = draft.copy(weekendNight = weekendNight, weekendDays = setOf(DayOfWeek.MONDAY))
             .withNightMode(NightMode.PER_DAY)
@@ -136,7 +134,7 @@ class NightsAndBreaksTest {
         val back = perDay.withNightMode(NightMode.WEEKEND)
         assertEquals(NightMode.WEEKEND, back.nightMode)
         assertEquals(weekendNight, back.weekendNight)
-        assertEquals(DEFAULT_WEEKEND, back.weekendDays)
+        assertEquals(setOf(DayOfWeek.MONDAY), back.weekendDays)
         assertNull(back.nightsByDay)
 
         assertEquals(NightMode.SAME, back.withNightMode(NightMode.SAME).nightMode)

@@ -124,7 +124,9 @@ those is a place for them to come apart. As columns there is nothing to keep in 
   dragged and offsets the frame with it.)
 - **`Item.travelBefore` / `returnAfter` / `breakAfter` are the defaults**, stamped
   onto every block the definition produces, each defaulting to **15 minutes** when
-  ticked. `BlockEditDialog` edits them **per occurrence** — adding a journey to today
+  ticked. Every margin picker steps in **5-minute** units from a minimum of 5
+  (`MARGIN_STEP`, `MIN_MARGIN` in `ui/attributes/ItemAttributes.kt`), in the Listen tab
+  and in the block dialog alike, so no value appears off the grid. `BlockEditDialog` edits them **per occurrence** — adding a journey to today
   does not add one to every Tuesday — while the Listen tab edits the definition's
   defaults. They travel with both copies the app makes of a task,
   `Item.newMakeUpTodo` and "in die Woche kopieren", both being the same work on

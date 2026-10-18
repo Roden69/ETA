@@ -17,6 +17,7 @@ import com.example.eta.domain.setup.UserSetup
 import com.example.eta.domain.setup.WeeklySlot
 import com.example.eta.domain.setup.WorkBlock
 import com.example.eta.domain.setup.WorkSchedule
+import com.example.eta.domain.setup.hasMorningRoutine
 import com.example.eta.domain.setup.recurringItems
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
@@ -26,6 +27,7 @@ import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNotNull
 import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
@@ -272,6 +274,12 @@ class SetupItemsTest {
     fun `a zero duration answer is skipped rather than materialized`() {
         val items = setup().copy(morningDuration = Duration.ZERO).recurringItems(now)
         assertTrue(items.none { it.name == SetupLabels.MORNING })
+    }
+
+    @Test
+    fun `a morning routine of no minutes has no definition to hold its steps`() {
+        assertFalse(setup().copy(morningDuration = Duration.ZERO).hasMorningRoutine)
+        assertTrue(setup().copy(morningDuration = 30.minutes).hasMorningRoutine)
     }
 
     @Test

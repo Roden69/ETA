@@ -80,6 +80,7 @@ fun SmartListsScreen(
     val todaySettled by viewModel.todaySettled.collectAsStateWithLifecycle()
     val setup by viewModel.setup.collectAsStateWithLifecycle()
     val morningSteps by viewModel.morningSteps.collectAsStateWithLifecycle()
+    val morningRoutineOn by viewModel.morningRoutineOn.collectAsStateWithLifecycle()
     val booked = remember(state.definitions, setup) { weekOccupancy(state.definitions, setup) }
 
     // Every list starts closed, and after that stays the way it was left —
@@ -439,7 +440,7 @@ fun SmartListsScreen(
             ownedBySettings = group.ids.any(::isOwnedBySettings),
             // The live list rather than the group's own: the weekdays and the
             // weekend are two rows here and one routine.
-            morningSteps = morningSteps.takeIf { group.ids.any(::isMorningRoutine) },
+            morningSteps = morningSteps.takeIf { morningRoutineOn && group.ids.any(::isMorningRoutine) },
             onMorningSteps = viewModel::saveMorningSteps,
             onDismiss = { openedGroup = null },
             onEdit = {

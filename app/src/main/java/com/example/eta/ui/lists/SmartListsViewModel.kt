@@ -177,6 +177,14 @@ class SmartListsViewModel(
         .map { it.drafts() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Whether there is a morning routine to hold steps; the dialog shows the editor only then. */
+    val morningRoutineOn: StateFlow<Boolean> = setupRepository.observeMorningRoutineOn()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /**
+     * Writes the steps. The editor is only offered while a routine exists, so the
+     * false answer of the repository is not reachable from here.
+     */
     fun saveMorningSteps(steps: List<SubtaskDraft>) {
         viewModelScope.launch { setupRepository.saveMorningSteps(steps) }
     }

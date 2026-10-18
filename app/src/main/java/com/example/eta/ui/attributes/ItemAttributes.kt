@@ -116,6 +116,13 @@ val MIN_TASK_DURATION: Duration = 15.minutes
 val MIN_MARGIN: Duration = 5.minutes
 
 /**
+ * The grid every margin is stepped on: 5, 10, 15 … minutes, the same from every
+ * place a margin is set. Stepping in quarter hours from the minimum gave 5, 20,
+ * 35, 50 and then "1:05 h", which no one expects from a picker.
+ */
+val MARGIN_STEP: Duration = 5.minutes
+
+/**
  * No "ohne Kategorie" here, and that is deliberate.
  *
  * A ToDo without one is not `isConcretized` and cannot be planned, so offering it
@@ -1746,6 +1753,7 @@ private fun MarginRow(
             EtaDurationPicker(
                 value = value,
                 onValueChange = onValueChange,
+                step = MARGIN_STEP,
                 minimum = MIN_MARGIN,
             )
         }

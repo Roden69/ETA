@@ -120,7 +120,7 @@ private fun NightFields(
         )
         if (night.sleepsAfterMidnight) {
             EtaText(
-                text = AFTER_MIDNIGHT_HINT,
+                text = afterMidnightHint(night.sleep),
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
             )

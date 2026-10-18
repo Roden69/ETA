@@ -31,6 +31,7 @@ import com.example.eta.domain.recurrence.recurringOverlaps
 import com.example.eta.domain.recurrence.slotOccupancy
 import com.example.eta.domain.recurrence.weekOccupancy
 import com.example.eta.domain.setup.UserSetup
+import com.example.eta.domain.setup.isMorningRoutine
 import com.example.eta.ui.attributes.CategoryField
 import com.example.eta.ui.attributes.DEFAULT_DURATION
 import com.example.eta.ui.attributes.MIN_TASK_DURATION
@@ -59,6 +60,7 @@ import com.example.eta.ui.format.formatShort
 import com.example.eta.ui.format.formatWeekdays
 import com.example.eta.ui.subtasks.FoldCandidate
 import com.example.eta.domain.subtask.SubtaskDraft
+import com.example.eta.ui.subtasks.MORNING_ROUTINE_OFF_HINT
 import com.example.eta.ui.subtasks.MorningRoutineSteps
 import com.example.eta.ui.theme.EtaTheme
 import kotlin.time.Duration
@@ -648,6 +650,7 @@ fun RecurringGroupDialog(
         }
 
         if (ownedBySettings) {
+            val morningRoutine = group.ids.any(::isMorningRoutine)
             if (morningSteps != null) {
                 EtaField(
                     label = "Schritte",
@@ -657,11 +660,11 @@ fun RecurringGroupDialog(
                 }
             }
             EtaText(
-                text = if (morningSteps != null) {
-                    "Uhrzeit und Dauer hängen an deinen Schlafzeiten und werden in den " +
+                text = when {
+                    morningSteps != null -> "Uhrzeit und Dauer hängen an deinen Schlafzeiten und werden in den " +
                         "Einstellungen unter „Schlaf und Morgen“ geändert."
-                } else {
-                    "Hängt an deinen Schlafzeiten und wird in den Einstellungen " +
+                    morningRoutine -> MORNING_ROUTINE_OFF_HINT
+                    else -> "Hängt an deinen Schlafzeiten und wird in den Einstellungen " +
                         "unter „Schlaf und Morgen“ geändert."
                 },
                 style = EtaTheme.typography.caption,

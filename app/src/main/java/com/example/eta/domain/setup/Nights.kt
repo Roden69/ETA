@@ -113,24 +113,22 @@ fun rhythmDiverges(nights: Collection<NightTimes>): Boolean =
 /**
  * How the week's nights are answered.
  *
- * [SAME] is one night for every day, [WEEKEND] a second one for Friday and
- * Saturday evening, [PER_DAY] a night for each weekday — which the app offers
- * and advises against.
+ * [SAME] is one night for every day, [WEEKEND] a second one for the weekend
+ * days (see [UserSetup.weekendDays]), [PER_DAY] a night for each weekday — which
+ * the app offers and advises against.
  */
 enum class NightMode { SAME, WEEKEND, PER_DAY }
 
 /**
  * Which of the three the answers amount to.
  *
- * A weekend on days other than Saturday and Sunday could be chosen between
- * steps 33 and 40. It no longer can, and what such a setup holds *is* a night
- * per weekday — so it is read as one, and its first edit writes it as one.
+ * The weekend's days are a setting of the weekend night and do not change the
+ * mode: whichever days are chosen, the answers are still one weekend night.
  */
 val UserSetup.nightMode: NightMode
     get() = when {
         nightsByDay != null -> NightMode.PER_DAY
         weekendNight == null -> NightMode.SAME
-        weekendDays != DEFAULT_WEEKEND -> NightMode.PER_DAY
         else -> NightMode.WEEKEND
     }
 
@@ -146,17 +144,24 @@ fun UserSetup.rhythmDiverges(): Boolean = rhythmDiverges(allNights().values)
  *
  * Going to [NightMode.PER_DAY] starts from the nights as they are, so nothing
  * moves by choosing it. Leaving it drops the seven; a weekend night that stood
- * before is still there and comes back.
+ * before is still there and comes back, with the weekend days it had.
  */
 fun UserSetup.withNightMode(mode: NightMode): UserSetup = when (mode) {
     NightMode.SAME -> copy(weekendNight = null, nightsByDay = null)
     NightMode.WEEKEND -> copy(
         nightsByDay = null,
         weekendNight = weekendNight ?: suggestedWeekendNight(),
-        weekendDays = DEFAULT_WEEKEND,
     )
     NightMode.PER_DAY -> copy(nightsByDay = allNights())
 }
+
+/**
+ * Which days the weekend night ends on. Refuses none and refuses all seven: a
+ * weekend of no days is no weekend, and one of every day leaves no ordinary
+ * night to ask. Returns the answers unchanged in that case.
+ */
+fun UserSetup.withWeekendDays(days: Set<DayOfWeek>): UserSetup =
+    if (days.isEmpty() || days.size == WEEK.size) this else copy(weekendDays = days)
 
 /**
  * The answers with the night that ends on [day] changed, and that one alone.
@@ -179,9 +184,8 @@ fun UserSetup.nightEndingOn(date: LocalDate, overrides: Map<LocalDate, NightOver
 }
 
 /**
- * The days a weekend night ends on: Saturday and Sunday, so Friday and Saturday
- * evening. Fixed again since step 40 — a week that runs differently is answered
- * with a night per weekday.
+ * The days a weekend night ends on until the user picks others: Saturday and
+ * Sunday, so Friday and Saturday evening.
  */
 val DEFAULT_WEEKEND: Set<DayOfWeek> = setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY)
 

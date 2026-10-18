@@ -36,7 +36,8 @@ onboarding uses its own routine selection and weekly calendar. The settings draf
 stays null until stored answers arrive, so defaults cannot be saved by accident.
 
 **Since step 18 only the answers that are configuration are here**: sleep and
-morning, the wake alarm, the still-active question, the planning times,
+morning (the morning steps editor is shown only while the stored morning has minutes),
+the wake alarm, the still-active question, the planning times,
 the four "Advanced Features" switches (`AdvancedFeaturesBox` — see *Step 36*; they
 apply at once, and the points one folds the next two away), inflation and the cancellation rate. Meals, housekeeping, sport, free time,
 mindfulness and work are standing *tasks* and are edited on the Listen tab. Saving

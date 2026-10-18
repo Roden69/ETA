@@ -192,10 +192,7 @@ data class RoutineSetup(
      * Which days are the weekend. Refuses none and refuses all seven: a weekend of
      * no days is no weekend, and one of every day leaves no ordinary night to ask.
      */
-    fun withWeekendDays(days: Set<DayOfWeek>): RoutineSetup {
-        if (days.isEmpty() || days.size == WEEK.size) return this
-        return withSetup(setup.copy(weekendDays = days))
-    }
+    fun withWeekendDays(days: Set<DayOfWeek>): RoutineSetup = withSetup(setup.withWeekendDays(days))
 
     // --- Sleep: the individual nights of the calendar ---------------------------
 
