@@ -46,11 +46,12 @@ data class EtaTabItem(
 /**
  * The bottom tab bar, drawn by hand like everything else here.
  *
- * Labels rather than icons: the destinations are "Heute", "Listen", "Verträge",
- * "Erinnerungen", "Einstellungen" and "Growth-Tasks" — words this app can say in
- * its own voice, where icons for a Sperrliste or a self-contract would have to be
- * invented and then explained. The active one is marked by a short accent bar
- * above it and by weight, so the state survives being read in a hurry.
+ * Icon and name by default ([TabStyle.DEFAULT]), so the bar is easy to find and
+ * each destination is still named in full. Where a destination has no icon it
+ * keeps its name whatever the style says. Icons alone are a choice in the
+ * Navigation page of the settings, for the bar that has to be short. The active
+ * one is marked by a short accent bar above it and by weight, so the state
+ * survives being read in a hurry.
  *
  * **Every label is drawn whole, and the bar scrolls instead.** Six of them
  * sharing one phone width meant "Erinnerungen" and "Einstellungen" were cut off,
@@ -67,7 +68,7 @@ fun EtaTabBar(
     selectedId: String,
     onSelect: (String) -> Unit,
     modifier: Modifier = Modifier,
-    /** Names, icons or both — the Navigation page of the settings. */
+    /** Icons and names (the default), names only, or icons only — the Navigation page of the settings. */
     style: TabStyle = TabStyle.DEFAULT,
 ) {
     val scrollState = rememberScrollState()
