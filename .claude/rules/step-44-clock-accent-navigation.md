@@ -81,6 +81,10 @@ design and brightness, in the same `DesignStore`.
   swatch (which takes the choice back), `ACCENT_PRESETS`, and a hue bar —
   `accentOfHue`, at the presets' saturation and value. The bar's gestures read
   the callback through `rememberUpdatedState`.
+- **The presets leave out the app's own hues** (issue #35): Fokus (indigo),
+  Nebenbei (cyan), Achtsam (green), the calendar's ochre, the conflict red and the
+  booked grey. A task in one of those would read as the category or as a warning.
+  A stored accent outside the list keeps its colour and is just not offered.
 
 #### Navigation: names, icons, or both
 

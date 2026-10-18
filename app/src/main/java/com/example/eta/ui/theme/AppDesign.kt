@@ -142,10 +142,15 @@ fun EtaColors.withAccent(accent: Color): EtaColors = copy(
  *
  * Mid-tones on purpose: each has to carry white text as a button and still be
  * readable as text on white and on near-black.
+ *
+ * And hues the app already means something by are left out: Fokus (indigo),
+ * Nebenbei (cyan), Achtsam (green), the calendar's ochre, the red of a conflict
+ * and the grey of what is booked. A task painted in one of those would read as
+ * the category, or as a warning. A stored accent outside this list keeps its
+ * colour; it just is not offered as a swatch any more.
  */
 val ACCENT_PRESETS: List<Int> = listOf(
-    0xFFE5322D, 0xFFE0662B, 0xFFC99A1E, 0xFF4E9F3D, 0xFF1F9E8F, 0xFF2A8FD0,
-    0xFF4F5BD5, 0xFF8A4FD5, 0xFFC94FB0, 0xFFD5456E, 0xFF6B7280,
+    0xFFE0662B, 0xFF65A30D, 0xFFC94FB0, 0xFFD5456E, 0xFF8A4FD5, 0xFF9A5B2E,
 ).map { it.toInt() }
 
 /** A hue of the user's own, at the saturation and value the presets sit at. */

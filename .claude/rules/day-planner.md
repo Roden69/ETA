@@ -63,6 +63,13 @@ snapping, and where a block can actually go.
   the category's place — a category pays it nothing — and `edit` writes
   `pointsPerHour` to the item, safe there because a points entry has exactly one
   block.
+- **A standing occurrence shows its task read-only** in `BlockEditDialog`: name,
+  category, note for every occurrence and the end sound are said to belong to the
+  task and are changed in "Generell" or on the Listen tab. Only the block's own
+  start, length, margins, note and "Flexibel" are editable there.
+- **Steps in a block** (issue #43): listed in the block when every step fits the
+  room below the name and time; otherwise the time line says "n Schritte". A tap
+  opens the bubble, which lists them all. The same block draws them in the week tab.
 - **Long-press also offers a copy into the week list**, for a task that did not
   finish inside the time it was given. That copy is a **new ToDo, not a moved one**:
   the occurrence keeps its history and stays on its day, and the copy carries name,

@@ -200,12 +200,12 @@ fun SmartListsScreen(
                         opened = OpenedRow(entry.item, detail, editable = true)
                     }
                 }
-                // Each task in the colour of the dot in front of its row below.
+                // Each task in its colour: the legend under the chart names them.
                 val taskSpans = remember(state.definitions) { weekTaskSpans(state.definitions) }
                 WeekSchemeChart(
                     booked = booked,
                     tasks = taskSpans.mapValues { (_, spans) ->
-                        spans.map { (range, item) -> range to colorOf(item) }
+                        spans.map { (range, item) -> ChartBar(range, colorOf(item), item.name) }
                     },
                 )
                 state.recurring.forEach { group ->

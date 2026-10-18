@@ -32,6 +32,7 @@ import com.example.eta.domain.setup.WEEK
 import com.example.eta.domain.setup.isOwnedBySettings
 import com.example.eta.ui.attributes.RecurringAttributes
 import com.example.eta.ui.attributes.toEdit
+import com.example.eta.ui.format.formatLong
 import com.example.eta.ui.format.formatVeryShort
 import kotlin.time.Clock
 import kotlin.time.Duration.Companion.minutes
@@ -429,6 +430,17 @@ class WeekTabViewModel(
         }
     }
 
+    /**
+     * "Nur <Tag>" from the edit window: the task's answers for that one weekday, the
+     * other weekdays of the task left as they are ([RecurringTaskService.saveWeekday]).
+     */
+    fun saveWeekday(group: RecurringGroup, day: DayOfWeek, name: String, note: String?, attributes: RecurringAttributes) {
+        if (attributes.weekdays.isEmpty()) return
+        viewModelScope.launch {
+            recurringTaskService.saveWeekday(ids = group.ids, day = day, edit = attributes.toEdit(name, note))
+        }
+    }
+
     /** A standing task made from a box shaped on the timetable. */
     fun create(name: String, note: String?, attributes: RecurringAttributes) {
         if (attributes.weekdays.isEmpty()) return
@@ -448,6 +460,33 @@ class WeekTabViewModel(
             wakeAlarmCoordinator.reschedule()
             taskStartCoordinator.reschedule()
         }
+    }
+
+    /**
+     * "Nur diese Nacht" in "Aktuell": the night that ends on [wakeDate] gets hours
+     * of its own, and no other night does — the day planner's own rule, reached
+     * from the week. Moves what hangs off the night along, as the planner does.
+     */
+    fun changeNight(wakeDate: LocalDate, sleep: LocalTime, wake: LocalTime) {
+        viewModelScope.launch {
+            nightService.overrideNight(wakeDate, sleep, wake)
+            wakeAlarmCoordinator.reschedule()
+            taskStartCoordinator.reschedule()
+        }
+    }
+
+    /** Back to the standing hours for the night that ends on [wakeDate]. */
+    fun resetNight(wakeDate: LocalDate) {
+        viewModelScope.launch {
+            nightService.clearOverride(wakeDate)
+            wakeAlarmCoordinator.reschedule()
+            taskStartCoordinator.reschedule()
+        }
+    }
+
+    /** A long press on a night that is already over. */
+    fun refusePastNight(wakeDate: LocalDate) {
+        _notice.value = "Die Nacht auf ${wakeDate.formatLong()} ist vorbei und lässt sich nicht mehr ändern."
     }
 
     /** A long press on something that only happens once — a ToDo, an appointment. */

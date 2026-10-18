@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -711,6 +712,10 @@ fun RecurringGroupEditDialog(
     subtasks: List<Subtask> = emptyList(),
     /** ToDos this task can swallow as steps. */
     foldCandidates: List<FoldCandidate> = emptyList(),
+    /** The weekday the task was opened on in the week timetable, when it was. */
+    singleDay: DayOfWeek? = null,
+    /** Saves that weekday alone; the other weekdays of the task stay as they are. */
+    onSaveSingleDay: ((name: String, note: String?, attributes: RecurringAttributes) -> Unit)? = null,
 ) {
     val item = group.representative
     var name by remember(group.ids) { mutableStateOf(item.name) }
@@ -774,6 +779,28 @@ fun RecurringGroupEditDialog(
             onGroupName = { name = it },
             foldCandidates = foldCandidates,
         )
+        // "Nur Dienstag": the form's answers for this one weekday, the rest of the
+        // task left as it is. Only where the task has more than this one day.
+        if (singleDay != null && onSaveSingleDay != null && group.weekdays.size > 1) {
+            EtaText(
+                text = "Ändert nur ${singleDay.formatLong()}. Die anderen Tage dieser Aufgabe " +
+                    "bleiben, wie sie sind.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textMuted,
+            )
+            EtaButton(
+                text = "Nur ${singleDay.formatLong()} sichern",
+                style = EtaButtonStyle.Secondary,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    onSaveSingleDay(
+                        name.trim().ifEmpty { item.name },
+                        note.trim().ifBlank { null },
+                        attributes.copy(weekdays = setOf(singleDay)),
+                    )
+                },
+            )
+        }
 
         Row(horizontalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
             EtaButton(text = "Abbrechen", style = EtaButtonStyle.Secondary, onClick = onDismiss)
@@ -824,7 +851,7 @@ internal fun SchemePreview(
     )
 }
 
-private fun categoryLabel(category: Category): String = when (category) {
+internal fun categoryLabel(category: Category): String = when (category) {
     Category.FOKUS -> "Fokus"
     Category.NEBENBEI -> "Nebenbei"
     Category.ACHTSAM -> "Achtsam"
