@@ -4,6 +4,7 @@ import com.example.eta.domain.model.RecurrenceRule
 import com.example.eta.domain.planning.nextWake
 import com.example.eta.domain.planning.sleepStretches
 import com.example.eta.domain.setup.DEFAULT_WEEKEND
+import com.example.eta.domain.setup.NightMode
 import com.example.eta.domain.setup.NightTimes
 import com.example.eta.domain.setup.SetupLabels
 import com.example.eta.domain.setup.UserSetup
@@ -12,6 +13,7 @@ import com.example.eta.domain.setup.WEEK
 import com.example.eta.domain.setup.conflicts
 import com.example.eta.domain.setup.freeMinutesPerWeek
 import com.example.eta.domain.setup.nightEndingOn
+import com.example.eta.domain.setup.nightMode
 import com.example.eta.domain.setup.isOwnedBySettings
 import com.example.eta.domain.setup.recurringItems
 import com.example.eta.domain.setup.sleepMinutesPerWeek
@@ -20,7 +22,9 @@ import com.example.eta.domain.setup.weekdayNight
 import com.example.eta.domain.setup.wakeTimeOn
 import com.example.eta.domain.setup.weeklySpans
 import com.example.eta.domain.setup.withNightEndingOn
+import com.example.eta.domain.setup.withNightMode
 import com.example.eta.domain.setup.withNightOverride
+import com.example.eta.domain.setup.withWeekendDays
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Instant
@@ -302,5 +306,75 @@ class WeekendNightTest {
         assertEquals(late, changed.nightEndingOn(DayOfWeek.TUESDAY))
         assertEquals(mapOf(DayOfWeek.WEDNESDAY to wednesdayOverride), changed.nightOverrides)
         assertEquals(wednesdayOverride, changed.nightEndingOn(DayOfWeek.WEDNESDAY))
+    }
+
+    @Test
+    fun `chosen weekend days keep the weekend rhythm rather than a night per weekday`() {
+        val chosen = lateWeekend.copy(weekendDays = setOf(DayOfWeek.MONDAY, DayOfWeek.TUESDAY))
+        assertEquals(NightMode.WEEKEND, chosen.nightMode)
+        assertEquals(NightMode.WEEKEND, lateWeekend.copy(weekendDays = setOf(DayOfWeek.SUNDAY)).nightMode)
+    }
+
+    @Test
+    fun `choosing the weekend rhythm again keeps the chosen days`() {
+        val chosen = setOf(DayOfWeek.FRIDAY, DayOfWeek.SATURDAY)
+        val answered = lateWeekend.copy(weekendDays = chosen).withNightMode(NightMode.WEEKEND)
+        assertEquals(chosen, answered.weekendDays)
+        assertEquals(lateWeekend.weekendNight, answered.weekendNight)
+    }
+
+    @Test
+    fun `the chosen days survive a detour through a night per weekday`() {
+        val chosen = lateWeekend.copy(weekendDays = setOf(DayOfWeek.FRIDAY, DayOfWeek.SATURDAY))
+        val back = chosen.withNightMode(NightMode.PER_DAY).withNightMode(NightMode.WEEKEND)
+        assertEquals(chosen.weekendDays, back.weekendDays)
+        assertEquals(chosen.weekendNight, back.weekendNight)
+    }
+
+    @Test
+    fun `weekend days refuse none and all seven, and keep the answers as they were`() {
+        assertEquals(lateWeekend, lateWeekend.withWeekendDays(emptySet()))
+        assertEquals(lateWeekend, lateWeekend.withWeekendDays(WEEK.toSet()))
+        assertEquals(setOf(DayOfWeek.SUNDAY), lateWeekend.withWeekendDays(setOf(DayOfWeek.SUNDAY)).weekendDays)
+    }
+
+    @Test
+    fun `a one o'clock bedtime on custom weekend days lands on the day it falls on`() {
+        // Working Monday to Thursday: Friday and Saturday are the weekend.
+        val custom = oneOClock.copy(weekendDays = setOf(DayOfWeek.FRIDAY, DayOfWeek.SATURDAY))
+        val night = custom.weekendNight!!
+
+        assertEquals(setOf(DayOfWeek.FRIDAY, DayOfWeek.SATURDAY), night.sleepDays(custom.weekendDays))
+        assertEquals(setOf(DayOfWeek.FRIDAY, DayOfWeek.SATURDAY), night.bedPrepDays(custom.weekendDays))
+
+        // Friday's and Saturday's mornings hold the whole night from one o'clock;
+        // no evening before them is taken, and Sunday's stays the ordinary one.
+        assertEquals(listOf(60 until 540), custom.sleepStretches(DayOfWeek.FRIDAY))
+        assertEquals(listOf(60 until 540, 1380 until 1440), custom.sleepStretches(DayOfWeek.SATURDAY))
+        assertEquals(listOf(0 until 420, 1380 until 1440), custom.sleepStretches(DayOfWeek.SUNDAY))
+
+        val intoFriday = custom.recurringItems(now).single { it.id == "setup:bedprep-friday" }
+        assertEquals(RecurrenceRule.Weekly(DayOfWeek.FRIDAY), intoFriday.recurrenceRule)
+        assertEquals(LocalTime(0, 15), intoFriday.startTime)
+    }
+
+    @Test
+    fun `a bedtime before midnight on custom weekend days is named by the evening before`() {
+        val custom = lateWeekend.copy(weekendDays = setOf(DayOfWeek.FRIDAY, DayOfWeek.SATURDAY))
+        val night = custom.weekendNight!!
+        // Sleeps at half past midnight: after midnight, so the wake days name it.
+        assertEquals(setOf(DayOfWeek.FRIDAY, DayOfWeek.SATURDAY), night.sleepDays(custom.weekendDays))
+
+        val eveningBefore = night.copy(sleep = LocalTime(23, 30), bedPrep = LocalTime(22, 30))
+        assertEquals(setOf(DayOfWeek.THURSDAY, DayOfWeek.FRIDAY), eveningBefore.sleepDays(custom.weekendDays))
+        assertEquals(setOf(DayOfWeek.THURSDAY, DayOfWeek.FRIDAY), eveningBefore.bedPrepDays(custom.weekendDays))
+    }
+
+    @Test
+    fun `midnight is the start of the wake day and counts as after midnight`() {
+        val midnight = lateWeekend.weekendNight!!.copy(sleep = LocalTime(0, 0))
+        assertTrue(midnight.sleepsAfterMidnight)
+        assertEquals(0, midnight.sleepOffset())
+        assertEquals(setOf(DayOfWeek.SATURDAY, DayOfWeek.SUNDAY), midnight.sleepDays(DEFAULT_WEEKEND))
     }
 }

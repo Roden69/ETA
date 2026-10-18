@@ -35,15 +35,14 @@ stored: `SAME`, `WEEKEND`, `PER_DAY`.
   the day each night **ends** on. Non-null it overrules `weekendNight`, which is
   *kept* — `withNightMode(WEEKEND)` finds it again. Always all seven
   (`allNights`). `nightEndingOn(weekday)` is still the one place that decides.
-- **The weekend is Friday and Saturday evening again.** The picker from step 33
-  is gone and `withNightMode(WEEKEND)` writes `DEFAULT_WEEKEND`. A setup from
-  between that still carries other `weekendDays` **reads as `PER_DAY`** and keeps
-  sleeping exactly as it did — `nightEndingOn` still honours the set — until its
-  first edit writes it as seven nights. No data migration, and `WeekendNightTest`
-  stands unchanged for that reason.
+- **The weekend days are the user's again (superseded the step-40 default).** The
+  setup picker of step 33 is back, and the settings show the same one under the
+  weekend rhythm. `withNightMode(WEEKEND)` keeps `weekendDays`; any chosen set reads
+  as `WEEKEND`, not `PER_DAY`. The Friday/Saturday wording of the step-40 hint is gone.
 - **`recurringItems` asks `nightMode == SAME`** where it asked `weekendNight ==
   null`: one pair of tasks per night in both other modes.
-- **`SleepStep`**: "Schlafrhythmus" with the three options. Choosing the third
+- **`SleepStep`**: "Schlafrhythmus" with the three options; under `WEEKEND` the
+  weekend days picker and the labels follow `weekendDays`. Choosing the third
   asks first (`ConfirmDialog`, "Trotzdem") — offered and advised against in one
   breath, as asked. In `PER_DAY` the three ordinary pickers are hidden (they
   would be an eighth answer that means nothing) and each night is an

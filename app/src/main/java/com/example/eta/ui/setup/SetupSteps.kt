@@ -10,7 +10,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
-import com.example.eta.domain.setup.DEFAULT_WEEKEND
 import com.example.eta.domain.setup.NightMode
 import com.example.eta.domain.setup.NightTimes
 import com.example.eta.domain.setup.UserSetup
@@ -27,6 +26,7 @@ import com.example.eta.domain.setup.withNightMode
 import com.example.eta.domain.setup.withNightOverride
 import com.example.eta.domain.setup.withSleepNextDay
 import com.example.eta.domain.setup.withWeekdayNight
+import com.example.eta.domain.setup.withWeekendDays
 import com.example.eta.domain.setup.weekdayNight
 import com.example.eta.ui.attributes.CheckRow
 import com.example.eta.ui.components.ConfirmDialog
@@ -109,7 +109,7 @@ fun SleepStep(
                 )
                 EtaField(
                     label = "Schlafen gehen",
-                    hint = AFTER_MIDNIGHT_HINT.takeIf { draft.weekdayNight.sleepsAfterMidnight },
+                    hint = if (draft.weekdayNight.sleepsAfterMidnight) afterMidnightHint(draft.sleepTime) else null,
                 ) {
                     EtaTimePicker(
                         value = draft.sleepTime,
@@ -149,8 +149,8 @@ fun SleepStep(
 
             EtaField(
                 label = "Schlafrhythmus",
-                hint = "Ob jede Nacht gleich ist. Als Wochenende gelten die Nächte von Freitag " +
-                    "auf Samstag und von Samstag auf Sonntag.",
+                hint = "Ob jede Nacht gleich ist. Als Wochenende gelten die Nächte, die am " +
+                    "${formatWeekdays(draft.weekendDays)} enden — der Abend davor gehört jeweils dazu.",
             ) {
                 EtaChoice(
                     options = listOf(
@@ -189,10 +189,30 @@ fun SleepStep(
                 fun change(transform: (NightTimes) -> NightTimes) =
                     onChange { it.copy(weekendNight = it.weekendNight?.let(transform)) }
 
+                // The same days as the setup's sleep card: the chosen weekend,
+                // toggled in place. Empty and all seven are refused by the domain.
+                val days = draft.weekendDays
+                EtaField(
+                    label = "Welche Tage sind dein Wochenende?",
+                    hint = "Die Tage, an denen du nach diesen Zeiten aufstehst — der Abend davor " +
+                        "gehört jeweils dazu.",
+                ) {
+                    EtaWeekdayPicker(
+                        selected = days,
+                        onToggle = { day ->
+                            onChange { setup ->
+                                setup.withWeekendDays(
+                                    if (day in setup.weekendDays) setup.weekendDays - day else setup.weekendDays + day,
+                                )
+                            }
+                        },
+                        days = WEEK,
+                    )
+                }
+
                 // The days are named beside each hour, because an hour alone
                 // does not say which day's it is — least of all one after
                 // midnight, which falls on the day of getting up.
-                val days = DEFAULT_WEEKEND
                 EtaField(
                     label = "Bettfertig machen ab (${formatWeekdays(weekend.bedPrepDays(days))})",
                 ) {
@@ -207,7 +227,7 @@ fun SleepStep(
                 )
                 EtaField(
                     label = "Schlafen gehen (${formatWeekdays(weekend.sleepDays(days))})",
-                    hint = AFTER_MIDNIGHT_HINT.takeIf { weekend.sleepsAfterMidnight },
+                    hint = if (weekend.sleepsAfterMidnight) afterMidnightHint(weekend.sleep) else null,
                 ) {
                     EtaTimePicker(
                         value = weekend.sleep,
@@ -258,7 +278,7 @@ fun SleepStep(
                         )
                         EtaField(
                             label = "Schlafen gehen (${formatWeekdays(night.sleepDays(one))})",
-                            hint = AFTER_MIDNIGHT_HINT.takeIf { night.sleepsAfterMidnight },
+                            hint = if (night.sleepsAfterMidnight) afterMidnightHint(night.sleep) else null,
                         ) {
                             EtaTimePicker(
                                 value = night.sleep,
@@ -361,9 +381,22 @@ private fun NextDayBox(checked: Boolean, onCheckedChange: (Boolean) -> Unit) {
  * night it starts, not to the evening of the day it is written on: 01:00 for
  * the night into Sunday is Sunday at one, at the end of Saturday evening.
  */
-internal const val AFTER_MIDNIGHT_HINT =
+private const val AFTER_MIDNIGHT_HINT =
     "Nach Mitternacht — zählt als Ende des Abends davor und liegt im Kalender " +
         "schon auf dem Tag des Aufstehens."
+
+/**
+ * Said under a bedtime of exactly 00:00. Midnight is the start of the wake day,
+ * and a calendar day runs from 00:00 to 23:59, so "after midnight" alone does
+ * not say which side of the line 00:00 is on.
+ */
+private const val MIDNIGHT_HINT =
+    "00:00 ist Mitternacht — die Nacht beginnt direkt nach dem Abend davor, am Tag " +
+        "des Aufstehens. Ein Kalendertag läuft von 00:00 bis 23:59."
+
+/** The hint under a bedtime that lies after midnight, midnight itself included. */
+internal fun afterMidnightHint(sleep: LocalTime): String =
+    if (sleep == LocalTime(0, 0)) MIDNIGHT_HINT else AFTER_MIDNIGHT_HINT
 
 @Composable
 fun PlanningStep(draft: UserSetup, onChange: OnSetupChange) {
