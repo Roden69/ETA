@@ -1,5 +1,6 @@
 package com.example.eta.ui.dashboard
 
+import androidx.activity.compose.BackHandler
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
@@ -22,6 +23,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.saveable.rememberSaveableStateHolder
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -102,26 +104,34 @@ fun DashboardScreen(
     var pageName by rememberSaveable { mutableStateOf(DashboardPage.TODAY.name) }
     val page = pages.firstOrNull { it.name == pageName } ?: DashboardPage.TODAY
 
+    // A page leaves the composition when another is in front, and with it any
+    // scroll position it held. Kept per page, as the tabs keep theirs.
+    val pageState = rememberSaveableStateHolder()
+    // System back goes to "Heute" from the other two before it leaves the screen.
+    BackHandler(enabled = page != DashboardPage.TODAY) { pageName = DashboardPage.TODAY.name }
+
     EtaScreen(modifier = modifier, bottomInset = false) {
         Column(Modifier.fillMaxSize()) {
             DashboardTabs(pages = pages, selected = page, onSelect = { pageName = it.name })
 
             Box(Modifier.weight(1f)) {
-                when (page) {
-                    DashboardPage.TODAY -> TodayPage(
-                        state = state,
-                        editFeedback = editFeedback,
-                        now = now,
-                        viewModel = viewModel,
-                        quickAddViewModel = quickAddViewModel,
-                        plannerViewModel = plannerViewModel,
-                        onCloseDay = onCloseDay,
-                        onPlanTomorrow = onPlanTomorrow,
-                        onReplanToday = onReplanToday,
-                    )
+                pageState.SaveableStateProvider(page.name) {
+                    when (page) {
+                        DashboardPage.TODAY -> TodayPage(
+                            state = state,
+                            editFeedback = editFeedback,
+                            now = now,
+                            viewModel = viewModel,
+                            quickAddViewModel = quickAddViewModel,
+                            plannerViewModel = plannerViewModel,
+                            onCloseDay = onCloseDay,
+                            onPlanTomorrow = onPlanTomorrow,
+                            onReplanToday = onReplanToday,
+                        )
 
-                    DashboardPage.TOMORROW -> TomorrowPage(state, onPlanTomorrow, onPlanWeek)
-                    DashboardPage.WEEK -> weekPage?.invoke()
+                        DashboardPage.TOMORROW -> TomorrowPage(state, onPlanTomorrow, onPlanWeek)
+                        DashboardPage.WEEK -> weekPage?.invoke()
+                    }
                 }
             }
         }

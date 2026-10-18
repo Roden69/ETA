@@ -9,6 +9,9 @@ paths:
 `ui/weekplanner/` runs the three parts `Planungsphase.md` names, with the maths in
 `domain/planning/WeekPlanning.kt` and `WeekPlanningService` doing the writing.
 
+- **Each step keeps its scroll position** (`pageScrolls` in `WeekPlannerScreen`, one
+  per `Step`): paging away and "Anpassungen vornehmen" (the timetable over the phase)
+  both leave the page's composition, and would otherwise start it at the top (issue #7).
 - **The week is the seven days after the planning day**, not a calendar week. The
   user chooses which weekday they plan on, so the plan covers the seven days that
   follow whenever that happens.
