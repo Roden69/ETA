@@ -261,5 +261,9 @@ to Eta, so it is never lost. The hand-over is the evening's one-shot question
 (`ClockAppAlarms.setOnce`, see `streak-reevaluation.md`), not a repeating alarm. Eta still
 cannot read, change or delete the alarms a clock app holds. The Settings choice "Wecken
 über" is shown only while the Weckruf is on, and the wake time shown as due is Eta's own,
-so it is empty while the clock app holds the alarm.
+so it is empty while the clock app holds the alarm. The Settings text says that without
+the evening's confirmation no alarm stands. System Back in the evening's planner leads on
+to the evening screens like its own button, so the gesture cannot skip the question; and
+when the evening finds the clock app gone, it re-arms Eta's alarm on the spot, so
+"Eta weckt dich selbst" is true.
 

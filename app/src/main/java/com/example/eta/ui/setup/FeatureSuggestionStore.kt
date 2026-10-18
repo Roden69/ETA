@@ -36,6 +36,12 @@ class FeatureSuggestionStore(context: Context) {
     fun answer(feature: SuggestedFeature, today: LocalDate) =
         write(_state.value.copy(answered = _state.value.answered + feature, lastOfferedOn = today))
 
+    /** Back to a first start: nothing answered, nothing offered yet. */
+    fun reset() {
+        prefs.edit { clear() }
+        _state.value = FeatureSuggestionState(answered = emptySet(), lastOfferedOn = null)
+    }
+
     private fun write(next: FeatureSuggestionState) {
         prefs.edit {
             putStringSet(KEY_ANSWERED, next.answered.map { it.name }.toSet())

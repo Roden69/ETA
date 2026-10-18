@@ -1,6 +1,7 @@
 package com.example.eta.domain.planning
 
 import com.example.eta.data.local.BlockWithItem
+import com.example.eta.domain.model.BlockOrigin
 import com.example.eta.domain.model.ItemRole
 import com.example.eta.domain.model.NightOverride
 import com.example.eta.domain.model.PlannedBlock
@@ -171,10 +172,12 @@ fun PlannedBlock.cancelledInAdvance(timeZone: TimeZone): Boolean {
  * Three ways out of it, and they are different statements: free time keeps its
  * slot and is priced the other way round ([isCancelled]), an excused one was
  * nobody's doing (`forceMajeure`), and one decided in advance never cost the day
- * anything ([cancelledInAdvance]).
+ * anything ([cancelledInAdvance]). A time blocker (#16) is outside the scoring
+ * altogether, so calling it off costs nothing either.
  */
 fun BlockWithItem.cancellationCharged(timeZone: TimeZone): Boolean =
-    isCancelled() && !block.isExcused && !block.cancelledInAdvance(timeZone)
+    isCancelled() && !block.isExcused && !block.cancelledInAdvance(timeZone) &&
+        block.origin != BlockOrigin.CALENDAR_BLOCKER
 
 /**
  * Whether the day still counts these minutes as carried by the plan.

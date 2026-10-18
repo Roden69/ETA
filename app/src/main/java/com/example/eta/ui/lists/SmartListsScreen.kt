@@ -19,6 +19,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
@@ -891,26 +892,35 @@ private fun RecurringTaskBlock(task: RecurringTask, onOpen: (RecurringGroup) -> 
         EtaText(text = task.name, style = EtaTheme.typography.bodyStrong)
         task.rows.forEach { row: RecurringWeekdayRow ->
             val item = row.group.representative
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(start = EtaTheme.spacing.lg)
-                    .pointerInput(item.id, row.weekday, row.startTime) {
-                        detectTapGestures(onTap = { onOpen(row.group) }, onLongPress = { onOpen(row.group) })
-                    },
-                verticalAlignment = Alignment.CenterVertically,
-            ) {
-                Box(
+            key(item.id, row.weekday, row.startTime) {
+                // Through State: `pointerInput` keeps the lambda it launched with, and
+                // an edit that keeps the keys (a new length) would open the old group.
+                val group by rememberUpdatedState(row.group)
+                val latestOnOpen by rememberUpdatedState(onOpen)
+                Row(
                     modifier = Modifier
-                        .size(8.dp)
-                        .background(colorOf(item), CircleShape),
-                )
-                Spacer(Modifier.size(EtaTheme.spacing.sm))
-                EtaText(
-                    text = rowLabel(row),
-                    style = EtaTheme.typography.caption,
-                    color = EtaTheme.colors.textSecondary,
-                )
+                        .fillMaxWidth()
+                        .padding(start = EtaTheme.spacing.lg)
+                        .pointerInput(item.id, row.weekday, row.startTime) {
+                            detectTapGestures(
+                                onTap = { latestOnOpen(group) },
+                                onLongPress = { latestOnOpen(group) },
+                            )
+                        },
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .background(colorOf(item), CircleShape),
+                    )
+                    Spacer(Modifier.size(EtaTheme.spacing.sm))
+                    EtaText(
+                        text = rowLabel(row),
+                        style = EtaTheme.typography.caption,
+                        color = EtaTheme.colors.textSecondary,
+                    )
+                }
             }
         }
     }

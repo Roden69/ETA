@@ -103,7 +103,7 @@ class GoogleAuth(private val context: Context) {
  * When this build's package name and signing certificate do not match a registered
  * Android OAuth client, Play Services refuses before any network call, and the
  * message it returns does not name the cause. The hint names the two usual causes
- * and keeps the original text for lookup. Setup: docs/calendar-oauth-setup.md.
+ * and keeps the original text for lookup. Setup: docs/calendar-oauth.md.
  */
 internal fun authorizationFailureMessage(original: String?): String {
     val detail = original?.takeIf { it.isNotBlank() } ?: "keine Details von Google"

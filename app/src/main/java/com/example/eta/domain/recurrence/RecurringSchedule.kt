@@ -16,6 +16,7 @@ import kotlin.time.Duration
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.isoDayNumber
 
 /**
  * The time a standing task claims on each of its days, as a planner would see it.
@@ -211,9 +212,30 @@ private data class GroupKey(
     val returnAfter: Duration?,
     val breakAfter: Duration?,
     val endSound: Boolean,
-    val rhythm: Rhythm,
+    /** The rhythm as [groupingKey] reads it: weekdays of one series land together. */
+    val rhythm: Any,
     val repeatUntil: LocalDate?,
 )
+
+/**
+ * What makes two definitions the same rhythm for grouping.
+ *
+ * An every-N-weeks series anchors each weekday on its own first date, so the
+ * Monday and the Wednesday of one series carry different anchors. They belong
+ * together when they run in the same weeks: same N, and the same week of the
+ * cycle, counted in whole weeks from 1970-01-05, the first Monday of the epoch.
+ */
+private fun Rhythm.groupingKey(): Any = when (this) {
+    is Rhythm.EveryWeeks -> {
+        val mondayEpochDay = anchor.toEpochDays().toLong() - (anchor.dayOfWeek.isoDayNumber - 1)
+        val week = Math.floorDiv(mondayEpochDay - FIRST_EPOCH_MONDAY, 7L)
+        Pair(weeks, Math.floorMod(week, weeks.toLong()))
+    }
+    else -> this
+}
+
+/** 1970-01-05, the first Monday after the epoch, in epoch days. */
+private const val FIRST_EPOCH_MONDAY = 4L
 
 /**
  * The standing schedule, gathered into [RecurringGroup]s and ordered the way a
@@ -238,7 +260,7 @@ fun groupRecurring(definitions: List<Item>): List<RecurringGroup> =
                 returnAfter = item.returnAfter,
                 breakAfter = item.breakAfter,
                 endSound = item.endSound,
-                rhythm = Rhythm.of(item.recurrenceRule!!),
+                rhythm = Rhythm.of(item.recurrenceRule!!).groupingKey(),
                 repeatUntil = item.repeatUntil,
             )
         }

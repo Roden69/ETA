@@ -109,12 +109,23 @@ class CalendarRepository(
 
         val remote = calendars.flatMap { api.events(token, it.id, from, to) }
         val known = dao.findForRange(from, to).associateBy { it.id }
-        val adopted = adoptedSeries()
+        val live = dao.findLiveSeries()
+        val adopted = live.associate { seriesKey(it.calendarId, it.seriesId) to it.itemId }
+        // Cards made from a series that have since been deleted or ended: what they
+        // took is offered again instead of pointing at a card that lays nothing down.
+        val deadSeriesItems = dao.findSeries().map { it.itemId }.toSet() - live.map { it.itemId }.toSet()
         val now = clock.now()
 
         dao.upsertEvents(
             remote.map { event ->
-                merge(event, known[idOf(event)], adopted[seriesKey(event.calendarId, event.seriesId)], now)
+                val existing = known[idOf(event)]?.let { row ->
+                    if (row.itemId != null && row.itemId in deadSeriesItems) {
+                        row.copy(decision = EventDecision.PENDING, itemId = null)
+                    } else {
+                        row
+                    }
+                }
+                merge(event, existing, adopted[seriesKey(event.calendarId, event.seriesId)], now)
             },
         )
         // What the calendar no longer offers and nobody has decided about is gone.
@@ -156,7 +167,7 @@ class CalendarRepository(
     )
 
     private suspend fun adoptedSeries(): Map<String, String> =
-        dao.findSeries().associate { seriesKey(it.calendarId, it.seriesId) to it.itemId }
+        dao.findLiveSeries().associate { seriesKey(it.calendarId, it.seriesId) to it.itemId }
 
     /** Whether a series has been made into recurring cards. */
     suspend fun isSeriesAdopted(calendarId: String, seriesId: String): Boolean =
@@ -191,6 +202,15 @@ class CalendarRepository(
     /** Remembers that the user was told about this clash, so it is announced once. */
     suspend fun markConflictNotified(event: CalendarEvent) {
         dao.markConflictNotified(event.id)
+    }
+
+    /** Every stored occurrence of a series, whatever was decided about it. */
+    suspend fun occurrencesOf(calendarId: String, seriesId: String): List<CalendarEvent> =
+        dao.findSeriesOccurrences(calendarId, seriesId)
+
+    /** Points an occurrence at another card: the series' own, once the series is adopted. */
+    suspend fun relink(event: CalendarEvent, itemId: String) {
+        dao.relink(event.id, itemId, clock.now())
     }
 
     private fun seriesKey(calendarId: String, seriesId: String?): String =

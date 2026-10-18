@@ -225,6 +225,24 @@ class RecurringScheduleTest {
         assertTrue(groupRecurring(listOf(Item.newQuickRecurring("Joggen", now))).isEmpty())
     }
 
+    @Test
+    fun `the weekdays of one every-three-weeks series are one task, another phase is another`() {
+        // Adopted on Wednesday 2026-10-21 for Monday and Wednesday: the Monday rule
+        // is anchored a full cycle later than the Wednesday one, yet runs in the
+        // same weeks.
+        val series = Rhythm.EveryWeeks(3, kotlinx.datetime.LocalDate(2026, 10, 21))
+            .rulesFor(setOf(MONDAY, WEDNESDAY))
+        val shifted = Rhythm.EveryWeeks(3, kotlinx.datetime.LocalDate(2026, 10, 28))
+            .rulesFor(setOf(MONDAY))
+        val groups = groupRecurring(
+            series.mapIndexed { i, rule -> def("s$i", rule, LocalTime(16, 0), name = "Physio") } +
+                shifted.map { rule -> def("x", rule, LocalTime(16, 0), name = "Physio") },
+        )
+
+        assertEquals(2, groups.size)
+        assertEquals(setOf(MONDAY, WEDNESDAY), groups.first { it.ids.size == 2 }.weekdays)
+    }
+
     // --- Reassigning rows on an edit -----------------------------------------
 
     @Test

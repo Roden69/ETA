@@ -535,6 +535,23 @@ class DailySettlementTest {
     }
 
     @Test
+    fun `a time blocker keeps its hours out of the unplanned charge and costs nothing to call off`() {
+        fun blocker(id: String, discarded: Boolean) = entry(id, LocalTime(9, 0), 2.hours, discarded = discarded)
+            .let { it.copy(block = it.block.copy(origin = BlockOrigin.CALENDAR_BLOCKER)) }
+        val unticked = blocker("arzt", discarded = false)
+        val calledOff = blocker("abgesagt", discarded = true)
+
+        val held = settleDay(listOf(unticked), emptyList(), sleep, ALLOWANCE, 1.0, timeZone = TimeZone.UTC)
+        assertEquals(14.0, held.unplannedHours, 0.0001)
+        assertEquals(0.0, held.harvest, 0.0001)
+
+        assertFalse(calledOff.cancellationCharged(TimeZone.UTC))
+        val freed = settleDay(listOf(calledOff), emptyList(), sleep, ALLOWANCE, 1.0, timeZone = TimeZone.UTC)
+        assertEquals(16.0, freed.unplannedHours, 0.0001)
+        assertEquals(0.0, freed.cancellationPenalty, 0.0001)
+    }
+
+    @Test
     fun `inflation takes thirty percent of savings and leaves debt alone`() {
         assertEquals(3.0, weeklyInflationOn(10.0), 0.0001)
         assertEquals(0.0, weeklyInflationOn(-10.0), 0.0001)

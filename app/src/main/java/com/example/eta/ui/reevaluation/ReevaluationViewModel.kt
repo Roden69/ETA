@@ -29,6 +29,9 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.todayIn
+import com.example.eta.ui.format.formatLong
 
 /** The self-reflection questions, in the order `Tägliche Reevaluation.md` asks them. */
 object JournalQuestions {
@@ -38,6 +41,9 @@ object JournalQuestions {
     const val STRESS = "War der Tag stressig?"
     const val STRESS_FROM_PLAN = "War der Tag stressig wegen deines Plans?"
     const val PLAN_CHANGE = "Was könntest du am Plan anpassen?"
+
+    /** Not a question: the note that marks an evening closed on a later day. */
+    const val CAUGHT_UP = "Nachgeholt"
 }
 
 enum class StressLevel(val label: String) {
@@ -93,6 +99,12 @@ data class ReevaluationUiState(
     val settled: DailySettlement? = null,
     /** Booked by an earlier evening already: nothing is left to settle on this screen. */
     val alreadySettled: Boolean = false,
+    /**
+     * An earlier evening being caught up. Its contracts are not asked and not paid:
+     * a promise is checked on its evening or not at all, and a late "kept" must not
+     * credit it or move its last check back to an older day.
+     */
+    val catchUp: Boolean = false,
     val loading: Boolean = true,
 ) {
     /**
@@ -128,9 +140,12 @@ class ReevaluationViewModel(
     private val dayClosingService: DayClosingService,
     private val subtaskRepository: SubtaskRepository,
     private val clock: Clock = Clock.System,
+    private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) : ViewModel() {
 
-    private val _state = MutableStateFlow(ReevaluationUiState(date = date))
+    private val catchUp: Boolean = date < clock.todayIn(timeZone)
+
+    private val _state = MutableStateFlow(ReevaluationUiState(date = date, catchUp = catchUp))
     val uiState: StateFlow<ReevaluationUiState> = _state.asStateFlow()
 
     private val _journal = MutableStateFlow<Map<String, String>>(emptyMap())
@@ -146,7 +161,7 @@ class ReevaluationViewModel(
     private fun refresh() {
         viewModelScope.launch {
             val blocks = reevaluationService.blocksOf(date)
-            val contracts = reevaluationService.contractsAwaitingCheck(date)
+            val contracts = if (catchUp) emptyList() else reevaluationService.contractsAwaitingCheck(date)
             val steps = subtaskRepository.stepsByItem()
             val ticks = subtaskRepository.checkedByBlock(date)
             // A block that has been answered — done or dropped — with steps still
@@ -314,7 +329,9 @@ class ReevaluationViewModel(
                 entry = offer.entry,
                 open = offer.open,
                 total = offer.total,
-                today = date,
+                // The real today, not the evening being closed: a rest stamped with a
+                // caught-up day would count as a goal of the last cycle and lock the week.
+                today = clock.todayIn(timeZone),
             )
             refresh()
         }
@@ -371,7 +388,14 @@ class ReevaluationViewModel(
         settling = true
         viewModelScope.launch {
             val state = _state.value
-            val settlement = reevaluationService.settle(date, state.toVerdicts(), _journal.value)
+            // A caught-up day says so in its journal, as the phrase route does: a
+            // made-up evening is never indistinguishable from a lived one.
+            val journal = if (catchUp) {
+                _journal.value + (JournalQuestions.CAUGHT_UP to "Am ${clock.todayIn(timeZone).formatLong()} nachgeholt.")
+            } else {
+                _journal.value
+            }
+            val settlement = reevaluationService.settle(date, state.toVerdicts(), journal)
             _state.update { it.copy(settled = settlement) }
             onDone()
         }

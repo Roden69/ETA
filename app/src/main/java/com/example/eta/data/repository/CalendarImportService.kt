@@ -5,6 +5,7 @@ import com.example.eta.domain.calendar.SeriesPattern
 import com.example.eta.domain.model.BlockOrigin
 import com.example.eta.domain.model.CalendarEvent
 import com.example.eta.domain.model.Category
+import com.example.eta.domain.model.EventDecision
 import com.example.eta.domain.model.Item
 import com.example.eta.domain.model.ItemExtras
 import com.example.eta.domain.model.ItemType
@@ -225,7 +226,33 @@ class CalendarImportService(
             rhythm = pattern.rhythm,
         )
         calendarRepository.adoptSeries(event.calendarId, seriesId, ids)
+        replaceSingleImports(event.calendarId, seriesId, ids)
         return ids
+    }
+
+    /**
+     * Occurrences of the series that were taken one by one before the series was:
+     * from tomorrow on, the series' card stands on those days, so the single card
+     * gives way — its open block is removed (it is an import, not a materialized
+     * occurrence) and the card retired — and the occurrence points at the series.
+     * Today and anything already ticked off stay as they are: those are the user's
+     * day, not a duplicate to tidy.
+     */
+    private suspend fun replaceSingleImports(calendarId: String, seriesId: String, ids: List<String>) {
+        val today = weekPlanningService.today()
+        val now = clock.now()
+        calendarRepository.occurrencesOf(calendarId, seriesId)
+            .filter { it.decision == EventDecision.IMPORTED && it.date > today }
+            .forEach { occurrence ->
+                val singleId = occurrence.itemId?.takeIf { it !in ids } ?: return@forEach
+                val single = planRepository.findDay(occurrence.date)
+                    .firstOrNull { it.item.id == singleId && it.block.origin.isCalendarEvent }
+                    ?: return@forEach
+                if (!single.block.isOpen) return@forEach
+                planRepository.removeBlock(single.block)
+                itemRepository.update(single.item.copy(stage = Stage.DONE, completedAt = now, updatedAt = now))
+                calendarRepository.relink(occurrence, ids.first())
+            }
     }
 
     /**

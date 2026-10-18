@@ -30,6 +30,10 @@ ordinary reevaluation, one tap each: a missed evening is the most common way the
 rhythm breaks, so its repair is not hidden. They come oldest first, and each can be
 skipped with "Überspringen", which leaves it unsettled. `CatchUpService.dailyDays()`
 selects them with the pure rule `unsettledDays` (`domain/reevaluation/CatchUp.kt`).
+A caught-up evening (`ReevaluationUiState.catchUp`, the date before today) asks no
+contracts and pays none, exactly like the phrase route: a contract is checked on its
+evening, and a late answer must not pay it or move `lastCheckedOn` back. Its journal
+gets the note "Nachgeholt", and each missed day opens on its own first page.
 
 Older days, up to 30, stay behind the phrase `TECHNISCHE SCHWIERIGKEITEN` in the
 settings tab. `CatchUpService.catchUp` pays the day's harvest but **never contract

@@ -58,7 +58,10 @@ Operational instructions: `docs/ci-cd.md`.
   `ANTHROPIC_API_KEY` it comments the setup and stops. Otherwise
   `anthropics/claude-code-action` (pinned to v1.0.252, commit f27be6b6…) works on
   `fix/issue-<N>` and opens a PR against `main`. Issue text is untrusted data; it never
-  enters a shell step, and the tool allow-list permits pushes only to `fix/issue-*`.
+  enters a shell step. The model gets only title and body from the event payload (the
+  text a maintainer approved), no comments or later edits, and the tool allow-list
+  names exact commands: the push only to `fix/issue-<N>` of this issue, Gradle only as
+  the CI gate, no `cat`.
   Nothing is pushed to `main` by the workflow; that protection is a branch ruleset.
   Pull requests created with `GITHUB_TOKEN` start no `pull_request` workflows, so the
   Android run for such a PR is started by hand on its branch.

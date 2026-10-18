@@ -193,10 +193,16 @@ shows a sentence.
 - **Background refresh** (`alarm/CalendarRefreshAlarm.kt`): one chained
   `setWindow` alarm (request code 1300, about every 60 min, 10 min window, no
   exact-alarm permission, no WorkManager) while an account is connected. Armed on
-  app start (`EtaApplication`, `RootViewModel`) and after boot without pushing a
-  standing alarm back; each run arms the next; disconnecting cancels it; the
-  sandbox never arms one. `CalendarRefreshService.run` refreshes the planning
-  window and swallows consent/network failures (no Activity to ask).
+  app start (`EtaApplication`, `RootViewModel`), after boot and whenever the
+  connection changes in the calendar box (connect, consent, disconnect). The due
+  time is kept with each arming (SharedPreferences `calendar_refresh`): a standing
+  alarm is not pushed back, but one whose due time has passed — a run killed
+  before it re-armed — is armed again. A run arms the next one *before* it reads,
+  so a slow network cannot end the chain. Disconnecting cancels alarm and intent;
+  the sandbox never arms one. `CalendarRefreshService.run` refreshes the planning
+  window and swallows consent/network failures (no Activity to ask). On the
+  planning day the window ends the day before the next one; that day's own
+  appointments come in through the evening's calendar step for tomorrow.
 - **New clashes are announced once** (`domain/calendar/CalendarClashes.kt`,
   `pendingClashes`): an undecided appointment that lands on planned time gets one
   low-importance notification on its own soundless channel `calendar_conflicts`
@@ -207,8 +213,11 @@ shows a sentence.
 - **Three decisions per appointment:** Ignorieren, Übernehmen (points by the
   hour as before) and **"Als Zeitblocker (ohne Punkte)"**, imported with
   `BlockOrigin.CALENDAR_BLOCKER`: it holds its time and is as immovable as an
-  import (`BlockOrigin.isCalendarEvent`), and `yieldOf` pays 0 for it. Without a
-  local decision the normal points stay. Nothing is ever written to Google.
+  import (`BlockOrigin.isCalendarEvent`), and `yieldOf` pays 0 for it. It is
+  outside the scoring altogether: unticked it still counts as held time
+  (`heldItsTime`), so it is not charged as unplanned, and calling it off costs no
+  cancellation (`cancellationCharged`). Without a local decision the normal points
+  stay. Nothing is ever written to Google.
 - **Series** (`domain/calendar/SeriesPattern.kt`): occurrences carry Google's
   `recurringEventId` as `calendar_events.seriesId`. "Als wiederkehrende Aufgabe
   übernehmen" asks Google for the series master on demand and converts
@@ -217,8 +226,13 @@ shows a sentence.
   date, stored as `E:<weekday>:<weeks>:<anchor>`) for intervals above one week,
   so a three-weekly series stays three-weekly. Other rules are refused with the
   reason. `calendar_series` links the cards to the series so its occurrences are
-  not offered again. Later changes to the series in Google are not followed.
-  One-off events are never turned into recurring tasks.
+  not offered again; only links whose card is still a live standing task count
+  (`findLiveSeries`), so deleting or ending the card offers the occurrences again.
+  Occurrences already taken one by one give way from tomorrow on: their open
+  import block is removed, the single card retired and the occurrence pointed at
+  the series card. Later changes to the series in Google are not followed. One-off
+  events are never turned into recurring tasks. Weekdays of one every-N-weeks
+  series are grouped by their phase, so they edit as one task.
 - **Conflict answers while planning:** skip this occurrence, shorten, move after
   the appointment, or **split around it** (`splitAround` in `ConflictRelief.kt`):
   the block keeps the part in front, the part behind becomes a make-up ToDo in

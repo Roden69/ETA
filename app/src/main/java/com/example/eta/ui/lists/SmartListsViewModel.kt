@@ -33,6 +33,7 @@ import com.example.eta.domain.recurrence.groupRecurring
 import com.example.eta.domain.setup.UserSetup
 import com.example.eta.domain.staging.daysUntilBan
 import com.example.eta.domain.chain.isOfferedFollowUp
+import com.example.eta.domain.chain.isWaitingFollowUp
 import com.example.eta.ui.attributes.RecurringAttributes
 import com.example.eta.ui.attributes.TodoAttributes
 import kotlin.time.Clock
@@ -448,6 +449,9 @@ class SmartListsViewModel(
      * of the day in the evening — the dialog says so before it happens.
      */
     fun completeEarly(item: Item, category: Category, duration: Duration) {
+        // A follow-up waiting for its predecessor cannot be done ahead of it: that
+        // would release the next one while the first is still open.
+        if (item.isWaitingFollowUp()) return
         viewModelScope.launch {
             val now = clock.now()
             // Written back before anything else: for a card that was never filled

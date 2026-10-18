@@ -145,7 +145,7 @@ class SetupViewModel(
     private fun describe(outcome: SyncOutcome): String? = when (outcome) {
         is SyncOutcome.Ok, SyncOutcome.NotConnected -> null
         is SyncOutcome.NeedsConsent ->
-            "Google braucht eine neue Freigabe. Verbinde den Kalender auf dieser Seite erneut. " +
+            "Google braucht eine neue Freigabe. Verbinde den Kalender auf der vorigen Seite erneut. " +
                 "Die Einrichtung geht auch ohne Termine weiter."
         is SyncOutcome.Failed ->
             "Termine konnten nicht geladen werden: ${outcome.reason}. Die Einrichtung geht trotzdem weiter."
