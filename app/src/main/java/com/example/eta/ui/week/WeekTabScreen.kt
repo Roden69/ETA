@@ -38,6 +38,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.eta.domain.planning.TimelineDraft
+import androidx.compose.ui.graphics.Color
+import com.example.eta.data.local.BlockWithItem
+import com.example.eta.domain.model.BlockOrigin
 import com.example.eta.domain.planning.minuteToLocalTime
 import com.example.eta.domain.planning.nightDateAt
 import com.example.eta.domain.setup.allNights
@@ -59,6 +62,9 @@ import com.example.eta.ui.format.formatShort
 import com.example.eta.ui.format.formatVeryShort
 import com.example.eta.ui.format.formatWeekdays
 import com.example.eta.ui.lists.RecurringCreateDialog
+import com.example.eta.ui.lists.LegendEntry
+import com.example.eta.ui.lists.WeekLegend
+import com.example.eta.ui.lists.categoryLabel
 import com.example.eta.ui.lists.RecurringGroupEditDialog
 import com.example.eta.ui.planner.BlockEditDialog
 import com.example.eta.ui.planner.DayPlannerViewModel
@@ -66,9 +72,11 @@ import com.example.eta.ui.planner.DayTimeline
 import com.example.eta.ui.planner.HOUR_HEIGHT
 import com.example.eta.ui.subtasks.foldCandidatesExcept
 import com.example.eta.ui.theme.EtaTheme
+import com.example.eta.ui.theme.colorOf
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalDate
 
 /** The hour the timetable opens on: early enough that the morning is in sight. */
 private const val OPENING_HOUR = 6.5f
@@ -139,10 +147,12 @@ fun WeekTabScreen(
     var creating by remember { mutableStateOf<Pair<DayOfWeek, TimelineDraft>?>(null) }
     // Held as an id and resolved against the tasks as they are now.
     var editingId by remember { mutableStateOf<String?>(null) }
+    // The weekday a standing task was opened on in "Generell": "Nur <Tag>" answers for it.
+    var editingDay by remember { mutableStateOf<DayOfWeek?>(null) }
     // The same for one occurrence, in "Aktuell": a block id.
     var editingBlockId by remember { mutableStateOf<String?>(null) }
-    // The weekday whose night a long press landed in — the day it ends on.
-    var editingNight by remember { mutableStateOf<DayOfWeek?>(null) }
+    // What a long press on the night asked about — see [NightTarget].
+    var editingNight by remember { mutableStateOf<NightTarget?>(null) }
 
     Column(modifier = modifier.fillMaxSize()) {
         header?.invoke()
@@ -204,6 +214,15 @@ fun WeekTabScreen(
             )
         }
 
+        // The colours this week shows, named: the legend for the timeline below.
+        WeekLegend(
+            entries = weekLegendEntries(
+                blocks = WEEK.flatMap { shown(it) },
+                sleep = WEEK.any { state.sleepOn(it, view).isNotEmpty() },
+            ),
+            modifier = Modifier.padding(horizontal = EtaTheme.spacing.lg),
+        )
+
         HorizontalPager(
             state = pagerState,
             modifier = Modifier
@@ -219,13 +238,22 @@ fun WeekTabScreen(
                 DayTimeline(
                     blocks = shown(pageDay),
                     sleep = state.sleepOn(pageDay, view),
-                    // Read off the standing nights in both views: what the
-                    // window changes is the weekday's night, whatever a single
-                    // date in "Aktuell" happens to show.
+                    // "Aktuell" changes one night of this week, "Generell" the
+                    // weekday's rule. A night over midnight is one night either way:
+                    // the long press names the night, not the half it was pressed on.
                     onSleepLongPress = { minute ->
                         val date = state.dateOf(pageDay)
-                        editingNight = state.setup?.nightDateAt(date, minute)?.dayOfWeek
-                            ?: state.setup?.nightDateAt(date, minute, state.nightOverrides)?.dayOfWeek
+                        if (view == WeekView.CURRENT) {
+                            val wakeDate = state.setup?.nightDateAt(date, minute, state.nightOverrides)
+                            when {
+                                wakeDate == null -> Unit
+                                wakeDate < state.today -> viewModel.refusePastNight(wakeDate)
+                                else -> editingNight = NightTarget.Once(wakeDate)
+                            }
+                        } else {
+                            editingNight = state.setup?.nightDateAt(date, minute)
+                                ?.let { NightTarget.Standing(it.dayOfWeek) }
+                        }
                     },
                     sleepLabels = true,
                     editable = true,
@@ -249,7 +277,10 @@ fun WeekTabScreen(
                             }
 
                             isOwnedBySettings(entry.item.id) -> viewModel.refuseSettingsOwned(entry.item.name)
-                            else -> editingId = entry.item.id
+                            else -> {
+                                editingId = entry.item.id
+                                editingDay = pageDay
+                            }
                         }
                     },
                     // A block id comes back, and in "Aktuell" that is an
@@ -302,26 +333,58 @@ fun WeekTabScreen(
 
     if (showInfo) WeekInfoDialog(onDismiss = { showInfo = false })
 
-    editingNight?.let { wakeDay ->
+    editingNight?.let { target ->
         val setup = state.setup
         if (setup == null) {
             editingNight = null
-        } else {
-            NightEditDialog(
-                title = "Nacht auf ${wakeDay.formatLong()}",
-                scope = "Gilt ab jetzt für jede Nacht auf ${wakeDay.formatLong()} — und nur für " +
-                    "diesen Wochentag. Morgenroutine und »Bettfertig machen« ziehen mit; " +
-                    "heute, und morgen, wenn die Planung schon bestätigt ist, bleiben wie geplant.",
-                night = setup.nightEndingOn(wakeDay),
-                wakeDay = wakeDay,
-                // Against the other six: this one is about to be the odd one out.
-                compareWith = (setup.allNights() - wakeDay).values,
-                onDismiss = { editingNight = null },
-                onSave = { sleep, wake ->
-                    viewModel.saveNight(wakeDay, sleep, wake)
-                    editingNight = null
-                },
-            )
+        } else when (target) {
+            is NightTarget.Once -> {
+                // One night: its own hours, changed for that date alone. The rule
+                // stays where it is, and the window says so.
+                val wakeDate = target.wakeDate
+                NightEditDialog(
+                    title = "Diese Nacht · ${wakeDate.formatLong()}",
+                    scope = "Nur für diese eine Nacht. Die Regel für jeden " +
+                        "${wakeDate.dayOfWeek.formatLong()} änderst du unter »Generell«. " +
+                        "Morgenroutine, »Bettfertig machen« und der Weckruf wandern mit.",
+                    night = setup.nightEndingOn(wakeDate, state.nightOverrides),
+                    wakeDay = wakeDate.dayOfWeek,
+                    // Measured against what this weekday's night usually is.
+                    compareWith = listOf(setup.nightEndingOn(wakeDate.dayOfWeek)),
+                    onDismiss = { editingNight = null },
+                    onSave = { sleep, wake ->
+                        viewModel.changeNight(wakeDate, sleep, wake)
+                        editingNight = null
+                    },
+                    onReset = if (wakeDate in state.nightOverrides) {
+                        {
+                            viewModel.resetNight(wakeDate)
+                            editingNight = null
+                        }
+                    } else {
+                        null
+                    },
+                )
+            }
+
+            is NightTarget.Standing -> {
+                val wakeDay = target.wakeDay
+                NightEditDialog(
+                    title = "Nacht auf ${wakeDay.formatLong()}",
+                    scope = "Gilt ab jetzt für jede Nacht auf ${wakeDay.formatLong()} — und nur für " +
+                        "diesen Wochentag. Morgenroutine und »Bettfertig machen« ziehen mit; " +
+                        "heute, und morgen, wenn die Planung schon bestätigt ist, bleiben wie geplant.",
+                    night = setup.nightEndingOn(wakeDay),
+                    wakeDay = wakeDay,
+                    // Against the other six: this one is about to be the odd one out.
+                    compareWith = (setup.allNights() - wakeDay).values,
+                    onDismiss = { editingNight = null },
+                    onSave = { sleep, wake ->
+                        viewModel.saveNight(wakeDay, sleep, wake)
+                        editingNight = null
+                    },
+                )
+            }
         }
     }
 
@@ -395,10 +458,23 @@ fun WeekTabScreen(
                 setup = state.setup,
                 subtasks = state.subtasks[group.representative.id].orEmpty(),
                 foldCandidates = state.foldable.foldCandidatesExcept(*group.ids.toTypedArray()),
-                onDismiss = { editingId = null },
+                onDismiss = {
+                    editingId = null
+                    editingDay = null
+                },
                 onSave = { name, note, attributes ->
                     viewModel.saveGroup(group, name, note, attributes)
                     editingId = null
+                    editingDay = null
+                },
+                // "Nur <Tag>": the same window, answering for the weekday the long press was on.
+                singleDay = editingDay,
+                onSaveSingleDay = editingDay?.let { onDay ->
+                    { name: String, note: String?, attributes: RecurringAttributes ->
+                        viewModel.saveWeekday(group, onDay, name, note, attributes)
+                        editingId = null
+                        editingDay = null
+                    }
                 },
             )
         }
@@ -775,3 +851,41 @@ private fun ClashDialog(
 /** "09:30 · 1 h 15 min" */
 private fun PendingReschedule.summary(): String =
     "${minuteToLocalTime(startMinute).formatClock()} · ${durationMinutes.minutes.formatShort()}"
+
+/**
+ * The night a long press on the shaded hours asks about.
+ *
+ * [Once] is one night in "Aktuell", named by the date it ends on; [Standing] is
+ * the weekday's rule in "Generell". Two different acts, kept apart on purpose.
+ */
+private sealed interface NightTarget {
+    data class Once(val wakeDate: LocalDate) : NightTarget
+    data class Standing(val wakeDay: DayOfWeek) : NightTarget
+}
+
+/**
+ * The colours the week shows, each with what it means — the colours the timeline
+ * draws: a task's own colour, else its category's; the calendar's ochre for an
+ * imported appointment; the night's shade; free time as the plain ground.
+ */
+@Composable
+private fun weekLegendEntries(blocks: List<BlockWithItem>, sleep: Boolean): List<LegendEntry> {
+    val entries = mutableListOf<LegendEntry>()
+    blocks.filter { it.item.color != null && it.block.origin != BlockOrigin.CALENDAR_IMPORT }
+        .groupBy { it.item.color!! }
+        .forEach { (argb, same) ->
+            entries += LegendEntry(Color(argb), same.map { it.item.name }.distinct().joinToString(", "))
+        }
+    blocks.filter { it.item.color == null && it.block.origin != BlockOrigin.CALENDAR_IMPORT }
+        .map { it.item.category }
+        .distinct()
+        .forEach { category ->
+            entries += LegendEntry(colorOf(category), category?.let(::categoryLabel) ?: "Ohne Kategorie")
+        }
+    if (blocks.any { it.block.origin == BlockOrigin.CALENDAR_IMPORT }) {
+        entries += LegendEntry(EtaTheme.colors.calendar, "Google-Termin")
+    }
+    if (sleep) entries += LegendEntry(EtaTheme.colors.sleep, "Schlaf")
+    entries += LegendEntry(EtaTheme.colors.surface, "Frei", outlined = true)
+    return entries
+}

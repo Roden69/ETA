@@ -173,6 +173,9 @@ fun BlockEditDialog(
     // property of the kind of thing it is. The row below says so.
     var endSound by remember(entry.block.id) { mutableStateOf(entry.item.endSound) }
     val recurring = entry.item.recurrenceRule != null
+    // A standing occurrence shows its task's fields read-only: they are written
+    // where the task is, and a window on one day must not rewrite it.
+    val locked = entry.block.origin == BlockOrigin.RECURRING
     // Custom Earn, Custom Spend and Social: what they are worth is their rate.
     val spend = entry.item.type == ItemType.SPEND
     var rate by remember(entry.block.id) { mutableDoubleStateOf(entry.item.pointsPerHour ?: 0.0) }
@@ -188,7 +191,20 @@ fun BlockEditDialog(
 
     PlannerDialog(title = "Bearbeiten", onDismiss = onDismiss) {
         EtaField(label = "Name") {
-            EtaTextField(value = name, onValueChange = { name = it })
+            if (locked) {
+                EtaText(text = name, style = EtaTheme.typography.bodyStrong)
+            } else {
+                EtaTextField(value = name, onValueChange = { name = it })
+            }
+        }
+        if (locked) {
+            EtaText(
+                text = "Name, Kategorie, Notiz und Endton gelten für alle Termine dieser Aufgabe " +
+                    "und bleiben hier unverändert. Dauerhaft ändern unter »Generell« in der " +
+                    "Wochenansicht oder in der Liste.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textMuted,
+            )
         }
         // Directly under the name, because it is read together with it: the note
         // about *this* occurrence is what the name alone does not say. The one for
@@ -216,7 +232,7 @@ fun BlockEditDialog(
                     hint = "Gilt für diesen Eintrag. Positiv schreibt gut, negativ zehrt vom Konto.",
                 )
             }
-        } else {
+        } else if (!locked) {
             EtaField(
                 label = "Kategorie",
                 hint = "Gilt für alle künftigen Vorkommen dieser Aufgabe.",
@@ -254,7 +270,7 @@ fun BlockEditDialog(
             )
         }
 
-        val activeExtras = listOf(endSound, travel != null, returnAfter != null, breakAfter != null)
+        val activeExtras = listOf(endSound && !locked, travel != null, returnAfter != null, breakAfter != null)
             .count { it }
         EtaExpander(
             label = "Extras",
@@ -283,7 +299,7 @@ fun BlockEditDialog(
                 value = breakAfter,
                 onValueChange = { breakAfter = it },
             )
-            CheckRow(
+            if (!locked) CheckRow(
                 checked = endSound,
                 onCheckedChange = { endSound = it },
                 label = "Ton am Ende",
@@ -295,7 +311,7 @@ fun BlockEditDialog(
             )
         }
 
-        if (recurring) {
+        if (recurring && !locked) {
             EtaField(
                 label = "Notiz für alle Termine",
                 hint = "Gehört zur Aufgabe selbst und begleitet jedes Vorkommen.",

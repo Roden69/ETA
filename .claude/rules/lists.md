@@ -45,6 +45,13 @@ on the screen could hold them:
   they still sit in `Stage.COLLECTION` and on its one-month clock) and the
   **Wochenschema** below them — see *Step 25*.
 
+**The chart's colours are named under it** (issue #35). `WeekSchemeChart` draws
+free time as the plain surface, what is booked as the grey, each task in its own
+colour (`ChartBar`, one per task, in lanes where stretches overlap) and the form in
+edit as the accent, with a collision in the danger colour. Its `WeekLegend` lists
+exactly those colours with the task's name, so a bar is found by colour and name.
+Editor previews and the list use the same free-time colour.
+
 **Attributes are editable, placement is not.** A wrong duration or priority is a
 typo, and running a whole planning phase to fix a typo is the tail wagging the dog.
 Tapping a row opens `ItemDetailDialog`, which offers **Bearbeiten** and
