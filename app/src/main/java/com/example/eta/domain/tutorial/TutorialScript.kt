@@ -139,7 +139,11 @@ object TutorialSpot {
  * comes in as a signal.
  */
 data class TutorialFacts(
-    /** A ToDo and a recurring note of the user's own were made at some point. */
+    /**
+     * A ToDo named like the script's example, and a recurring note named like
+     * its example, were made at some point. The name counts as well as the type,
+     * so a half-typed "Katzen" or a note of the wrong kind does not tick a check.
+     */
     val todoNoted: Boolean = false,
     val recurringNoted: Boolean = false,
     /** What the user called them, for the texts; null until there is one. */
@@ -175,8 +179,8 @@ data class TutorialFacts(
     val mailAnswered: Boolean get() = mailCompleted || mailDiscarded
 
     /** The names as a text quotes them, with the script's own as the fallback. */
-    val todoLabel: String get() = "»${todoName ?: "Katzenstreu kaufen"}«"
-    val recurringLabel: String get() = "»${recurringName ?: "Regelmäßig Sport"}«"
+    val todoLabel: String get() = "»${todoName ?: TODO_NOTE_NAME}«"
+    val recurringLabel: String get() = "»${recurringName ?: RECURRING_NOTE_NAME}«"
 }
 
 class TutorialStep(
@@ -282,7 +286,7 @@ val QUICKSTART_STEPS: List<TutorialStep> = listOf(
                     "gehört auf die zweite Seite der Box: Wische sie zur Seite oder " +
                     "tippe auf den zweiten Punkt oben rechts. Dort notierst du es."
             } else {
-                "Schreibe beides in die Quick-Add-Box — ein Name genügt. Beginne mit " +
+                "Schreibe beides in die Quick-Add-Box – mit genau diesem Namen. Beginne mit " +
                     "»Katzenstreu kaufen«. Danach darfst du es vergessen: Eta erinnert " +
                     "sich für dich. (Nur zur Übung — nichts davon landet in deinen " +
                     "eigenen Listen.)"
@@ -298,8 +302,8 @@ val QUICKSTART_STEPS: List<TutorialStep> = listOf(
         swipeHint = { it.todoNoted && !it.recurringNoted },
         checks = {
             listOf(
-                TutorialCheck("»Katzenstreu kaufen« notieren", it.todoNoted),
-                TutorialCheck("»Regelmäßig Sport« als Wiederholung notieren", it.recurringNoted),
+                TutorialCheck("»$TODO_NOTE_NAME« notieren", it.todoNoted),
+                TutorialCheck("»$RECURRING_NOTE_NAME« als Wiederholung notieren", it.recurringNoted),
             )
         },
     ),
@@ -685,6 +689,21 @@ fun exitTarget(steps: List<TutorialStep>, index: Int, stage: TutorialStage, fact
     }
 }
 
+/** The Quick-Add notes the checklist asks for, by the names the script gives them. */
+private const val TODO_NOTE_NAME = "Katzenstreu kaufen"
+private const val RECURRING_NOTE_NAME = "Regelmäßig Sport"
+
+/**
+ * Whether a typed name is the script's: trimmed, case-insensitive, inner runs of
+ * spaces collapsed. Compared in uppercase, because lowercasing would not match
+ * "REGELMÄSSIG" against "Regelmäßig" ("ß" has no lowercase counterpart to "SS").
+ */
+private fun String.isNoteNamed(script: String): Boolean =
+    normalizedNoteName() == script.normalizedNoteName()
+
+private fun String.normalizedNoteName(): String =
+    trim().replace(Regex("\\s+"), " ").uppercase()
+
 /**
  * What the practice database says, as the steps ask about it.
  *
@@ -706,14 +725,16 @@ fun tutorialFacts(
     // it is Eta's doing, and must not pass for the note the tutorial asked for.
     fun Item.isOwnTodo() = type == ItemType.TODO && !name.startsWith(MAKE_UP_NAME_PREFIX)
     val ownTodos = collection.filter { it.isOwnTodo() } + week.filter { it.isOwnTodo() }
+    val todoNotes = ownTodos.filter { it.name.isNoteNamed(TODO_NOTE_NAME) }
     val notes = collection.filter { it.type == ItemType.RECURRING }
+    val recurringNotes = notes.filter { it.name.isNoteNamed(RECURRING_NOTE_NAME) }
     val mail = today.firstOrNull { it.item.id == TUTORIAL_MAIL_ID }?.block
 
     return TutorialFacts(
-        todoNoted = ownTodos.isNotEmpty(),
-        recurringNoted = notes.isNotEmpty(),
-        todoName = ownTodos.firstOrNull()?.name,
-        recurringName = notes.firstOrNull()?.name,
+        todoNoted = todoNotes.isNotEmpty(),
+        recurringNoted = recurringNotes.isNotEmpty(),
+        todoName = todoNotes.firstOrNull()?.name,
+        recurringName = recurringNotes.firstOrNull()?.name,
         openTodoNotes = collection.count { it.type == ItemType.TODO && !it.isConcretized },
         openRecurringNotes = notes.count { !it.isConcretized },
         completedToday = today.filter { it.block.isCompleted }.mapTo(mutableSetOf()) { it.item.id },

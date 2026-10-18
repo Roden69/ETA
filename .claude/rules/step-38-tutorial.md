@@ -172,7 +172,10 @@ how it is left:
 it means the thing happened and not that a button was pressed. Only what no table
 holds comes in as a **signal** — which page of a pager is in front — through
 `TutorialGuide.report`. `remembering` keeps "a note was made" and its name once
-the note has left the Sammelliste by being filled in.
+the note has left the Sammelliste by being filled in. The two Quick-Add checks count
+a note only with the script's name (`tutorialFacts`: trimmed, case-insensitive,
+inner spaces collapsed) and of the right kind, so "Katzen" or "Katzenstreu kaufen"
+as a recurring note does not tick them (issue #42).
 
 - **"Zurück" on the coach** goes to the step before, across screens too. Nothing
   is undone: what was ticked stays ticked, so a task come back to shows as done.
