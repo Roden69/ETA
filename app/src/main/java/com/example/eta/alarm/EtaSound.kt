@@ -11,14 +11,14 @@ import android.media.AudioFocusRequest
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
 import androidx.annotation.RawRes
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import androidx.core.content.edit
 import androidx.core.content.getSystemService
+import com.example.eta.domain.audio.AudioMode
+import com.example.eta.domain.audio.RingerMode
+import com.example.eta.domain.audio.effectiveAudioMode
 
 /**
  * Every sound Eta makes, played by Eta rather than by a notification channel.
@@ -42,22 +42,10 @@ import androidx.core.content.getSystemService
  *
  * The wake alarm is the one exception and keeps its own [WakeAlarmRinger]: an
  * alarm clock that stayed quiet under DND would not be an alarm clock.
- */
-/**
- * How Eta makes itself heard — every sound it has except the wake alarm.
  *
- * [SOUND] is what there was. [VIBRATE] buzzes where a sound would have played;
- * [SILENT] does neither and leaves the banner to say it. Chosen on the "Audio"
- * page of the settings and kept in `SharedPreferences`, for the reason the
- * Do-Not-Disturb switch is: the sounds are played from receivers that have a
- * context and nothing else.
+ * The mode itself is decided by [effectiveAudioMode], a pure function in
+ * `domain/audio`; this object only reads the phone's state and plays.
  */
-enum class AudioMode(val label: String) {
-    SOUND("Ton"),
-    VIBRATE("Vibration"),
-    SILENT("Still"),
-}
-
 object EtaSound {
 
     private val attributes: AudioAttributes = AudioAttributes.Builder()
@@ -106,9 +94,16 @@ object EtaSound {
      * Eta's sounds did too. The user called that a bug, and for a task
      * announcement it is one: muting the phone is asking it to be quiet.
      */
-    fun isRingerMuted(context: Context): Boolean {
-        val audio: AudioManager = context.getSystemService() ?: return false
-        return audio.ringerMode != AudioManager.RINGER_MODE_NORMAL
+    fun isRingerMuted(context: Context): Boolean = ringerMode(context) != RingerMode.NORMAL
+
+    /** The phone's ringer switch, as the domain rule reads it. */
+    internal fun ringerMode(context: Context): RingerMode {
+        val audio: AudioManager = context.getSystemService() ?: return RingerMode.NORMAL
+        return when (audio.ringerMode) {
+            AudioManager.RINGER_MODE_SILENT -> RingerMode.SILENT
+            AudioManager.RINGER_MODE_VIBRATE -> RingerMode.VIBRATE
+            else -> RingerMode.NORMAL
+        }
     }
 
     private fun prefs(context: Context) =
@@ -126,34 +121,17 @@ object EtaSound {
         prefs(context).edit().putString(KEY_MODE, mode.name).apply()
     }
 
-    /** One policy for sounds and speech; a DND override never unmutes the phone. */
-    internal fun effectiveMode(context: Context): AudioMode {
-        val selected = mode(context)
-        if (selected == AudioMode.SILENT ||
-            (isDoNotDisturbOn(context) && !ignoresDoNotDisturb(context))
-        ) {
-            return AudioMode.SILENT
-        }
-        return if (isRingerMuted(context)) AudioMode.VIBRATE else selected
-    }
+    /** One policy for sounds and speech; see [effectiveAudioMode]. */
+    internal fun effectiveMode(context: Context): AudioMode = effectiveAudioMode(
+        selected = mode(context),
+        ringer = ringerMode(context),
+        doNotDisturb = isDoNotDisturbOn(context),
+        ignoresDoNotDisturb = ignoresDoNotDisturb(context),
+    )
 
     /** One short buzz, after [effectiveMode] has allowed it. */
     private fun vibrate(context: Context) {
-        runCatching {
-            val vibrator = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-                context.getSystemService<VibratorManager>()?.defaultVibrator
-            } else {
-                @Suppress("DEPRECATION")
-                context.getSystemService<Vibrator>()
-            } ?: return
-            val pattern = longArrayOf(0, 250, 150, 250)
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createWaveform(pattern, -1))
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator.vibrate(pattern, -1)
-            }
-        }
+        alarmVibrator(context)?.vibrateAsAlarm(longArrayOf(0, 250, 150, 250), repeat = -1)
     }
 
     /** Announces [sound] once using the effective sound, vibration or silent mode. Never throws. */

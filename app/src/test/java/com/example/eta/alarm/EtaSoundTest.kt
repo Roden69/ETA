@@ -2,10 +2,12 @@ package com.example.eta.alarm
 
 import android.app.Application
 import android.app.NotificationManager
+import android.content.Context
 import android.media.AudioManager
 import android.media.MediaPlayer
 import android.os.Vibrator
 import com.example.eta.R
+import com.example.eta.domain.audio.AudioMode
 import kotlinx.coroutines.runBlocking
 import org.junit.After
 import org.junit.Assert.assertEquals
@@ -93,6 +95,15 @@ class EtaSoundTest {
     @Test
     fun `normal phone still plays task start and end sounds`() {
         assertTaskOutput(AudioMode.SOUND)
+    }
+
+    @Test
+    fun `ignoring do not disturb is off on a fresh install`() {
+        context.getSharedPreferences("sound", Context.MODE_PRIVATE).edit().clear().commit()
+
+        assertFalse(EtaSound.ignoresDoNotDisturb(context))
+        notifications.setInterruptionFilter(NotificationManager.INTERRUPTION_FILTER_PRIORITY)
+        assertEquals(AudioMode.SILENT, EtaSound.effectiveMode(context))
     }
 
     @Test

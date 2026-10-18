@@ -19,9 +19,9 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import com.example.eta.alarm.AudioMode
 import com.example.eta.alarm.ClockApp
 import com.example.eta.alarm.ClockAppAlarms
+import com.example.eta.domain.audio.AudioMode
 import com.example.eta.domain.setup.clockAlarms
 import com.example.eta.ui.components.EtaSwatch
 import com.example.eta.ui.components.EtaIcon
@@ -764,9 +764,9 @@ private fun AudioModeBox() {
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = "Audio", style = EtaTheme.typography.heading)
             EtaText(
-                text = "Wie Eta sich meldet: bei Aufgaben, Pomodoro und Timer, bei den " +
-                    "Planungsphasen und bei Erinnerungen. Gilt sofort. Der Weckruf am " +
-                    "Morgen klingelt immer.",
+                text = "Gilt für alles, was Eta meldet: Aufgabenbeginn und -ende, Pomodoro, " +
+                    "Nachfragen, Planungsphasen und Erinnerungen. Gilt sofort. Der Weckruf " +
+                    "ist davon getrennt: Er hat keinen eigenen Modus und klingelt immer.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
             )
@@ -1635,9 +1635,11 @@ private fun AlarmBox(alarms: AlarmSchedule) {
 
             EtaField(
                 label = "Bei „Nicht stören“",
-                hint = "Gilt sofort, für Töne und Ansagen. Bei „Lautlos komplett“ " +
-                    "schaltet das Handy auch Wecker stumm — daran kann Eta nichts ändern. " +
-                    "Der Weckruf klingelt ohnehin immer.",
+                hint = "Standard ist „Still bleiben“. Gilt sofort, für Töne und Ansagen. " +
+                    "Mit „Trotzdem spielen“ klingen sie auch bei „Nicht stören“; ist das " +
+                    "Handy stumm oder auf Vibration, vibriert Eta stattdessen. Bei „Lautlos " +
+                    "komplett“ schaltet das Handy auch Wecker stumm — daran kann Eta nichts " +
+                    "ändern. Der Weckruf klingelt ohnehin immer.",
             ) {
                 EtaChoice(
                     options = listOf(false to "Still bleiben", true to "Trotzdem spielen"),

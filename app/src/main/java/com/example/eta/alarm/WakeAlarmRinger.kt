@@ -2,11 +2,6 @@ package com.example.eta.alarm
 
 import android.content.Context
 import android.media.MediaPlayer
-import android.os.Build
-import android.os.VibrationEffect
-import android.os.Vibrator
-import android.os.VibratorManager
-import androidx.core.content.getSystemService
 
 /**
  * The sound and the buzz, held outside any screen.
@@ -49,27 +44,11 @@ object WakeAlarmRinger {
     fun stop(context: Context) {
         player?.let { runCatching { it.stop() }; runCatching { it.release() } }
         player = null
-        runCatching { vibrator(context)?.cancel() }
+        runCatching { alarmVibrator(context)?.cancel() }
     }
 
+    /** Alarm usage, so the buzz is felt even when the phone is on silent. */
     private fun vibrate(context: Context) {
-        val vibrator = vibrator(context) ?: return
-        val pattern = longArrayOf(0, 700, 900)
-        runCatching {
-            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-                vibrator.vibrate(VibrationEffect.createWaveform(pattern, 0))
-            } else {
-                @Suppress("DEPRECATION")
-                vibrator.vibrate(pattern, 0)
-            }
-        }
+        alarmVibrator(context)?.vibrateAsAlarm(longArrayOf(0, 700, 900), repeat = 0)
     }
-
-    private fun vibrator(context: Context): Vibrator? =
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
-            context.getSystemService<VibratorManager>()?.defaultVibrator
-        } else {
-            @Suppress("DEPRECATION")
-            context.getSystemService()
-        }
 }

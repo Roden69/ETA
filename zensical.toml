@@ -10,6 +10,7 @@ nav = [
   { "Projekt" = [
     { "Architektur" = "architecture.md" },
     { "Entwicklung und Prüfung" = "development.md" },
+    { "Google-Kalender für eigene Builds" = "calendar-oauth.md" },
     { "Dokumentation pflegen" = "workflow.md" },
     { "Dokumentationsentscheidung" = "decisions/0001-docs-as-code.md" },
   ] },

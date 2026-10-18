@@ -66,7 +66,10 @@ events, vacation mode, the open-days catch-up and the debug reset.
 vibrate replaces task sounds and speech with vibration; the app's **Still** mode
 and DND without an override suppress vibration as well. The DND override never
 unmutes the ringer. The speech probe follows the same policy without mistaking a
-muted phone for a missing speech engine. See [the audio policy](alarms.md).
+muted phone for a missing speech engine. See [the audio policy](alarms.md). The
+help text under the Ton/Vibration/Still choice says these modes cover Eta's own
+messages only; the wake alarm has no mode and always rings (issue 22). The DND
+override's hint names its default, "Still bleiben" (issue 27).
 The Audio page and its sound/vibration explanations were checked on a Pixel 8
 emulator, including the speech probe in vibration mode without a false
 missing-engine message. Physical-device audio remains a separate check.
