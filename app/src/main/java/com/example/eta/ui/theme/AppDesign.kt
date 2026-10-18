@@ -104,9 +104,9 @@ data class DesignChoice(
 /**
  * What the tab bar draws for each destination: its name, an icon, or both.
  *
- * Names are the default and were the only answer until step 44 — the
- * destinations are words this app can say in full. Icons alone make the bar
- * short enough that most of it fits without scrolling.
+ * Both is the default: the icon makes the bar findable at a glance and the name
+ * keeps every destination readable in full. Icons alone make the bar short
+ * enough that most of it fits without scrolling, which is why it stays a choice.
  */
 enum class TabStyle(val label: String) {
     NAMES("Nur Namen"),
@@ -117,7 +117,7 @@ enum class TabStyle(val label: String) {
     val showsName: Boolean get() = this != ICONS
 
     companion object {
-        val DEFAULT = NAMES
+        val DEFAULT = BOTH
     }
 }
 
@@ -163,6 +163,17 @@ fun shapesOf(design: AppDesign): EtaShapes = when (design) {
 }
 
 /**
+ * Whether a stored tab style was picked on purpose rather than being the default.
+ *
+ * Installs from before the default changed stored a style on every save, so the
+ * stored name alone does not say. Icons or both can only have come from a pick (the
+ * old default was names); names without a flag is the old default, which moves to
+ * the new one. [storedFlag] is null when no pick was ever recorded.
+ */
+internal fun tabStylePicked(storedStyle: String?, storedFlag: Boolean?): Boolean =
+    storedFlag ?: (storedStyle == TabStyle.ICONS.name || storedStyle == TabStyle.BOTH.name)
+
+/**
  * Which design is on, and how bright.
  *
  * In `SharedPreferences` and not in `user_setup` like the other settings: the
@@ -175,12 +186,17 @@ class DesignStore(context: Context) {
     private val prefs =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    private var tabStyleChosen = tabStylePicked(
+        storedStyle = prefs.getString(KEY_TAB_STYLE, null),
+        storedFlag = if (prefs.contains(KEY_TAB_STYLE_CHOSEN)) prefs.getBoolean(KEY_TAB_STYLE_CHOSEN, false) else null,
+    )
+
     private val _choice = MutableStateFlow(
         DesignChoice.fromStored(
             design = prefs.getString(KEY_DESIGN, null),
             brightness = prefs.getString(KEY_BRIGHTNESS, null),
             accent = if (prefs.contains(KEY_ACCENT)) prefs.getInt(KEY_ACCENT, 0) else null,
-            tabStyle = prefs.getString(KEY_TAB_STYLE, null),
+            tabStyle = if (tabStyleChosen) prefs.getString(KEY_TAB_STYLE, null) else null,
         ),
     )
     val choice: StateFlow<DesignChoice> = _choice.asStateFlow()
@@ -192,13 +208,17 @@ class DesignStore(context: Context) {
     /** An accent of the user's own, or null for the design's. */
     fun selectAccent(accent: Int?) = store(_choice.value.copy(accent = accent))
 
-    fun select(tabStyle: TabStyle) = store(_choice.value.copy(tabStyle = tabStyle))
+    fun select(tabStyle: TabStyle) {
+        tabStyleChosen = true
+        store(_choice.value.copy(tabStyle = tabStyle))
+    }
 
     private fun store(choice: DesignChoice) {
         prefs.edit {
             putString(KEY_DESIGN, choice.design.name)
             putString(KEY_BRIGHTNESS, choice.brightness.name)
             putString(KEY_TAB_STYLE, choice.tabStyle.name)
+            putBoolean(KEY_TAB_STYLE_CHOSEN, tabStyleChosen)
             if (choice.accent == null) remove(KEY_ACCENT) else putInt(KEY_ACCENT, choice.accent)
         }
         _choice.value = choice
@@ -210,5 +230,6 @@ class DesignStore(context: Context) {
         const val KEY_BRIGHTNESS = "brightness"
         const val KEY_ACCENT = "accent"
         const val KEY_TAB_STYLE = "tabStyle"
+        const val KEY_TAB_STYLE_CHOSEN = "tabStyleChosen"
     }
 }

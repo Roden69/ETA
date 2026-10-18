@@ -14,7 +14,9 @@ import com.example.eta.ui.theme.LegacyLightColors
 import com.example.eta.ui.theme.TabStyle
 import com.example.eta.ui.theme.accentOfHue
 import com.example.eta.ui.theme.shapesOf
+import com.example.eta.ui.theme.tabStylePicked
 import com.example.eta.ui.theme.withAccent
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -99,12 +101,26 @@ class AppDesignTest {
         val stored = DesignChoice.fromStored("LEGACY", "DARK", accent = ACCENT_PRESETS.first(), tabStyle = "BOTH")
         assertEquals(DesignChoice(AppDesign.LEGACY, Brightness.DARK, ACCENT_PRESETS.first(), TabStyle.BOTH), stored)
 
-        // Nothing stored, or a style that was removed: names, and the design's own colour.
+        // Nothing stored, or a style that was removed: both, and the design's own colour.
         assertEquals(DesignChoice(), DesignChoice.fromStored(null, null, accent = null, tabStyle = "?"))
-        assertEquals(TabStyle.NAMES, TabStyle.DEFAULT)
+        assertEquals(TabStyle.BOTH, TabStyle.DEFAULT)
         assertTrue(TabStyle.ICONS.showsIcon && !TabStyle.ICONS.showsName)
         assertTrue(TabStyle.BOTH.showsIcon && TabStyle.BOTH.showsName)
         assertTrue(!TabStyle.NAMES.showsIcon && TabStyle.NAMES.showsName)
+    }
+
+    @Test
+    fun `a tab style counts as picked only when the flag or a non-default name says so`() {
+        // Installs from before the flag: names was the old default, so it moves to both.
+        assertFalse(tabStylePicked(storedStyle = null, storedFlag = null))
+        assertFalse(tabStylePicked(storedStyle = "NAMES", storedFlag = null))
+        assertTrue(tabStylePicked(storedStyle = "ICONS", storedFlag = null))
+        assertTrue(tabStylePicked(storedStyle = "BOTH", storedFlag = null))
+
+        // Once recorded, the flag decides: every save writes the style, so the name is no proof.
+        assertFalse(tabStylePicked(storedStyle = "NAMES", storedFlag = false))
+        assertFalse(tabStylePicked(storedStyle = "BOTH", storedFlag = false))
+        assertTrue(tabStylePicked(storedStyle = "NAMES", storedFlag = true))
     }
 
     @Test

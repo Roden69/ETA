@@ -91,7 +91,9 @@ design and brightness, in the same `DesignStore`.
   `ui/components/EtaIcons.kt`), drawn on a `Canvas` on a 24-unit grid in one
   stroke weight: house, list, signed page, bell, target, present, bar chart,
   folded sheet, sliders. This ends "labels, not icons" in `ui-foundation.md` as
-  a rule; names are still the default.
+  a rule. **The default is now icons and names** (`TabStyle.DEFAULT = BOTH`, issue
+  #29); installs that never picked a style get it, a pick is kept via the
+  `tabStyleChosen` flag in `DesignStore`.
 - `EtaTab` carries its icon; a tab without one would keep its name whatever
   the style. An icon alone is 56dp wide instead of 72 and says its name to a
   screen reader (`semantics { contentDescription = spoken }` — the value is a

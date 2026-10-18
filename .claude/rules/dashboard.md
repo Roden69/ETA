@@ -40,6 +40,12 @@ either opens `PomodoroDialog`.
 "Dashboard", and Heute, Morgen and Woche are tabs across its top (*Step 39*). What
 follows describes that page; cross-references still call it *The Heute tab*.
 
+Each page keeps its scroll position while another page is in front. A page leaves the
+composition when it is not shown, so `DashboardScreen` wraps the shown page in a
+`rememberSaveableStateHolder().SaveableStateProvider(page.name)` (issue #7). System
+back on "Morgen" or "Woche" goes to "Heute" first (`BackHandler`, issue #25); on
+"Heute" it leaves the tab as before.
+
 Top to bottom: box 0 ("Kritisch"), the "now" box, the points box, the deadlines box
 when there is one, Quick-Add, "Heute anstehend", and `PhaseBox` — at the top from the
 minute the phase is owed, at the bottom before that. The Überschneidung box goes

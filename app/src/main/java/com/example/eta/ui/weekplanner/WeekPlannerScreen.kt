@@ -114,6 +114,9 @@ fun WeekPlannerScreen(
     )
     val scope = rememberCoroutineScope()
     var adding by remember { mutableStateOf(false) }
+    // Each step's scroll position, held up here: paging away from a step, or the
+    // timetable replacing the whole screen, would otherwise start it at the top.
+    val pageScrolls = Step.entries.associateWith { rememberScrollState() }
     // The timetable lies **over** the phase rather than replacing it: the pager
     // above keeps its page, so coming back lands on "Auffüllen" again.
     var adjusting by rememberSaveable { mutableStateOf(false) }
@@ -168,7 +171,7 @@ fun WeekPlannerScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(pageScrolls.getValue(steps[page]))
                         .padding(EtaTheme.spacing.lg),
                     verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.lg),
                 ) {
