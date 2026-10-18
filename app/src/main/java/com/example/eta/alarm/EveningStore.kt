@@ -1,6 +1,7 @@
 package com.example.eta.alarm
 
 import android.content.Context
+import androidx.core.content.edit
 import com.example.eta.domain.planning.WakeRoute
 import kotlinx.datetime.LocalDate
 
@@ -22,7 +23,7 @@ class EveningStore(context: Context) {
         WakeRoute.entries.firstOrNull { it.name == prefs.getString(KEY_ROUTE, null) } ?: WakeRoute.ETA
 
     fun chooseWakeRoute(route: WakeRoute) {
-        prefs.edit().putString(KEY_ROUTE, route.name).apply()
+        prefs.edit { putString(KEY_ROUTE, route.name) }
     }
 
     /** The clock app the wake alarm would be handed to: the one chosen for the clock-app box. */
@@ -35,14 +36,14 @@ class EveningStore(context: Context) {
         prefs.getString(KEY_ASKED_FOR, null)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
 
     fun markWakeAsked(wakeDate: LocalDate) {
-        prefs.edit().putString(KEY_ASKED_FOR, wakeDate.toString()).apply()
+        prefs.edit { putString(KEY_ASKED_FOR, wakeDate.toString()) }
     }
 
     /** On by default; "Nicht mehr anzeigen" turns it off for good. */
     fun windDownEnabled(): Boolean = prefs.getBoolean(KEY_WIND_DOWN, true)
 
     fun setWindDownEnabled(enabled: Boolean) {
-        prefs.edit().putBoolean(KEY_WIND_DOWN, enabled).apply()
+        prefs.edit { putBoolean(KEY_WIND_DOWN, enabled) }
     }
 
     private companion object {
