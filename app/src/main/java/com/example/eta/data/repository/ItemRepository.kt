@@ -113,6 +113,8 @@ class ItemRepository(
         item: Item,
         subtasks: List<SubtaskDraft> = emptyList(),
         folded: Collection<String> = emptyList(),
+        /** The steps after this card, in order; each waits for the one before. */
+        followUps: List<String> = emptyList(),
     ): AddItemResult {
         val now = clock.now()
         itemDao.findActiveLock(item.normalizedName, now)?.let { locked ->
@@ -121,6 +123,9 @@ class ItemRepository(
         itemDao.upsert(item)
         if (subtasks.isNotEmpty()) subtaskRepository.save(item.id, subtasks)
         itemDao.retireFolded(folded, now)
+        // Follow-ups skip the Sperrliste check: they follow from a card already
+        // committed to, like a "Nachholen von …" does, not from a fresh idea.
+        itemDao.writeFollowUps(item, followUps, now)
         return AddItemResult.Added(item)
     }
 
@@ -136,10 +141,37 @@ class ItemRepository(
     suspend fun addWithoutLockCheck(item: Item) = itemDao.upsert(item)
 
     suspend fun update(item: Item) {
-        itemDao.upsert(item.copy(updatedAt = clock.now()))
+        val now = clock.now()
+        itemDao.upsert(item.copy(updatedAt = now))
+        // A card that is finished releases whatever waits for it — see FollowUps.kt.
+        if (item.completedAt != null) itemDao.applyFollowUpTransition(item.id, finished = true, now = now)
     }
 
-    suspend fun delete(item: Item) = itemDao.delete(item)
+    /**
+     * Removes a card. Its follow-ups are released first: a predecessor that is gone
+     * cannot hold its successor back any longer.
+     */
+    suspend fun delete(item: Item) {
+        itemDao.applyFollowUpTransition(item.id, finished = true, now = clock.now())
+        itemDao.delete(item)
+    }
+
+    /** Names of predecessors that a follow-up waits for, by id — for "danach: …". */
+    fun observeFollowUpPredecessorNames(): Flow<Map<String, String>> =
+        itemDao.observePredecessorNames().map { rows -> rows.associate { it.id to it.name } }
+
+    /**
+     * Appends [names] as steps after the last step of the chain of [predecessorId].
+     *
+     * Read fresh by id: the caller has usually just saved the predecessor's new
+     * attributes, and the steps inherit those, not the screen's older copy.
+     */
+    suspend fun appendFollowUps(predecessorId: String, names: List<String>) {
+        val predecessor = itemDao.findById(predecessorId) ?: return
+        var tail = predecessor
+        while (true) tail = itemDao.findFollowUpsOf(tail.id).firstOrNull() ?: break
+        itemDao.writeFollowUps(tail, names, clock.now())
+    }
 
     /**
      * Fills in the attributes a Quick-Add ToDo was created without.

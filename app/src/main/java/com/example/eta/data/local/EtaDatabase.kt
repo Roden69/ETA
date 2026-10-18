@@ -52,7 +52,7 @@ import com.example.eta.domain.setup.UserSetup
         SleepLog::class,
         Note::class,
     ],
-    version = 33,
+    version = 34,
     exportSchema = true,
 )
 @ColumnTypeConverters(Converters::class)
@@ -1013,6 +1013,23 @@ val MIGRATION_32_33 = object : Migration(32, 33) {
 }
 
 /**
+ * Version 34: follow-up ToDos (Folgeaufgaben).
+ *
+ * `items.followUpOfId` names the predecessor a ToDo waits for; null for every
+ * existing row, so every card keeps behaving as before.
+ */
+private val SCHEMA_34_FOLLOW_UPS: List<String> = listOf(
+    "ALTER TABLE `items` ADD COLUMN `followUpOfId` TEXT",
+    "CREATE INDEX IF NOT EXISTS `index_items_followUpOfId` ON `items` (`followUpOfId`)",
+)
+
+val MIGRATION_33_34 = object : Migration(33, 34) {
+    override suspend fun migrate(connection: SQLiteConnection) {
+        for (statement in SCHEMA_34_FOLLOW_UPS) connection.execSQL(statement)
+    }
+}
+
+/**
  * Reconciles both shipped version-28 schemas without rewriting their history.
  *
  * The fork added night corrections where upstream added flexibility switches.
@@ -1078,4 +1095,5 @@ internal val ETA_DATABASE_MIGRATIONS = arrayOf(
     MIGRATION_31_32,
     MIGRATION_32_33,
     MIGRATION_28_33,
+    MIGRATION_33_34,
 )

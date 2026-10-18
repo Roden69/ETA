@@ -188,6 +188,11 @@ data class TodoAttributes(
      * Carried rather than acted on, so cancelling the form leaves them standing.
      */
     val foldedItemIds: List<String> = emptyList(),
+    /**
+     * The steps that come after this ToDo, in order (Folgeaufgaben). Created as
+     * waiting ToDos when the card is saved; blank names are dropped.
+     */
+    val followUps: List<String> = emptyList(),
 ) {
     companion object {
         /**
@@ -354,6 +359,8 @@ fun TodoAttributeFields(
     onChange: (TodoAttributes) -> Unit,
     today: LocalDate,
     showTargetDate: Boolean = true,
+    /** Whether the form asks for the steps that come after this ToDo. */
+    offerFollowUps: Boolean = false,
     /**
      * The card's own name, which the Subtask-Builder edits along with the list —
      * a group is a task, and renaming the group renames the task. Null is "no
@@ -443,6 +450,9 @@ fun TodoAttributeFields(
         )
     }
 
+    if (offerFollowUps) {
+        FollowUpsField(names = value.followUps, onNames = { onChange(value.copy(followUps = it)) })
+    }
     ExtrasBox(
         endSound = value.endSound,
         onEndSound = { onChange(value.copy(endSound = it)) },

@@ -72,3 +72,56 @@ stretch) and a cancelled one is not drawn at all, and both are rows of this list
 — a place in the day is the one thing all three have. The focus is cleared when
 the flow is left, so "Heute umplanen" opens an hour before now as it always did.
 The tab still moves nothing itself; this is the way to the screen that does.
+
+### The standing schedule, as the list shows it
+
+**One block per task, one row per weekday and variant** (`recurringTasks` in
+`domain/recurrence/RecurringSchedule.kt`). A task whose weekdays have different
+hours or lengths ("Mo 14:00 · 1:00 h, Mi 17:00 · 0:30 h, Fr 13:00 · 0:15 h") is one
+block under its name; each row carries its own day, hour and length. Considered:
+one line per variant with aligned lists ("Mo, Mi, Fr · 14:00, 17:00, 13:00 ·
+1:00, 0:30, 0:15"). Rejected, because the columns only read correctly while their
+order is kept, and an added or dropped weekday silently shifts the others. Rows never
+merge variants into one value.
+
+**Order:** tasks by their earliest hour, then name; rows Monday to Sunday, and by
+hour within a day. The screen says so. Tapping a row opens the variant it belongs to
+(`RecurringGroup`), so an edit changes that variant's hour and length only.
+
+**A second time slot** ("Weiterer Zeitplatz" in the task's dialog) opens the create
+form on a copy of the routine: same name, note, days and steps, a new definition. The
+two definitions expand independently, so both lay down a block on the same day, and
+each is checked off, settled and scored on its own. No duplicate-name check applies
+to standing tasks, and the overlap warning is the only thing that compares them.
+
+### Follow-up ToDos (Folgeaufgaben)
+
+A ToDo can carry an ordered list of **follow-up steps** in the editor ("Danach").
+Each step is a ToDo of its own, created with `Item.newFollowUp`, which takes the
+predecessor's category, priority, length and journeys. `items.followUpOfId` is the
+link, kept after the step is released.
+
+- **Waiting** = `followUpOfId` set and `enteredCollectionAt` null. A waiting step is
+  not pullable (`PullBlock.AfterPredecessor`), not a fold candidate, and does not age
+  towards the Sperrliste, since the clock starts at `enteredCollectionAt`. The
+  Sammelliste shows it as "danach: …".
+- **Released** when the predecessor is **checked off** (a block completed through
+  `PlanRepository.complete`, or "Erledigt" on the Listen tab, or a finished card via
+  `ItemRepository.update`). It gets `enteredCollectionAt = now` and is offered:
+  "»X« ist jetzt dran" with "In die Wochenliste" (same gate as every other pull).
+- **Only the next step** is released: a step waits for the one before it, so the
+  order is enforced and any amount of time may pass between steps.
+- **Ticking the predecessor back** makes an offered step that is still in the
+  Sammelliste wait again (clock stopped). A step already taken into the week or a day
+  stays where it is: the user committed to it.
+- **Deleting the predecessor** releases its steps: a gone predecessor cannot hold them.
+- Steps are created when the card is created; on an edit they are appended behind the
+  existing chain. Blank names are dropped. Steps skip the Sperrliste check, like a
+  "Nachholen von …".
+
+The pure rules are `domain/chain/FollowUpChain.kt` (`isWaitingFollowUp`,
+`isOfferedFollowUp`, `followUpsAfter`); the writes are `data/repository/FollowUps.kt`.
+Known limit: a predecessor that is only checked off on its block is detected through
+that block; an edit that adds steps to an already-finished card relies on
+`isFinishedForChain` (stage DONE or `completedAt`) and does not see a block-only
+check-off.

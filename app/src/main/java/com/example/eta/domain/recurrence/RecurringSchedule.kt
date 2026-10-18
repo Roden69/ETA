@@ -283,3 +283,54 @@ fun reassignRows(
     }
     return result to unused
 }
+
+/**
+ * One weekday of one variant of a standing task: the hour and the length that
+ * weekday really has. Never a merge of several variants.
+ */
+data class RecurringWeekdayRow(
+    val weekday: DayOfWeek,
+    val startTime: LocalTime,
+    val duration: Duration?,
+    val group: RecurringGroup,
+)
+
+/** Every variant of one standing task (one name), as the list shows it. */
+data class RecurringTask(
+    val name: String,
+    /** Week order first, then the hour: Mo 14:00, Mo 17:00, Mi 13:00, … */
+    val rows: List<RecurringWeekdayRow>,
+)
+
+/**
+ * The standing schedule as the Listen tab shows it: one [RecurringTask] per name,
+ * with one row per weekday and variant.
+ *
+ * Why rows per weekday rather than one line per variant with aligned lists
+ * ("Mo, Mi, Fr · 14:00, 17:00, 13:00 · 1:00, 0:30, 0:15"): an aligned list only
+ * reads correctly while three columns keep their order, and it does not say which
+ * hour belongs to which day once a weekday is added or dropped. A row carries its
+ * own day, hour and length, so nothing has to be matched up by position.
+ *
+ * Order: tasks by their earliest hour, then name. Rows: Monday to Sunday, and
+ * within one day by hour. Variants with different hours or lengths are never
+ * folded into one value.
+ */
+fun recurringTasks(groups: List<RecurringGroup>): List<RecurringTask> {
+    val tasks = groups
+        .groupBy { it.representative.name }
+        .map { (name, variants) ->
+            val rows = variants
+                .flatMap { group ->
+                    val item = group.representative
+                    val start = item.startTime ?: return@flatMap emptyList()
+                    group.weekdays.map { day ->
+                        RecurringWeekdayRow(day, start, item.estimatedDuration, group)
+                    }
+                }
+                .sortedWith(compareBy({ WEEK.indexOf(it.weekday) }, { it.startTime }))
+            RecurringTask(name, rows)
+        }
+        .filter { it.rows.isNotEmpty() }
+    return tasks.sortedWith(compareBy({ task -> task.rows.minOf { it.startTime } }, { it.name }))
+}

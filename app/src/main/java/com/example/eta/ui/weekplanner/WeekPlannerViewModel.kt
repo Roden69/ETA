@@ -18,6 +18,9 @@ import com.example.eta.domain.model.Priority
 import com.example.eta.domain.model.Stage
 import com.example.eta.domain.planning.WeekBudget
 import com.example.eta.domain.planning.weekBudget
+import com.example.eta.domain.planning.PullBlock
+import com.example.eta.domain.planning.pullBlockOf
+import com.example.eta.domain.planning.weekPool
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -58,6 +61,11 @@ data class WeekPlannerUiState(
      * `observeFoldCandidates` returns.
      */
     val foldable: List<Item> = emptyList(),
+    /**
+     * Sammelliste ToDos the week may not take on yet, each with the reason. Shown
+     * greyed out instead of being left off the column.
+     */
+    val held: List<Pair<Item, PullBlock>> = emptyList(),
 ) {
     /** New goals only once what was already committed to is worked off. */
     val canTakeOnMore: Boolean get() = unfinished.isEmpty()
@@ -110,17 +118,15 @@ class WeekPlannerViewModel(
         setupRepository.observe(),
         cycleStart.flatMapLatest { itemRepository.observeUnfinishedWeekGoals(it) },
     ) { collection, weekList, blocks, setup, unfinished ->
+        val pool = weekPool(collection, weekEnd, unfinished.size)
         WeekPlannerUiState(
             unfinished = unfinished,
             weekStart = weekStart,
             weekEnd = weekEnd,
-            // A ToDo whose week has not come round yet cannot be pulled in — and
-            // the Sammelliste now also holds bare recurring notes, which are not
-            // week goals at all: they belong to the standing schedule, and the
-            // evening's concretizing step is what puts them there.
-            collection = collection.filter {
-                it.type == ItemType.TODO && it.isAvailableOn(weekEnd)
-            },
+            // What may be pulled now, and every held-back card with its reason — see
+            // `weekPool`. Nothing is dropped from the screen without saying why.
+            collection = pool.pullable,
+            held = pool.held,
             weekList = weekList,
             foldable = weekList + collection.filter { it.type == ItemType.TODO },
             budget = weekBudget(setup, blocks, weekList),
@@ -158,7 +164,16 @@ class WeekPlannerViewModel(
         _evaluation.update { text }
     }
 
+    /**
+     * Takes a Sammelliste ToDo into the week.
+     *
+     * The gate is the phase's own rule, so it is checked here as well as drawn on
+     * screen: a tap on a card that was offered a frame ago must not take in what
+     * the week may not hold — an unlock day after the week's end, or goals of an
+     * earlier cycle still lying unplanned.
+     */
     fun pullIntoWeek(item: Item) {
+        if (pullBlockOf(item, weekEnd, uiState.value.unfinished.size) != null) return
         viewModelScope.launch { itemRepository.takeIntoWeek(item, cycleStart.value) }
     }
 
@@ -199,6 +214,7 @@ class WeekPlannerViewModel(
                 ).withExtras(attributes.extras),
                 subtasks = attributes.subtasks,
                 folded = attributes.foldedItemIds,
+                followUps = attributes.followUps,
             )
             onDone()
         }

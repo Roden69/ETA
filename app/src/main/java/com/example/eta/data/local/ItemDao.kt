@@ -9,6 +9,8 @@ import com.example.eta.domain.model.Stage
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
 import kotlinx.datetime.LocalDate
+/** An item's id and name, for labels that only need those two. */
+data class ItemName(val id: String, val name: String)
 
 @Dao
 interface ItemDao {
@@ -41,6 +43,8 @@ interface ItemDao {
         SELECT * FROM items
         WHERE type = 'TODO' AND completedAt IS NULL
           AND stage IN ('WEEK', 'COLLECTION')
+          -- A waiting follow-up is not a step that can be swallowed yet.
+          AND (followUpOfId IS NULL OR enteredCollectionAt IS NOT NULL)
         ORDER BY stage DESC, createdAt
         """,
     )
@@ -148,6 +152,20 @@ interface ItemDao {
         """,
     )
     suspend fun findCompletedTodosOn(date: LocalDate): List<Item>
+
+
+    /** Every follow-up of one predecessor, in any stage — the chain rules read them all. */
+    @Query("SELECT * FROM items WHERE followUpOfId = :predecessorId ORDER BY createdAt")
+    suspend fun findFollowUpsOf(predecessorId: String): List<Item>
+
+    /** The names of the predecessors some follow-up points at, for the "danach: …" line. */
+    @Query(
+        """
+        SELECT id, name FROM items
+        WHERE id IN (SELECT followUpOfId FROM items WHERE followUpOfId IS NOT NULL)
+        """,
+    )
+    fun observePredecessorNames(): Flow<List<ItemName>>
 
     /** Every recurring definition, used to expand blocks and to review them nightly. */
     @Query("SELECT * FROM items WHERE type = 'RECURRING' AND completedAt IS NULL")

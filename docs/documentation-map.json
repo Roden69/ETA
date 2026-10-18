@@ -45,7 +45,7 @@
     {"id": "setup", "paths": ["app/src/**/domain/setup/**", "app/src/**/ui/setup/**"], "documents": [".claude/rules/setup.md", "Eta_doc/Setup-Questionaire.md"]},
     {"id": "planner", "paths": ["app/src/**/ui/planner/**", "app/src/**/domain/planning/**"], "documents": [".claude/rules/day-planner.md", ".claude/rules/step-20-22.md", "Eta_doc/Planungsphase.md"]},
     {"id": "dashboard", "paths": ["app/src/**/ui/dashboard/**"], "documents": [".claude/rules/dashboard.md", "Eta_doc/Dashboard.md"]},
-    {"id": "lists", "paths": ["app/src/**/ui/lists/**"], "documents": [".claude/rules/lists.md", ".claude/rules/step-25-wochenschema.md", "Eta_doc/Konzept.md"]},
+    {"id": "lists", "paths": ["app/src/**/ui/lists/**", "app/src/**/domain/chain/**"], "documents": [".claude/rules/lists.md", ".claude/rules/step-25-wochenschema.md", "Eta_doc/Konzept.md"]},
     {"id": "week-planning", "paths": ["app/src/**/ui/weekplanner/**", "app/src/**/domain/weekplanning/**"], "documents": [".claude/rules/week-planning.md", "Eta_doc/Planungsphase.md"]},
     {"id": "reevaluation", "paths": ["app/src/**/ui/reevaluation/**", "app/src/**/domain/reevaluation/**", "app/src/**/ReevaluationService.kt", "app/src/**/DayClosingService.kt"], "documents": [".claude/rules/streak-reevaluation.md", "Eta_doc/Tägliche Reevaluation.md"]},
     {"id": "points-and-contracts", "paths": ["app/src/**/domain/reward/**", "app/src/**/domain/contract/**", "app/src/**/ui/contracts/**", "app/src/**/ui/rewards/**"], "documents": [".claude/rules/contracts.md", ".claude/rules/step-35-belohnomat.md", "Eta_doc/Belohnungssystem.md", "Eta_doc/Selbstverträge.md"]},

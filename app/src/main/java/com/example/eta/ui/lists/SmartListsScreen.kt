@@ -1,5 +1,8 @@
 package com.example.eta.ui.lists
 
+import com.example.eta.domain.chain.isOfferedFollowUp
+import com.example.eta.domain.chain.isWaitingFollowUp
+
 import androidx.compose.foundation.background
 import androidx.compose.foundation.gestures.detectTapGestures
 import androidx.compose.foundation.layout.Arrangement
@@ -27,12 +30,19 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.eta.ui.components.tutorialSpot
+import com.example.eta.domain.recurrence.RecurringWeekdayRow
+import com.example.eta.domain.recurrence.Rhythm
+import com.example.eta.domain.model.WeekParity
+import com.example.eta.ui.format.formatVeryShort
 import com.example.eta.domain.tutorial.TutorialSpot
+import com.example.eta.ui.attributes.RecurringAttributes
 import com.example.eta.domain.planning.startMinute
 import com.example.eta.domain.planning.endMinute
 import com.example.eta.data.local.BlockWithItem
 import com.example.eta.domain.model.Item
 import com.example.eta.domain.recurrence.RecurringGroup
+import com.example.eta.domain.recurrence.RecurringTask
+import com.example.eta.domain.recurrence.recurringTasks
 import com.example.eta.domain.recurrence.weekOccupancy
 import com.example.eta.domain.recurrence.weekTaskSpans
 import com.example.eta.domain.setup.isMorningRoutine
@@ -101,6 +111,8 @@ fun SmartListsScreen(
     // Standing tasks are opened as a group, one entry per task rather than per weekday.
     var openedGroup by remember { mutableStateOf<RecurringGroup?>(null) }
     var editingGroup by remember { mutableStateOf<RecurringGroup?>(null) }
+    // A second time slot for a routine: opens the create form on a copy of it.
+    var addingSlotOf by remember { mutableStateOf<RecurringGroup?>(null) }
     // Holding a list's heading down makes something new for that list.
     var creating by remember { mutableStateOf<Creating?>(null) }
     val notice by viewModel.notice.collectAsStateWithLifecycle()
@@ -149,6 +161,30 @@ fun SmartListsScreen(
                 longPressHint = "Überschrift lange drücken: neue Aufgabe.",
                 emptyHint = "Leer — nichts notiert.",
             ) {
+                // A released follow-up is due now: offered here, with the way into the week.
+                state.offered.forEach { item ->
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically,
+                    ) {
+                        Column(Modifier.weight(1f)) {
+                            EtaText(
+                                text = "»${item.name}« ist jetzt dran",
+                                style = EtaTheme.typography.bodyStrong,
+                            )
+                            EtaText(
+                                text = "Die Aufgabe davor ist erledigt.",
+                                style = EtaTheme.typography.caption,
+                                color = EtaTheme.colors.textMuted,
+                            )
+                        }
+                        EtaButton(
+                            text = "In die Wochenliste",
+                            style = EtaButtonStyle.Secondary,
+                            onClick = { viewModel.takeOfferedIntoWeek(item) },
+                        )
+                    }
+                }
                 state.collection.forEach { entry ->
                     CollectionLine(entry) { detail ->
                         opened = OpenedRow(entry.item, detail, editable = true)
@@ -209,12 +245,16 @@ fun SmartListsScreen(
                         spans.map { (range, item) -> ChartBar(range, colorOf(item), item.name) }
                     },
                 )
-                state.recurring.forEach { group ->
-                    ItemLine(
-                        item = group.representative,
-                        detail = recurringSummary(group),
-                        onOpen = { openedGroup = group },
-                    )
+                // One block per task, one row per weekday and variant — see
+                // `recurringTasks` for why, and for the order.
+                val tasks = remember(state.recurring) { recurringTasks(state.recurring) }
+                EtaText(
+                    text = "Nach der frühesten Uhrzeit sortiert; je Wochentag eine Zeile.",
+                    style = EtaTheme.typography.caption,
+                    color = EtaTheme.colors.textMuted,
+                )
+                tasks.forEach { task ->
+                    RecurringTaskBlock(task = task, onOpen = { openedGroup = it })
                 }
             }
 
@@ -442,6 +482,7 @@ fun SmartListsScreen(
             // weekend are two rows here and one routine.
             morningSteps = morningSteps.takeIf { morningRoutineOn && group.ids.any(::isMorningRoutine) },
             onMorningSteps = viewModel::saveMorningSteps,
+            onAddSlot = { addingSlotOf = group; openedGroup = null },
             onDismiss = { openedGroup = null },
             onEdit = {
                 editingGroup = group
@@ -465,6 +506,28 @@ fun SmartListsScreen(
             onSave = { name, note, attributes ->
                 viewModel.saveRecurringGroup(group, name, note, attributes)
                 editingGroup = null
+            },
+        )
+    }
+
+    addingSlotOf?.let { group ->
+        val routine = group.representative
+        RecurringCreateDialog(
+            definitions = state.definitions,
+            setup = setup,
+            foldCandidates = state.foldable.foldCandidatesExcept(),
+            title = "Weiterer Zeitplatz",
+            initialName = routine.name,
+            initialNote = routine.note.orEmpty(),
+            // The same task on the same days: the form opens on what the routine
+            // already is, and the time is for the user to move — the overlap warning
+            // says when it still clashes.
+            initial = RecurringAttributes.of(routine, state.subtasks[routine.id].orEmpty())
+                .copy(weekdays = group.weekdays, growth = null),
+            onDismiss = { addingSlotOf = null },
+            onCreate = { name, note, attributes ->
+                viewModel.createRecurring(name, note, attributes)
+                addingSlotOf = null
             },
         )
     }
@@ -505,10 +568,13 @@ private fun CollectionLine(entry: CollectionEntry, onOpen: (String) -> Unit) {
         entry.daysLeft == 1 -> "noch 1 Tag"
         else -> "noch ${entry.daysLeft} Tage"
     }
-    val detail = if (!entry.item.isConcretized) {
-        listOfNotNull("unvollständig", left?.takeIf { entry.daysLeft!! <= 7 }).joinToString(" · ")
-    } else {
-        left.orEmpty()
+    val detail = when {
+        // A step of a chain says where it stands: the one before, or that it is due now.
+        entry.item.isWaitingFollowUp() -> "danach: ${entry.predecessorName ?: "vorher"}"
+        entry.item.isOfferedFollowUp() -> "jetzt dran"
+        !entry.item.isConcretized ->
+            listOfNotNull("unvollständig", left?.takeIf { entry.daysLeft!! <= 7 }).joinToString(" · ")
+        else -> left.orEmpty()
     }
     ItemLine(
         item = entry.item,
@@ -812,5 +878,52 @@ private fun BlockLine(entry: BlockWithItem, onOpen: () -> Unit = {}) {
             style = EtaTheme.typography.caption,
             color = EtaTheme.colors.textMuted,
         )
+    }
+}
+
+/**
+ * One standing task: its name, then a row per weekday and variant. Each row opens
+ * the group it belongs to, so a variant is edited with its own hour and length.
+ */
+@Composable
+private fun RecurringTaskBlock(task: RecurringTask, onOpen: (RecurringGroup) -> Unit) {
+    Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.xs)) {
+        EtaText(text = task.name, style = EtaTheme.typography.bodyStrong)
+        task.rows.forEach { row: RecurringWeekdayRow ->
+            val item = row.group.representative
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(start = EtaTheme.spacing.lg)
+                    .pointerInput(item.id, row.weekday, row.startTime) {
+                        detectTapGestures(onTap = { onOpen(row.group) }, onLongPress = { onOpen(row.group) })
+                    },
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(8.dp)
+                        .background(colorOf(item), CircleShape),
+                )
+                Spacer(Modifier.size(EtaTheme.spacing.sm))
+                EtaText(
+                    text = rowLabel(row),
+                    style = EtaTheme.typography.caption,
+                    color = EtaTheme.colors.textSecondary,
+                )
+            }
+        }
+    }
+}
+
+/** "Mo · 14:00 · 1:00 h", with the rhythm named when it is not weekly. */
+private fun rowLabel(row: RecurringWeekdayRow): String = buildString {
+    append(row.weekday.formatVeryShort())
+    append(" · ").append(row.startTime.formatClock())
+    row.duration?.let { append(" · ").append(it.formatShort()) }
+    when (val rhythm = row.group.rhythm) {
+        Rhythm.Weekly -> Unit
+        is Rhythm.Biweekly -> append(if (rhythm.parity == WeekParity.EVEN) " · gerade KW" else " · ungerade KW")
+        is Rhythm.Monthly -> append(" · ${rhythm.weekOfMonth}. im Monat")
     }
 }
