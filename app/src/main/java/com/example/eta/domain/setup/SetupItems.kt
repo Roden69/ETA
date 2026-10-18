@@ -51,6 +51,13 @@ fun isMorningRoutine(id: String): Boolean =
     id == setupId("morning") || id.startsWith(setupId("morning-"))
 
 /**
+ * Whether there is a morning routine at all. A routine of no minutes is no
+ * definition (see [recurringItems]), so there is nothing its steps could be
+ * written onto.
+ */
+val UserSetup.hasMorningRoutine: Boolean get() = morningDuration.inWholeMinutes > 0
+
+/**
  * The recurring definitions that follow from the answers.
  *
  * Category is what decides whether a block pays points, so it is assigned by

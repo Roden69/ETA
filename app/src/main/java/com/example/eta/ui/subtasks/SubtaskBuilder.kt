@@ -496,6 +496,14 @@ private fun SubtaskEditDialog(
 }
 
 /**
+ * Said where the morning routine's steps would be, while it has no minutes.
+ * Shared by the settings and the list, which both hide the editor then.
+ */
+const val MORNING_ROUTINE_OFF_HINT =
+    "Die Morgenroutine hat 0 Minuten, deshalb gibt es keine Schritte. Stell oben " +
+        "unter „Morgenroutine“ eine Dauer ein und sichere die Einrichtung."
+
+/**
  * The morning routine's steps, and the way to change them.
  *
  * One composable for the two places the user asked for — the settings and the

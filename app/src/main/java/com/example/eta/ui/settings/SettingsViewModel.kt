@@ -111,8 +111,19 @@ class SettingsViewModel(
         .map { it.drafts() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Whether there is a morning routine to hold steps: the screen shows the editor only then. */
+    val morningRoutineOn: StateFlow<Boolean> = setupRepository.observeMorningRoutineOn()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
     fun saveMorningSteps(steps: List<SubtaskDraft>) {
-        viewModelScope.launch { setupRepository.saveMorningSteps(steps) }
+        viewModelScope.launch {
+            if (!setupRepository.saveMorningSteps(steps)) {
+                _message.value = SettingsMessage.Failed(
+                    "Die Morgenroutine hat keine Dauer, deshalb wurden die Schritte nicht " +
+                        "gespeichert. Stell oben eine Dauer ein und sichere die Einrichtung.",
+                )
+            }
+        }
     }
 
     private val _message = MutableStateFlow<SettingsMessage?>(null)

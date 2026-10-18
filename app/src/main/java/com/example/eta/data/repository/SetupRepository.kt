@@ -5,6 +5,7 @@ import com.example.eta.data.local.ResetDao
 import com.example.eta.data.local.SetupDao
 import com.example.eta.domain.model.Item
 import com.example.eta.domain.model.Subtask
+import com.example.eta.domain.setup.hasMorningRoutine
 import com.example.eta.domain.setup.isMorningRoutine
 import com.example.eta.domain.subtask.SubtaskDraft
 import com.example.eta.domain.subtask.drafts
@@ -16,6 +17,7 @@ import com.example.eta.domain.setup.recurringItems
 import kotlin.time.Clock
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
@@ -173,10 +175,20 @@ class SetupRepository(
      * and steps that existed on Tuesday and not on Saturday would be a bug
      * nobody could find. Both places the steps are edited — the settings and the
      * standing task's own window — come through here.
+     *
+     * Returns false, and writes nothing, when there is no open morning definition
+     * to hold them: a routine of zero minutes has none. The callers keep the
+     * editor away from that state; this answer is for whoever still reaches it.
      */
-    suspend fun saveMorningSteps(drafts: List<SubtaskDraft>) {
-        morningDefinitions().forEach { subtaskRepository.save(it.id, drafts) }
+    suspend fun saveMorningSteps(drafts: List<SubtaskDraft>): Boolean {
+        val definitions = morningDefinitions()
+        definitions.forEach { subtaskRepository.save(it.id, drafts) }
+        return definitions.isNotEmpty()
     }
+
+    /** Whether the stored setup has a morning routine, i.e. whether steps can be saved. */
+    fun observeMorningRoutineOn(): Flow<Boolean> =
+        setupDao.observe(SETUP_ID).map { it?.hasMorningRoutine == true }
 
     /**
      * Throws everything away, back to the state before the app was first opened.

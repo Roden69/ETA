@@ -23,6 +23,7 @@ import com.example.eta.alarm.AudioMode
 import com.example.eta.alarm.ClockApp
 import com.example.eta.alarm.ClockAppAlarms
 import com.example.eta.domain.setup.clockAlarms
+import com.example.eta.ui.subtasks.MORNING_ROUTINE_OFF_HINT
 import com.example.eta.ui.components.EtaSwatch
 import com.example.eta.ui.components.EtaIcon
 import com.example.eta.ui.components.EtaIconImage
@@ -152,6 +153,7 @@ fun SettingsScreen(
     val phraseAccepted by viewModel.phraseAccepted.collectAsStateWithLifecycle()
     val alarms by viewModel.alarms.collectAsStateWithLifecycle()
     val morningSteps by viewModel.morningSteps.collectAsStateWithLifecycle()
+    val morningRoutineOn by viewModel.morningRoutineOn.collectAsStateWithLifecycle()
 
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip"),
@@ -270,7 +272,11 @@ fun SettingsScreen(
                                     color = EtaTheme.colors.textMuted,
                                 )
                                 SleepStep(setup, viewModel::update)
-                                MorningRoutineBox(morningSteps, viewModel::saveMorningSteps)
+                                MorningRoutineBox(
+                                    routineOn = morningRoutineOn,
+                                    steps = morningSteps,
+                                    onSave = viewModel::saveMorningSteps,
+                                )
                             }
 
                             SettingsPage.WAKE -> {
@@ -1401,24 +1407,36 @@ private fun MessageBox(message: SettingsMessage, onDismiss: () -> Unit) {
  * set. Saved at once, unlike the answers around it: the steps are not part of
  * the draft, and a list edited in a dialog with its own "Sichern" that then
  * waited for a second one further down would lose edits.
+ *
+ * Without a routine — a stored duration of zero — there is no editor: steps
+ * typed into one would have nothing to be saved onto.
  */
 @Composable
 private fun MorningRoutineBox(
+    routineOn: Boolean,
     steps: List<SubtaskDraft>,
     onSave: (List<SubtaskDraft>) -> Unit,
 ) {
     EtaSurface(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = "Morgenroutine", style = EtaTheme.typography.heading)
-            EtaText(
-                text = "Beginnt mit dem Aufstehen und dauert so lange, wie oben unter " +
-                    "„Morgenroutine“ steht. Die Schritte laufen im Routine-Modus: " +
-                    "„Gerade“ zeigt immer nur den nächsten, Abhaken hält die Uhrzeit " +
-                    "fest. Änderungen an den Schritten gelten sofort.",
-                style = EtaTheme.typography.caption,
-                color = EtaTheme.colors.textMuted,
-            )
-            MorningRoutineSteps(steps = steps, onSave = onSave)
+            if (routineOn) {
+                EtaText(
+                    text = "Beginnt mit dem Aufstehen und dauert so lange, wie oben unter " +
+                        "„Morgenroutine“ steht. Die Schritte laufen im Routine-Modus: " +
+                        "„Gerade“ zeigt immer nur den nächsten, Abhaken hält die Uhrzeit " +
+                        "fest. Änderungen an den Schritten gelten sofort.",
+                    style = EtaTheme.typography.caption,
+                    color = EtaTheme.colors.textMuted,
+                )
+                MorningRoutineSteps(steps = steps, onSave = onSave)
+            } else {
+                EtaText(
+                    text = MORNING_ROUTINE_OFF_HINT,
+                    style = EtaTheme.typography.caption,
+                    color = EtaTheme.colors.textMuted,
+                )
+            }
         }
     }
 }
