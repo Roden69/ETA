@@ -701,7 +701,7 @@ private fun TutorialOfferBox(
 }
 
 private enum class ListSection(val title: String, val subtitle: String) {
-    SAMMELLISTE("Sammelliste", "Alles Notierte"),
+    SAMMELLISTE("Sammelliste", "Alles Notierte, für irgendwann"),
     WOCHENLISTE("Wochenliste", "Für diese Woche vorgenommen"),
     WIEDERKEHREND("Wiederkehrende Aufgaben", "Der feste Wochenplan"),
     TAGESLISTE("Tagesliste", "Heute"),

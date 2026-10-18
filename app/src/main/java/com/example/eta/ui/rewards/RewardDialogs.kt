@@ -59,8 +59,8 @@ internal fun RewardEditDialog(
 
     EtaDialog(title = "Neue Belohnung", onDismiss = onDismiss) {
         EtaText(
-            text = "Name, Preis und Bindung stehen danach fest — eine Belohnung lässt " +
-                "sich später nur noch löschen.",
+            text = "Name, Preis und Bindung lassen sich danach nicht mehr ändern; " +
+                "die Belohnung kann dann nur noch gelöscht werden.",
             style = EtaTheme.typography.caption,
             color = EtaTheme.colors.textMuted,
         )
@@ -73,7 +73,7 @@ internal fun RewardEditDialog(
         }
         EtaField(
             label = "Preis in Punkten",
-            hint = "Antippen, um die Zahl einzutippen.",
+            hint = "Tippen, um eine Zahl einzugeben.",
         ) {
             EtaCountPicker(
                 value = draft.cost,

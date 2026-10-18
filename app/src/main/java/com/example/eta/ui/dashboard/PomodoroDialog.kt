@@ -79,7 +79,7 @@ fun PomodoroDialog(
         )
         // Stepped in fives, typed to the minute: tapping the value opens the entry
         // dialog. Seconds are dropped — the rhythm rings on whole minutes.
-        EtaField(label = "Arbeit", hint = "Wert antippen, um ihn frei einzugeben.") {
+        EtaField(label = "Arbeit", hint = "Tippen, um eine Dauer einzugeben.") {
             EtaDurationPicker(
                 value = work,
                 onValueChange = { work = it.inWholeMinutes.minutes },

@@ -1019,7 +1019,7 @@ fun ExtrasBox(
         modifier = Modifier.tutorialSpot(TutorialSpot.EXTRAS),
         hint = "Wege, Pause, Töne, Pomodoro, Erinnerung" +
             (if (today != null) ", Deadline" else "") +
-            (if (onSubtasks != null) ", Subtasks" else "") +
+            (if (onSubtasks != null) ", Schritte" else "") +
             (if (offerQuantity) ", Mengen-Inkrement" else "") +
             if (onGrowth != null) " und Timer-Task." else ".",
         summary = when (active) {
@@ -1127,7 +1127,7 @@ private fun SubtaskSection(
     var open by remember { mutableStateOf(false) }
 
     EtaExpander(
-        label = "Subtasks",
+        label = "Schritte",
         hint = "Schritte innerhalb der Aufgabe, zum Abhaken während sie läuft.",
         summary = when (val count = setting.subtasks.size) {
             0 -> "Keine"
@@ -1143,7 +1143,7 @@ private fun SubtaskSection(
             )
         }
         EtaButton(
-            text = "Subtasks erstellen / bearbeiten",
+            text = "Schritte anlegen / bearbeiten",
             style = EtaButtonStyle.Secondary,
             onClick = { open = true },
         )

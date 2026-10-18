@@ -92,9 +92,9 @@ fun RewardsScreen(viewModel: RewardsViewModel) {
             Column {
                 EtaText(text = "Belohn-o-mat", style = EtaTheme.typography.title)
                 EtaText(
-                    text = "Was du dir erarbeitest. Jeden Abend fließen die Punkte des " +
-                        "Tages in die oberste ungebundene Belohnung; gebundene sammeln " +
-                        "aus ihren eigenen Aufgaben.",
+                    text = "Hier sammelst du, was du dir verdienst. Jeden Abend fließen die " +
+                        "Punkte des Tages in die oberste Belohnung ohne Bindung; gebundene " +
+                        "sammeln aus ihren eigenen Aufgaben.",
                     style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.textSecondary,
                 )
@@ -103,8 +103,8 @@ fun RewardsScreen(viewModel: RewardsViewModel) {
             if (state.open.isEmpty()) {
                 EtaSurface(modifier = Modifier.fillMaxWidth()) {
                     EtaText(
-                        text = "Noch keine Belohnung. Gib ihr einen Namen und einen Preis in " +
-                            "Punkten — der Abend füllt sie dann nach und nach.",
+                        text = "Noch keine Belohnung. Gib ihr einen Namen und einen Punktepreis, " +
+                            "danach füllt sie sich jeden Abend ein Stück weiter.",
                         style = EtaTheme.typography.body,
                         color = EtaTheme.colors.textMuted,
                     )

@@ -91,7 +91,7 @@ fun ManualPointsDialog(
                 }
 
                 EtaText(
-                    text = "Als eigene Zeile im Punktekonto — so bleibt der Verlauf nachvollziehbar.",
+                    text = "Erscheint als eigene Zeile im Punktekonto, damit der Verlauf nachvollziehbar bleibt.",
                     style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.textMuted,
                 )
