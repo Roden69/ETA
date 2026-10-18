@@ -33,6 +33,7 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.eta.data.repository.InflationPreview
 import com.example.eta.domain.model.Item
 import com.example.eta.domain.planning.WeekBudget
+import com.example.eta.domain.planning.PullBlock
 import com.example.eta.domain.planning.costOf
 import com.example.eta.ui.calendar.CalendarEventsSection
 import com.example.eta.ui.calendar.CalendarEventsViewModel
@@ -396,8 +397,8 @@ private fun PlanStep(state: WeekPlannerUiState, viewModel: WeekPlannerViewModel,
     Row(horizontalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
         ItemColumn(
             title = "Sammelliste",
-            items = if (state.canTakeOnMore) state.collection else emptyList(),
-            emptyHint = if (state.canTakeOnMore) "Leer." else "Gesperrt.",
+            items = state.collection,
+            emptyHint = if (state.held.isEmpty()) "Leer." else "Nichts verplanbar, siehe unten.",
             modifier = Modifier.weight(1f),
             onPick = viewModel::pullIntoWeek,
         )
@@ -408,6 +409,17 @@ private fun PlanStep(state: WeekPlannerUiState, viewModel: WeekPlannerViewModel,
             modifier = Modifier.weight(1f),
             onPick = viewModel::returnToCollection,
         )
+    }
+
+    // A card the week may not take on is said so, with the reason, rather than
+    // vanishing from the Sammelliste column or hiding behind a one-word hint.
+    if (state.held.isNotEmpty()) {
+        EtaSurface(modifier = Modifier.fillMaxWidth(), contentPadding = EtaTheme.spacing.md) {
+            Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
+                EtaText(text = "Noch nicht in dieser Woche", style = EtaTheme.typography.heading)
+                state.held.forEach { (item, reason) -> HeldCard(item = item, reason = reason) }
+            }
+        }
     }
 
     // The Sammelliste can be empty exactly when it is needed most — a fresh setup
@@ -527,6 +539,39 @@ private fun ItemCard(item: Item, onClick: () -> Unit) {
                 duration == null -> "noch ohne Dauer"
                 // What it really costs the week, break and all.
                 else -> "${duration.formatShort()} · kostet ${costOf(duration).formatShort()}"
+            },
+            style = EtaTheme.typography.caption,
+            color = EtaTheme.colors.textMuted,
+        )
+    }
+}
+
+/** A Sammelliste card the week may not take on yet: greyed, not tappable, with why. */
+@Composable
+private fun HeldCard(item: Item, reason: PullBlock) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(EtaTheme.colors.background, EtaTheme.shapes.small)
+            .padding(EtaTheme.spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.xs),
+    ) {
+        EtaText(
+            text = item.name,
+            style = EtaTheme.typography.body,
+            color = EtaTheme.colors.textMuted,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        EtaText(
+            text = when (reason) {
+                is PullBlock.NotYetAvailable -> "Einplanbar ab ${reason.from.formatLong()}"
+                PullBlock.AfterPredecessor -> "Erst die Aufgabe davor erledigen."
+                is PullBlock.OpenGoals -> if (reason.count == 1) {
+                    "Erst das offene Ziel der letzten Woche verplanen oder zurückgeben."
+                } else {
+                    "Erst die ${reason.count} offenen Ziele der letzten Woche verplanen oder zurückgeben."
+                }
             },
             style = EtaTheme.typography.caption,
             color = EtaTheme.colors.textMuted,
