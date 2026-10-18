@@ -58,7 +58,16 @@ private fun nextWeekly(setup: UserSetup, after: LocalDateTime): LocalDateTime {
     return LocalDateTime(after.date.plus(DatePeriod(days = 7)), time)
 }
 
-/** What a tap on the wake alarm's snooze buys. Longer than the planning one. */
+/**
+ * What a tap on the wake alarm's snooze buys: ten minutes, chosen on purpose.
+ *
+ * Long enough to get out of bed before the ring returns; short enough that the
+ * second ring is still the same wake-up and not a nap. Longer than the planning
+ * snooze ([PLANNING_SNOOZE], five minutes), because a planning phase can be put
+ * off while the wake alarm exists to get you up. Nine minutes, the value this
+ * replaced, had no reason behind it. A different value is a product decision:
+ * change this constant, `ClockAlarmsTest` and the alarms note together.
+ */
 val WAKE_SNOOZE: Duration = 10.minutes
 
 /**
