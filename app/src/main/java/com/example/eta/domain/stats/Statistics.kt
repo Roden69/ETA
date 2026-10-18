@@ -88,7 +88,7 @@ data class Overview(
  * an imported appointment pays by the hour and counts whatever its category.
  */
 fun BlockWithItem.isTakenOnTask(): Boolean =
-    item.category != null || block.origin == BlockOrigin.CALENDAR_IMPORT
+    item.category != null || block.origin.isCalendarEvent
 
 /**
  * The overview over [blocks] and [logs] — both already cut to the range, and to

@@ -4,6 +4,8 @@ import android.app.PendingIntent
 import android.content.Intent
 import com.example.eta.data.calendar.AuthOutcome
 import com.example.eta.data.calendar.GoogleAuth
+import com.example.eta.domain.calendar.SeriesReading
+import com.example.eta.domain.calendar.readSeriesRule
 import java.io.IOException
 import kotlinx.datetime.LocalDate
 
@@ -23,6 +25,17 @@ sealed interface SyncOutcome {
 
     /** No account connected. Not a failure — the ordinary state before setup. */
     data object NotConnected : SyncOutcome
+}
+
+/** What reading a series' master from Google came to. */
+sealed interface SeriesOutcome {
+    /** Google answered; [reading] says whether Eta can take the series on. */
+    data class Ok(val reading: SeriesReading) : SeriesOutcome
+
+    /** As for [SyncOutcome.NeedsConsent]: only an Activity can show the screen. */
+    data class NeedsConsent(val pendingIntent: PendingIntent) : SeriesOutcome
+
+    data class Failed(val reason: String) : SeriesOutcome
 }
 
 /**
@@ -70,6 +83,28 @@ class CalendarSyncService(
 
             is AuthOutcome.NeedsConsent -> SyncOutcome.NeedsConsent(outcome.pendingIntent)
             is AuthOutcome.Failed -> SyncOutcome.Failed(outcome.reason)
+        }
+
+    /**
+     * Reads how a series repeats, from its master.
+     *
+     * Asked only when the user chooses to adopt a series, never by the sync: the
+     * occurrences a sync brings do not say the rule, and this is the one extra
+     * request a series costs.
+     */
+    suspend fun readSeries(calendarId: String, seriesId: String): SeriesOutcome =
+        when (val outcome = auth.token()) {
+            is AuthOutcome.Ok -> try {
+                val master = repository.readSeries(outcome.accessToken, calendarId, seriesId)
+                val start = master.start
+                    ?: return SeriesOutcome.Failed("Der Anfang der Serie ist nicht bekannt.")
+                SeriesOutcome.Ok(readSeriesRule(master.recurrence, start))
+            } catch (error: IOException) {
+                SeriesOutcome.Failed(error.message ?: "Keine Verbindung zu Google.")
+            }
+
+            is AuthOutcome.NeedsConsent -> SeriesOutcome.NeedsConsent(outcome.pendingIntent)
+            is AuthOutcome.Failed -> SeriesOutcome.Failed(outcome.reason)
         }
 
     /** Forgets the account. Nothing is asked of Google; see the repository. */

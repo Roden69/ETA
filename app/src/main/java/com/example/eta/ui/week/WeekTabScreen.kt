@@ -218,6 +218,7 @@ fun WeekTabScreen(
             ) {
                 DayTimeline(
                     blocks = shown(pageDay),
+                    occupied = state.occupiedOn(pageDay, view, appointments),
                     sleep = state.sleepOn(pageDay, view),
                     // Read off the standing nights in both views: what the
                     // window changes is the weekday's night, whatever a single

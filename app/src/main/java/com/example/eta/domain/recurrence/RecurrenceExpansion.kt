@@ -14,7 +14,9 @@ import kotlin.time.Instant
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.daysUntil
 import kotlinx.datetime.isoDayNumber
+import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
 /**
@@ -61,6 +63,7 @@ fun RecurrenceRule.weekdaysOf(): Set<DayOfWeek> = when (this) {
     is RecurrenceRule.Weekly -> setOf(weekday)
     is RecurrenceRule.Biweekly -> setOf(weekday)
     is RecurrenceRule.Monthly -> setOf(weekday)
+    is RecurrenceRule.EveryWeeks -> setOf(weekday)
 }
 
 /** Whether a recurring item is due on [date]. */
@@ -76,6 +79,27 @@ fun RecurrenceRule.matches(date: LocalDate): Boolean = when (this) {
 
     is RecurrenceRule.Monthly ->
         date.dayOfWeek == weekday && date.weekdayOccurrenceInMonth() == weekOfMonth
+
+    is RecurrenceRule.EveryWeeks ->
+        date.dayOfWeek == weekday && date >= anchor &&
+            (anchor.daysUntil(date) / DAYS_PER_WEEK) % weeks == 0
+}
+
+/** Days in a week, for the week arithmetic of [RecurrenceRule.EveryWeeks]. */
+private const val DAYS_PER_WEEK = 7
+
+/**
+ * The first date on [weekday] that a rhythm of [weeks] weeks anchored on [anchor]
+ * lands on.
+ *
+ * Weeks are counted from the Monday of the anchor's week, as the rule's own
+ * phase is. The anchor's week holds the occurrence only when that weekday is not
+ * before the anchor itself; otherwise the first one is a full cycle later.
+ */
+fun firstEveryWeeksDate(anchor: LocalDate, weeks: Int, weekday: DayOfWeek): LocalDate {
+    val monday = anchor.minus(DatePeriod(days = anchor.dayOfWeek.isoDayNumber - 1))
+    val candidate = monday.plus(DatePeriod(days = weekday.isoDayNumber - 1))
+    return if (candidate >= anchor) candidate else candidate.plus(DatePeriod(days = DAYS_PER_WEEK * weeks))
 }
 
 /** Every date in [from]..[to] on which this rule fires. */

@@ -96,6 +96,12 @@ fun DayTimeline(
      */
     freed: List<BlockWithItem> = emptyList(),
     /**
+     * Appointments the calendar still offers, drawn at their hours so the day shows
+     * what is already taken. Not blocks: they cannot be moved, edited or ticked, and
+     * they sit on top of the blocks, so a clash is seen where it happens.
+     */
+    occupied: List<OccupiedSpan> = emptyList(),
+    /**
      * The steps inside each card, by item id, and which of them this day has ticked
      * off, by block id.
      *
@@ -313,6 +319,10 @@ fun DayTimeline(
             )
         }
 
+        // Over the blocks, translucent: a clash is only a clash where it is seen on
+        // top of the block it overlaps.
+        occupied.forEach { span -> OccupiedStretch(span = span, minutePx = minutePx) }
+
         // Over the blocks: it is what is being worked on, and it may be pushed
         // across something that already stands there on its way to a free hour.
         draft?.let { DraftBlock(draft = it, minutePx = minutePx, onChange = onDraftChange) }
@@ -348,7 +358,7 @@ fun DayTimeline(
 @Composable
 private fun MarginContainer(entry: BlockWithItem, minutePx: Float, offsetPx: Float = 0f) {
     val block = entry.block
-    val accent = if (block.origin == BlockOrigin.CALENDAR_IMPORT) {
+    val accent = if (block.origin.isCalendarEvent) {
         EtaTheme.colors.calendar
     } else {
         colorOf(entry.item)
@@ -442,7 +452,7 @@ private fun NameBubble(
     checkedIds: Set<String> = emptySet(),
 ) {
     val block = entry.block
-    val accent = if (block.origin == BlockOrigin.CALENDAR_IMPORT) {
+    val accent = if (block.origin.isCalendarEvent) {
         EtaTheme.colors.calendar
     } else {
         colorOf(entry.item)
@@ -514,6 +524,44 @@ private fun NameBubble(
                 }
             }
         }
+    }
+}
+
+/**
+ * An appointment the calendar still offers, at its hours on the day.
+ *
+ * [clashes] says whether it lands on planned time: the stretch is then drawn in
+ * the danger colour rather than the calendar's ochre.
+ */
+data class OccupiedSpan(
+    val label: String,
+    val startMinute: Int,
+    val endMinute: Int,
+    val clashes: Boolean,
+)
+
+@Composable
+private fun OccupiedStretch(span: OccupiedSpan, minutePx: Float) {
+    val color = if (span.clashes) EtaTheme.colors.danger else EtaTheme.colors.calendar
+    val height = (span.endMinute - span.startMinute) * minutePx
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = GUTTER_WIDTH, end = EtaTheme.spacing.sm)
+            .offsetMinutes(span.startMinute, minutePx)
+            .height(with(LocalDensity.current) { height.coerceAtLeast(0f).toDp() })
+            .background(color.copy(alpha = 0.12f), EtaTheme.shapes.draggedBlock)
+            .border(1.dp, color.copy(alpha = 0.7f), EtaTheme.shapes.draggedBlock)
+            .padding(horizontal = EtaTheme.spacing.sm),
+        contentAlignment = Alignment.TopStart,
+    ) {
+        EtaText(
+            text = if (span.clashes) "Termin · überschneidet sich: ${span.label}" else "Termin: ${span.label}",
+            style = EtaTheme.typography.caption,
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -650,7 +698,7 @@ private fun TimelineBlock(
     val currentDragPreview by rememberUpdatedState(onDragPreview)
     val currentMoved by rememberUpdatedState(onMoved)
     val block = entry.block
-    val imported = block.origin == BlockOrigin.CALENDAR_IMPORT
+    val imported = block.origin.isCalendarEvent
 
     // Called off. The row has to stay — expansion runs forward from today and
     // would lay a deleted occurrence down again — so "Absagen" can only be a

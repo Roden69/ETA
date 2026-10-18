@@ -27,6 +27,10 @@ const val CUSTOM_SPEND_POINTS_PER_HOUR = -5.0
 fun yieldOf(item: Item, block: PlannedBlock): Double {
     val hours = block.effectiveDuration.toDouble(DurationUnit.HOURS)
     return when {
+        // A time blocker holds the hour and pays nothing for it, whatever the
+        // category says: the user asked for the time to be kept, not for points.
+        block.origin == BlockOrigin.CALENDAR_BLOCKER -> 0.0
+
         // Imported events pay per full hour, regardless of what the item says.
         block.origin == BlockOrigin.CALENDAR_IMPORT ->
             floor(hours) * CALENDAR_POINTS_PER_FULL_HOUR

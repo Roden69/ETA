@@ -4,8 +4,10 @@ import androidx.room3.Dao
 import androidx.room3.Query
 import androidx.room3.Upsert
 import com.example.eta.domain.model.CalendarEvent
+import com.example.eta.domain.model.CalendarSeries
 import com.example.eta.domain.model.CalendarSource
 import kotlinx.coroutines.flow.Flow
+import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 
 @Dao
@@ -96,6 +98,27 @@ interface CalendarDao {
     @Query("DELETE FROM calendar_events WHERE calendarId NOT IN (:keep)")
     suspend fun deleteEventsOfCalendarsNotIn(keep: List<String>): Int
 
+    /** Marks the undecided occurrences of an adopted series as taken by its card. */
+    @Query(
+        """
+        UPDATE calendar_events
+        SET decision = 'IMPORTED', itemId = :itemId, updatedAt = :now
+        WHERE calendarId = :calendarId AND seriesId = :seriesId AND decision = 'PENDING'
+        """,
+    )
+    suspend fun decideSeriesOccurrences(calendarId: String, seriesId: String, itemId: String, now: Instant): Int
+
+    @Query("UPDATE calendar_events SET conflictNotified = 1 WHERE id = :id")
+    suspend fun markConflictNotified(id: String)
+
     @Query("DELETE FROM calendar_events")
     suspend fun clearEvents()
+
+    // --- the adopted series --------------------------------------------------
+
+    @Upsert
+    suspend fun upsertSeries(series: List<CalendarSeries>)
+
+    @Query("SELECT * FROM calendar_series")
+    suspend fun findSeries(): List<CalendarSeries>
 }

@@ -57,6 +57,7 @@ class BootCompletedReceiver : BroadcastReceiver() {
                 app.container.taskStartCoordinator.reschedule()
                 app.container.wakeAlarmCoordinator.reschedule()
                 app.container.reminderCoordinator.reschedule()
+                app.container.calendarRefreshCoordinator.reschedule()
             } finally {
                 pending.finish()
             }

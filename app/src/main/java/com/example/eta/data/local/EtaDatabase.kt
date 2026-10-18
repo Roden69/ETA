@@ -7,6 +7,7 @@ import androidx.room3.migration.Migration
 import androidx.sqlite.SQLiteConnection
 import androidx.sqlite.execSQL
 import com.example.eta.domain.model.CalendarEvent
+import com.example.eta.domain.model.CalendarSeries
 import com.example.eta.domain.model.CalendarSource
 import com.example.eta.domain.model.ConflictDismissal
 import com.example.eta.domain.model.Contract
@@ -41,6 +42,7 @@ import com.example.eta.domain.setup.UserSetup
         VacationRule::class,
         CalendarSource::class,
         CalendarEvent::class,
+        CalendarSeries::class,
         Reminder::class,
         ConflictDismissal::class,
         Subtask::class,
@@ -52,7 +54,7 @@ import com.example.eta.domain.setup.UserSetup
         SleepLog::class,
         Note::class,
     ],
-    version = 33,
+    version = 34,
     exportSchema = true,
 )
 @ColumnTypeConverters(Converters::class)
@@ -1013,6 +1015,38 @@ val MIGRATION_32_33 = object : Migration(32, 33) {
 }
 
 /**
+ * The SQL of version 34's calendar changes: recurring appointments and the
+ * time-blocker rules. Kept apart so the migration reads as one list.
+ *
+ * - `calendar_events.seriesId`: the Google series an occurrence belongs to, null
+ *   for a one-off event.
+ * - `calendar_events.conflictNotified`: whether the clash with the plan has
+ *   already been announced. Existing rows were never checked, so 0.
+ * - `calendar_series`: one row per recurring card made from a series, linking it
+ *   back to Google so that its occurrences are not offered again.
+ */
+private val SCHEMA_34_CALENDAR: List<String> = listOf(
+    "ALTER TABLE `calendar_events` ADD COLUMN `seriesId` TEXT",
+    "ALTER TABLE `calendar_events` ADD COLUMN `conflictNotified` INTEGER NOT NULL DEFAULT 0",
+    "CREATE TABLE IF NOT EXISTS `calendar_series` (`itemId` TEXT NOT NULL, " +
+        "`calendarId` TEXT NOT NULL, `seriesId` TEXT NOT NULL, `createdAt` INTEGER NOT NULL, " +
+        "PRIMARY KEY(`itemId`))",
+    "CREATE INDEX IF NOT EXISTS `index_calendar_series_calendarId_seriesId` " +
+        "ON `calendar_series` (`calendarId`, `seriesId`)",
+)
+
+/**
+ * Version 34: recurring Google appointments and time blockers. The statements
+ * live in [SCHEMA_34_CALENDAR]; `BlockOrigin.CALENDAR_BLOCKER` and the every-N-weeks
+ * recurrence are stored by name or string and need no column of their own.
+ */
+val MIGRATION_33_34 = object : Migration(33, 34) {
+    override suspend fun migrate(connection: SQLiteConnection) {
+        SCHEMA_34_CALENDAR.forEach { connection.execSQL(it) }
+    }
+}
+
+/**
  * Reconciles both shipped version-28 schemas without rewriting their history.
  *
  * The fork added night corrections where upstream added flexibility switches.
@@ -1077,5 +1111,6 @@ internal val ETA_DATABASE_MIGRATIONS = arrayOf(
     MIGRATION_30_31,
     MIGRATION_31_32,
     MIGRATION_32_33,
+    MIGRATION_33_34,
     MIGRATION_28_33,
 )

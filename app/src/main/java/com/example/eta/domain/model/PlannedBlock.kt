@@ -19,7 +19,19 @@ import java.util.UUID
 enum class BlockOrigin {
     RECURRING,
     DRAGGED,
+
+    /** An appointment from Google Calendar that earns points by the hour. */
     CALENDAR_IMPORT,
+
+    /**
+     * An appointment from Google Calendar that holds its time and earns nothing:
+     * the user chose "Als Zeitblocker (ohne Punkte)".
+     */
+    CALENDAR_BLOCKER,
+    ;
+
+    /** Either kind of calendar appointment: the same time, the same immovability. */
+    val isCalendarEvent: Boolean get() = this == CALENDAR_IMPORT || this == CALENDAR_BLOCKER
 }
 
 /**

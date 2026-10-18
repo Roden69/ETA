@@ -1,5 +1,6 @@
 package com.example.eta.domain.model
 
+import androidx.room3.ColumnInfo
 import androidx.room3.Entity
 import androidx.room3.Ignore
 import androidx.room3.Index
@@ -51,6 +52,13 @@ data class CalendarEvent(
     @PrimaryKey val id: String,
     val calendarId: String,
     val eventId: String,
+    /**
+     * The series this occurrence belongs to, or null for a one-off event.
+     *
+     * Google sends it as `recurringEventId` on every occurrence of a repeating
+     * event. It is what lets an adopted series be recognised again on each sync.
+     */
+    val seriesId: String? = null,
     val title: String,
     val date: LocalDate,
     /** For an all-day event this is only a suggestion; see [allDay]. */
@@ -69,6 +77,14 @@ data class CalendarEvent(
     val decision: EventDecision,
     /** The card this became, for [EventDecision.IMPORTED]. */
     val itemId: String?,
+    /**
+     * Whether the user has already been told this event collides with the plan.
+     *
+     * Set once and never cleared, so a clash is announced once rather than on
+     * every background run that still sees it.
+     */
+    @ColumnInfo(defaultValue = "0")
+    val conflictNotified: Boolean = false,
     val createdAt: Instant,
     val updatedAt: Instant,
 ) {

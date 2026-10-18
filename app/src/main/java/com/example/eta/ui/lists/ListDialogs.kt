@@ -592,6 +592,7 @@ fun recurringSummary(group: RecurringGroup): String = buildString {
             if (rhythm.parity == WeekParity.EVEN) " (gerade KW)" else " (ungerade KW)",
         )
         is Rhythm.Monthly -> append(" (${rhythm.weekOfMonth}. im Monat)")
+        is Rhythm.EveryWeeks -> append(" (alle ${rhythm.weeks} Wochen)")
     }
     group.representative.startTime?.let { append(" · ${it.formatClock()}") }
     // A Timer-Task says the time on its timer; the buffer behind it is slack.

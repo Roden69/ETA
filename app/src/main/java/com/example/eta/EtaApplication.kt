@@ -51,6 +51,7 @@ class EtaApplication : Application() {
             container.taskStartCoordinator.reschedule()
             container.wakeAlarmCoordinator.reschedule()
             container.reminderCoordinator.reschedule()
+            container.calendarRefreshCoordinator.reschedule()
         }
     }
 

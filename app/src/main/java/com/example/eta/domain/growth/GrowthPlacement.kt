@@ -233,6 +233,7 @@ private fun RecurrenceRule.namedWeekday(): DayOfWeek = when (this) {
     is RecurrenceRule.Weekly -> weekday
     is RecurrenceRule.Biweekly -> weekday
     is RecurrenceRule.Monthly -> weekday
+    is RecurrenceRule.EveryWeeks -> weekday
 }
 
 /** The slot a definition claims once it has finished growing. */

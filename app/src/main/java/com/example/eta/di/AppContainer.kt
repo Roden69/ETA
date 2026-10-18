@@ -2,6 +2,7 @@ package com.example.eta.di
 
 import android.content.Context
 import androidx.room3.Room
+import com.example.eta.alarm.CalendarRefreshCoordinator
 import com.example.eta.alarm.PlanningAlarmCoordinator
 import com.example.eta.alarm.ReminderCoordinator
 import com.example.eta.alarm.TaskStartCoordinator
@@ -12,6 +13,7 @@ import com.example.eta.data.calendar.GoogleCalendarApi
 import com.example.eta.data.local.EtaDatabase
 import com.example.eta.data.local.ETA_DATABASE_MIGRATIONS
 import com.example.eta.data.repository.CalendarImportService
+import com.example.eta.data.repository.CalendarRefreshService
 import com.example.eta.data.repository.CalendarRepository
 import com.example.eta.data.repository.CalendarSyncService
 import com.example.eta.data.repository.CatchUpService
@@ -242,9 +244,28 @@ class AppContainer(
         itemRepository = itemRepository,
         planRepository = planRepository,
         calendarRepository = calendarRepository,
+        recurringTaskService = recurringTaskService,
         dayClosingService = dayClosingService,
         weekPlanningService = weekPlanningService,
         clock = clock,
+    )
+
+    /** The background read of the planning window, and the one quiet word about new clashes. */
+    val calendarRefreshService: CalendarRefreshService = CalendarRefreshService(
+        syncService = calendarSyncService,
+        calendarRepository = calendarRepository,
+        planRepository = planRepository,
+        setupRepository = setupRepository,
+        clock = clock,
+    )
+
+    /** Reads the calendar about hourly while an account is connected. Off in the sandbox. */
+    val calendarRefreshCoordinator: CalendarRefreshCoordinator = CalendarRefreshCoordinator(
+        context = appContext,
+        calendarRepository = calendarRepository,
+        refresh = calendarRefreshService,
+        clock = clock,
+        enabled = !sandbox,
     )
 
     val planningPhaseService: PlanningPhaseService = PlanningPhaseService(

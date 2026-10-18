@@ -143,7 +143,7 @@ interface PlannedBlockDao {
     @Query(
         """
         SELECT * FROM planned_blocks
-        WHERE origin = 'CALENDAR_IMPORT'
+        WHERE origin IN ('CALENDAR_IMPORT', 'CALENDAR_BLOCKER')
           AND date > :after
           AND discardedAt IS NULL
         ORDER BY date, start
