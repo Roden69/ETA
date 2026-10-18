@@ -1583,6 +1583,8 @@ private fun RhythmField(rhythm: Rhythm, onRhythm: (Rhythm) -> Unit) {
         add(Rhythm.Biweekly(WeekParity.EVEN) to "Alle zwei Wochen — gerade KW")
         add(Rhythm.Biweekly(WeekParity.ODD) to "Alle zwei Wochen — ungerade KW")
         if (rhythm is Rhythm.Monthly) add(rhythm to "Monatlich — ${rhythm.weekOfMonth}. Woche")
+        // Taken from a Google series: kept as it is rather than shown as nothing chosen.
+        if (rhythm is Rhythm.EveryWeeks) add(rhythm to "Alle ${rhythm.weeks} Wochen")
     }
     EtaField(
         label = "Rhythmus",

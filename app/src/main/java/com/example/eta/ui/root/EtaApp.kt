@@ -20,6 +20,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.key
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -280,8 +281,12 @@ private fun MainScaffold(
     val catchUpSlot: @Composable () -> Unit = { CatchUpOffer(container, dateKey, beginCatchUp) }
     val catchUpBanner = if (container.sandbox) null else catchUpSlot
 
-    // Back leaves a flow first, then returns to the first tab.
-    BackHandler(enabled = flow != null) { flow = null }
+    // Back leaves a flow first, then returns to the first tab. The planner that closes
+    // the evening leaves the way its own button does: on to the evening's screens, so
+    // the wake question is not skipped by the gesture.
+    BackHandler(enabled = flow != null) {
+        flow = if (flow == AppFlow.EveningPlanner && !container.sandbox) AppFlow.Evening else null
+    }
     BackHandler(enabled = flow == null && tab != EtaTab.Today) { savedTab = EtaTab.Today }
 
     // Covers both arrivals: the first composition after the questionnaire — which
@@ -380,14 +385,18 @@ private fun MainScaffold(
                 if (day == null) {
                     LaunchedEffect(Unit) { flow = null }
                 } else {
-                    ReevaluationScreen(
-                        viewModel = viewModel(
-                            key = "catchup-$day",
-                            factory = reevaluationViewModelFactory(container, day),
-                        ),
-                        onClose = advance,
-                        onSkip = advance,
-                    )
+                    // Keyed by the day: the pager, its page and the scroll positions
+                    // belong to one evening, and the next missed one starts on page one.
+                    key(day) {
+                        ReevaluationScreen(
+                            viewModel = viewModel(
+                                key = "catchup-$day",
+                                factory = reevaluationViewModelFactory(container, day),
+                            ),
+                            onClose = advance,
+                            onSkip = advance,
+                        )
+                    }
                 }
             }
 
@@ -703,6 +712,10 @@ private fun rootViewModelFactory(container: AppContainer): ViewModelProvider.Fac
                 container.scheduleMaintenance,
                 container.weekPlanningService,
                 container.tutorialStore,
+                resetLocalStores = {
+                    container.eveningStore.reset()
+                    container.featureSuggestionStore.reset()
+                },
             )
         }
     }
@@ -909,6 +922,8 @@ private fun calendarSettingsViewModelFactory(container: AppContainer): ViewModel
             CalendarSettingsViewModel(
                 repository = container.calendarRepository,
                 syncService = container.calendarSyncService,
+                clock = container.clock,
+                onConnectionChanged = container.calendarRefreshCoordinator::reschedule,
             )
         }
     }
@@ -1061,6 +1076,7 @@ private fun eveningViewModelFactory(container: AppContainer): ViewModelProvider.
                 planRepository = container.planRepository,
                 subtaskRepository = container.subtaskRepository,
                 eveningStore = container.eveningStore,
+                rearmWakeAlarm = container.wakeAlarmCoordinator::reschedule,
                 clock = container.clock,
             )
         }

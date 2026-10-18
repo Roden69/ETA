@@ -82,9 +82,8 @@ class SettingsViewModel(
     private val _wakeRoute = MutableStateFlow(eveningStore.wakeRoute())
     val wakeRoute: StateFlow<WakeRoute> = _wakeRoute.asStateFlow()
 
-    /** Whether the calm hint shows after the day closing. */
-    private val _windDown = MutableStateFlow(eveningStore.windDownEnabled())
-    val windDown: StateFlow<Boolean> = _windDown.asStateFlow()
+    /** Whether the calm hint shows after the day closing; follows "Nicht mehr anzeigen" too. */
+    val windDown: StateFlow<Boolean> = eveningStore.windDown
 
     /** Switches where the wake alarm rings, and arms or drops Eta's own at once. */
     fun chooseWakeRoute(route: WakeRoute) {
@@ -95,7 +94,6 @@ class SettingsViewModel(
 
     fun setWindDown(enabled: Boolean) {
         eveningStore.setWindDownEnabled(enabled)
-        _windDown.value = enabled
     }
 
     /**

@@ -187,16 +187,26 @@ class CalendarEventsViewModel(
     /** The consent screen came back; carry on where the sync left off. */
     fun onConsent(data: Intent?) {
         _consent.value = null
+        val series = seriesAwaitingConsent
+        seriesAwaitingConsent = null
         viewModelScope.launch {
             when (val outcome = syncService.completeConsent(data)) {
                 is SyncOutcome.Failed -> error.value = outcome.reason
-                else -> refresh()
+                else -> {
+                    refresh()
+                    // The series question that needed the grant is asked again now.
+                    series?.let(::requestSeries)
+                }
             }
         }
     }
 
+    /** The appointment whose series was being read when Google asked for consent. */
+    private var seriesAwaitingConsent: CalendarEvent? = null
+
     fun dismissConsent() {
         _consent.value = null
+        seriesAwaitingConsent = null
     }
 
     /** Not the app's business. It leaves the list and never comes back as new. */
@@ -249,7 +259,10 @@ class CalendarEventsViewModel(
                         _seriesNotice.value = SeriesNotice(event.id, reading.reason)
                 }
 
-                is SeriesOutcome.NeedsConsent -> _consent.value = outcome.pendingIntent
+                is SeriesOutcome.NeedsConsent -> {
+                    seriesAwaitingConsent = event
+                    _consent.value = outcome.pendingIntent
+                }
                 is SeriesOutcome.Failed -> _seriesNotice.value = SeriesNotice(event.id, outcome.reason)
             }
         }
@@ -325,16 +338,26 @@ class CalendarEventsViewModel(
     fun splitConflict(conflict: ConflictingBlock) {
         val shortened = conflict.shortened ?: return
         val back = conflict.split ?: return
+        // A second tap before the first has written would pass the repository's
+        // "already has a catch-up" check too and make a second card.
+        if (!splitting.add(conflict.entry.block.id)) return
         viewModelScope.launch {
-            if (importService.splitConflicting(conflict.entry, shortened.plannedDuration, back)) {
-                dropConflict(conflict.entry)
-            } else {
-                _conflicts.value = _conflicts.value?.copy(
-                    refusal = "Für diese Aufgabe gibt es schon ein Nachholen. Wähle eine andere Antwort.",
-                )
+            try {
+                if (importService.splitConflicting(conflict.entry, shortened.plannedDuration, back)) {
+                    dropConflict(conflict.entry)
+                } else {
+                    _conflicts.value = _conflicts.value?.copy(
+                        refusal = "Für diese Aufgabe gibt es schon ein Nachholen. Wähle eine andere Antwort.",
+                    )
+                }
+            } finally {
+                splitting.remove(conflict.entry.block.id)
             }
         }
     }
+
+    /** Blocks whose split is being written, by id. */
+    private val splitting = mutableSetOf<String>()
 
     /** Leaving one alone is allowed; two things at once is sometimes simply true. */
     fun keepConflict(entry: BlockWithItem) = dropConflict(entry)

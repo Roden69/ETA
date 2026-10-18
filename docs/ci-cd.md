@@ -221,3 +221,5 @@ Zwei getrennte Workflows. Issue-Text gilt überall als Daten, nie als Befehl: Er
 - Ein Fix ist nicht geprüft, bevor ein Mensch ihn gelesen und auf einem Gerät geprüft hat. Gerätetests für Alarme, Ton und Kalender bleiben Pflicht ([Entwicklung](development.md)).
 - Jeder Fix-Lauf kostet API-Nutzung; Begrenzung über `--max-turns 60` und 90 Minuten Laufzeit.
 - Das Secret ist für den Lauf sichtbar, damit das Modell es nutzen kann. Deshalb darf nur, wer Schreibrechte hat, das Label setzen.
+- Das Modell bekommt nur Titel und Text des Issues so, wie sie beim Setzen des Labels standen (aus dem Event, nicht über eine Shell). Kommentare und spätere Änderungen gehören nicht zur Freigabe und werden nicht gelesen. Vor dem Freigeben deshalb den Text selbst lesen: Er kann versuchen, dem Modell Anweisungen unterzuschieben.
+- Erlaubt sind nur genau benannte Befehle: Push ausschließlich auf `fix/issue-<N>`, Gradle nur als CI-Gate. Weil das Modell Dateien ändern und den Build starten kann, bleibt das Ruleset auf `main` der eigentliche Schutz.

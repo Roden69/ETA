@@ -115,6 +115,12 @@ link, kept after the step is released.
   Sammelliste wait again (clock stopped). A step already taken into the week or a day
   stays where it is: the user committed to it.
 - **Deleting the predecessor** releases its steps: a gone predecessor cannot hold them.
+  A step that is itself still waiting hands its followers down instead: A→B→C with B
+  deleted becomes A→C, and C still waits for A.
+- **Folding** a card into a group ("Aufgaben als Schritte übernehmen", or dropping it
+  onto another in the planner) releases what waited on it; it is no longer a task of
+  its own that could be finished. A waiting step cannot be marked "Erledigt" on the
+  Listen tab and is not offered for folding.
 - Steps are created when the card is created; on an edit they are appended behind the
   existing chain. Blank names are dropped. Steps skip the Sperrliste check, like a
   "Nachholen von …".

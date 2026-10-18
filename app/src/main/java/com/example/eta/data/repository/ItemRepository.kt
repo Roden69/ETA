@@ -1,6 +1,7 @@
 package com.example.eta.data.repository
 
 import com.example.eta.data.local.ItemDao
+import com.example.eta.domain.chain.isWaitingFollowUp
 import com.example.eta.domain.model.Category
 import com.example.eta.domain.growth.GrowthSetting
 import com.example.eta.domain.growth.withBufferAdded
@@ -148,11 +149,21 @@ class ItemRepository(
     }
 
     /**
-     * Removes a card. Its follow-ups are released first: a predecessor that is gone
-     * cannot hold its successor back any longer.
+     * Removes a card. A card that was itself still waiting hands its follow-ups to
+     * its own predecessor, so A→B→C with B deleted becomes A→C and C still waits for
+     * A. Otherwise its follow-ups are released: a predecessor that is gone cannot
+     * hold its successor back any longer.
      */
     suspend fun delete(item: Item) {
-        itemDao.applyFollowUpTransition(item.id, finished = true, now = clock.now())
+        val now = clock.now()
+        val inheritor = item.followUpOfId?.takeIf { item.isWaitingFollowUp() }
+        if (inheritor != null) {
+            val moved = itemDao.findFollowUpsOf(item.id)
+                .map { it.copy(followUpOfId = inheritor, updatedAt = now) }
+            if (moved.isNotEmpty()) itemDao.upsertAll(moved)
+        } else {
+            itemDao.applyFollowUpTransition(item.id, finished = true, now = now)
+        }
         itemDao.delete(item)
     }
 

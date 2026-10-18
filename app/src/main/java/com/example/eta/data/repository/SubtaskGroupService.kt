@@ -113,6 +113,9 @@ class SubtaskGroupService(
         planRepository.removeBlock(dissolvedBlock)
         subtaskRepository.save(dissolved.id, emptyList())
         itemDao.upsert(dissolved.copy(stage = Stage.DONE, completedAt = now, updatedAt = now))
+        // Swallowed into the survivor, it is nobody's predecessor any more: release
+        // what waited on it rather than leave it waiting for good.
+        itemDao.applyFollowUpTransition(dissolved.id, finished = true, now = now)
         return true
     }
 }

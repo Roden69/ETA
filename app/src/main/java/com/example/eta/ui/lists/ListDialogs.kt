@@ -18,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.example.eta.domain.chain.isWaitingFollowUp
 import com.example.eta.domain.model.Category
 import com.example.eta.domain.model.Item
 import com.example.eta.domain.model.ItemType
@@ -145,8 +146,9 @@ fun ItemDetailDialog(
 ) {
     // A standing task is never finished — checking one off would retire the
     // definition and with it every occurrence still to come. It is ended on the
-    // Wiederkehrend list instead, which is where a task itself lives.
-    val completable = editable && item.type != ItemType.RECURRING
+    // Wiederkehrend list instead, which is where a task itself lives. A follow-up
+    // still waiting for its predecessor is not finished either: the order is the point.
+    val completable = editable && item.type != ItemType.RECURRING && !item.isWaitingFollowUp()
 
     ListDialog(
         title = item.name,

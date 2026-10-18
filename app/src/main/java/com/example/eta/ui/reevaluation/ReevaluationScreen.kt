@@ -113,12 +113,13 @@ fun ReevaluationScreen(
     val pointsVisible = LocalPointsVisible.current
     val features = LocalFeatures.current
     val filling = state.rewards?.head != null && features.rewards
-    val steps = remember(pointsVisible, filling, features.contracts) {
+    val steps = remember(pointsVisible, filling, features.contracts, state.catchUp) {
         Step.entries.filter { step ->
             when (step) {
                 // Not asked while the contracts are out of sight; an unanswered
-                // contract counts as kept, which is the default it always had.
-                Step.CONTRACTS -> features.contracts
+                // contract counts as kept, which is the default it always had. A
+                // caught-up evening asks none: contracts are checked on their evening.
+                Step.CONTRACTS -> features.contracts && !state.catchUp
                 Step.REWARD -> pointsVisible
                 Step.REWARD_FILL -> filling
                 else -> true

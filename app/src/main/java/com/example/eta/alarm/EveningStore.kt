@@ -3,6 +3,9 @@ package com.example.eta.alarm
 import android.content.Context
 import androidx.core.content.edit
 import com.example.eta.domain.planning.WakeRoute
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.datetime.LocalDate
 
 /**
@@ -42,8 +45,20 @@ class EveningStore(context: Context) {
     /** On by default; "Nicht mehr anzeigen" turns it off for good. */
     fun windDownEnabled(): Boolean = prefs.getBoolean(KEY_WIND_DOWN, true)
 
+    private val _windDown = MutableStateFlow(windDownEnabled())
+
+    /** The same flag as a flow, so a settings page already open follows the evening's answer. */
+    val windDown: StateFlow<Boolean> = _windDown.asStateFlow()
+
     fun setWindDownEnabled(enabled: Boolean) {
         prefs.edit { putBoolean(KEY_WIND_DOWN, enabled) }
+        _windDown.value = enabled
+    }
+
+    /** Back to a first start: the debug reset wipes the database, and this with it. */
+    fun reset() {
+        prefs.edit { clear() }
+        _windDown.value = true
     }
 
     private companion object {

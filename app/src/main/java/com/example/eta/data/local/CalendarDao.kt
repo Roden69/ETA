@@ -108,6 +108,12 @@ interface CalendarDao {
     )
     suspend fun decideSeriesOccurrences(calendarId: String, seriesId: String, itemId: String, now: Instant): Int
 
+    @Query("SELECT * FROM calendar_events WHERE calendarId = :calendarId AND seriesId = :seriesId")
+    suspend fun findSeriesOccurrences(calendarId: String, seriesId: String): List<CalendarEvent>
+
+    @Query("UPDATE calendar_events SET itemId = :itemId, updatedAt = :now WHERE id = :id")
+    suspend fun relink(id: String, itemId: String, now: Instant)
+
     @Query("UPDATE calendar_events SET conflictNotified = 1 WHERE id = :id")
     suspend fun markConflictNotified(id: String)
 
@@ -121,4 +127,18 @@ interface CalendarDao {
 
     @Query("SELECT * FROM calendar_series")
     suspend fun findSeries(): List<CalendarSeries>
+
+    /**
+     * The links whose card is still a standing task: not deleted, not ended. A
+     * series whose card is gone is no longer adopted, and its occurrences are
+     * offered again.
+     */
+    @Query(
+        """
+        SELECT calendar_series.* FROM calendar_series
+        INNER JOIN items ON items.id = calendar_series.itemId
+        WHERE items.completedAt IS NULL
+        """,
+    )
+    suspend fun findLiveSeries(): List<CalendarSeries>
 }

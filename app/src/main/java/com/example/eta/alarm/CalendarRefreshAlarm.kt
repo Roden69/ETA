@@ -5,6 +5,7 @@ import android.app.PendingIntent
 import android.content.BroadcastReceiver
 import android.content.Context
 import android.content.Intent
+import androidx.core.content.edit
 import androidx.core.content.getSystemService
 import com.example.eta.EtaApplication
 import com.example.eta.data.repository.CalendarRefreshService
@@ -48,29 +49,41 @@ class CalendarRefreshCoordinator(
 
     private val alarmManager: AlarmManager? = context.getSystemService()
 
-    /** Keeps a standing alarm, arms one if none is standing, cancels when not connected. */
+    /** When the standing alarm is due; a time in the past means the chain broke. */
+    private val prefs = context.applicationContext.getSharedPreferences("calendar_refresh", Context.MODE_PRIVATE)
+
+    /**
+     * Keeps a standing alarm, arms one if none is standing or the last one was
+     * lost, cancels when not connected.
+     *
+     * A delivered alarm leaves its PendingIntent behind, so the intent alone cannot
+     * tell a standing alarm from a run that was killed before it armed the next
+     * one. The due time kept with each arming can: if it has passed, nothing is
+     * standing any more.
+     */
     suspend fun reschedule() {
         if (!enabled) return
         val manager = alarmManager ?: return
         if (!calendarRepository.isConnected()) {
-            manager.cancel(refreshIntent(create = false) ?: return)
+            cancel(manager)
             return
         }
-        if (refreshIntent(create = false) != null) return
+        val dueAt = prefs.getLong(KEY_DUE_AT, 0L)
+        if (dueAt > clock.now().toEpochMilliseconds() && refreshIntent(create = false) != null) return
         arm(manager)
     }
 
-    /** One read, then the next one armed — whatever the read found or failed on. */
+    /**
+     * Arms the next run first, then reads: the read makes several requests and may
+     * outlast the receiver's time, and a run cut short must not end the chain.
+     */
     suspend fun onRing() {
-        try {
-            val fresh = refresh.run()
-            CalendarNotifications.showConflicts(context, fresh)
-        } finally {
-            val manager = alarmManager
-            if (enabled && manager != null) {
-                if (calendarRepository.isConnected()) arm(manager)
-            }
+        val manager = alarmManager
+        if (enabled && manager != null) {
+            if (calendarRepository.isConnected()) arm(manager) else cancel(manager)
         }
+        val fresh = refresh.run()
+        CalendarNotifications.showConflicts(context, fresh)
     }
 
     private fun arm(manager: AlarmManager) {
@@ -81,6 +94,15 @@ class CalendarRefreshCoordinator(
             CalendarRefreshContract.WINDOW.inWholeMilliseconds,
             refreshIntent(create = true)!!,
         )
+        prefs.edit { putLong(KEY_DUE_AT, at) }
+    }
+
+    private fun cancel(manager: AlarmManager) {
+        refreshIntent(create = false)?.let { intent ->
+            manager.cancel(intent)
+            intent.cancel()
+        }
+        prefs.edit { remove(KEY_DUE_AT) }
     }
 
     /** The same intent every time, so the alarm is found, replaced or cancelled by it. */
@@ -93,6 +115,10 @@ class CalendarRefreshCoordinator(
             (if (create) PendingIntent.FLAG_UPDATE_CURRENT else PendingIntent.FLAG_NO_CREATE) or
                 PendingIntent.FLAG_IMMUTABLE,
         )
+
+    private companion object {
+        const val KEY_DUE_AT = "dueAt"
+    }
 }
 
 class CalendarRefreshReceiver : BroadcastReceiver() {

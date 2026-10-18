@@ -16,10 +16,14 @@ import kotlin.time.Instant
  * [ItemRepository] and [RecurringTaskService] write cards and either of them can be
  * the one that saves a group. Two copies of this would be two chances for one of
  * them to start deleting instead.
+ *
+ * A folded card that had follow-ups waiting on it releases them: it is not its
+ * own task any more, so nothing would ever finish it, and they would wait forever.
  */
 suspend fun ItemDao.retireFolded(ids: Collection<String>, now: Instant) {
     if (ids.isEmpty()) return
     val rows = ids.mapNotNull { findById(it) }
         .map { it.copy(stage = Stage.DONE, completedAt = now, updatedAt = now) }
     if (rows.isNotEmpty()) upsertAll(rows)
+    rows.forEach { applyFollowUpTransition(it.id, finished = true, now = now) }
 }

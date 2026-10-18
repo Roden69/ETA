@@ -10,6 +10,7 @@ import com.example.eta.data.repository.SetupRepository
 import com.example.eta.data.repository.WeekPlanningService
 import com.example.eta.data.repository.WeekScope
 import com.example.eta.domain.calendar.DateWindow
+import com.example.eta.domain.chain.isWaitingFollowUp
 import com.example.eta.domain.model.Category
 import com.example.eta.domain.model.Item
 import com.example.eta.domain.model.withExtras
@@ -141,7 +142,8 @@ class WeekPlannerViewModel(
             collection = pool.pullable,
             held = pool.held,
             weekList = weekList,
-            foldable = weekList + collection.filter { it.type == ItemType.TODO },
+            // As `observeFoldCandidates`: a follow-up still waiting is not a card to fold yet.
+            foldable = weekList + collection.filter { it.type == ItemType.TODO && !it.isWaitingFollowUp() },
             budget = weekBudget(setup, blocks, weekList),
         )
     }.stateIn(

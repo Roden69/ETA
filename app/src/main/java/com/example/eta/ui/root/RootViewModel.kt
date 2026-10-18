@@ -34,6 +34,8 @@ class RootViewModel(
     private val scheduleMaintenance: ScheduleMaintenance,
     private val weekPlanningService: WeekPlanningService,
     private val tutorialStore: TutorialStore,
+    /** The other on-device answers a first start does not have: evening and feature offers. */
+    private val resetLocalStores: () -> Unit = {},
 ) : ViewModel() {
 
     val destination: StateFlow<RootDestination> = setupRepository.observe()
@@ -74,6 +76,7 @@ class RootViewModel(
             // tutorial that follows the questionnaire. First, so the page is
             // already owed when the missing setup row swaps the screen.
             tutorialStore.reset()
+            resetLocalStores()
             setupRepository.resetEverything()
             // Without a setup there is nothing to ring for; this clears the alarms.
             planningAlarmCoordinator.rescheduleAll()

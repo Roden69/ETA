@@ -1631,8 +1631,9 @@ private fun WakeRouteBox(route: WakeRoute, onRoute: (WakeRoute) -> Unit) {
             )
 
             clockAppReady -> EtaText(
-                text = "Eta klingelt dann nicht. Am Abend fragt Eta, ob der Wecker in der gewählten " +
-                    "Uhr-App gestellt werden soll.",
+                text = "Eta klingelt dann nicht. Nach dem Tagesabschluss fragt Eta, ob der Wecker " +
+                    "für morgen in der gewählten Uhr-App gestellt werden soll. Ohne diese " +
+                    "Bestätigung steht morgens kein Wecker.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
             )

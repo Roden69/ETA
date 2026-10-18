@@ -47,6 +47,8 @@ class EveningViewModel(
     private val planRepository: PlanRepository,
     private val subtaskRepository: SubtaskRepository,
     private val eveningStore: EveningStore,
+    /** Re-arms Eta's own wake alarm when the clock app it was handed to is gone. */
+    private val rearmWakeAlarm: suspend () -> Unit = {},
     private val clock: Clock = Clock.System,
     private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) : ViewModel() {
@@ -72,6 +74,9 @@ class EveningViewModel(
                 )
             }
             if (question != WakeQuestion.NONE) eveningStore.markWakeAsked(tomorrow)
+            // "Eta klingelt deshalb selbst" must be true: the coordinator decided to stay
+            // silent while the app was still there, so it has to decide again now.
+            if (question == WakeQuestion.NO_CLOCK_APP) rearmWakeAlarm()
 
             val windDown = eveningStore.windDownEnabled()
             _state.value = EveningUiState(
