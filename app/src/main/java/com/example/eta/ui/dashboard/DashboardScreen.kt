@@ -41,6 +41,8 @@ import com.example.eta.domain.tutorial.TutorialSpot
 import com.example.eta.ui.components.EtaButton
 import com.example.eta.ui.components.EtaButtonStyle
 import com.example.eta.ui.components.EtaScreen
+import com.example.eta.ui.setup.FeatureSuggestionCard
+import com.example.eta.ui.setup.FeatureSuggestionViewModel
 import com.example.eta.ui.components.EtaSurface
 import com.example.eta.ui.components.EtaText
 import com.example.eta.ui.format.formatClock
@@ -93,6 +95,11 @@ fun DashboardScreen(
      * dashboard has none, there being nothing in its script to do there.
      */
     weekPage: (@Composable () -> Unit)? = null,
+    /**
+     * The optional-feature offer, shown above today's content. Null leaves it out,
+     * as in the tutorial, which has nothing to offer.
+     */
+    featureSuggestion: FeatureSuggestionViewModel? = null,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val editFeedback by viewModel.blockEditFeedback.collectAsStateWithLifecycle()
@@ -118,6 +125,7 @@ fun DashboardScreen(
                         onCloseDay = onCloseDay,
                         onPlanTomorrow = onPlanTomorrow,
                         onReplanToday = onReplanToday,
+                        featureSuggestion = featureSuggestion,
                     )
 
                     DashboardPage.TOMORROW -> TomorrowPage(state, onPlanTomorrow, onPlanWeek)
@@ -199,6 +207,7 @@ private fun TodayPage(
     onCloseDay: () -> Unit,
     onPlanTomorrow: () -> Unit,
     onReplanToday: () -> Unit,
+    featureSuggestion: FeatureSuggestionViewModel?,
 ) {
     // Held as an id and resolved against the list as it is now: the row may
     // have been ticked off or called off while the dialog stood open.
@@ -212,6 +221,7 @@ private fun TodayPage(
         verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.lg),
     ) {
         PageHeader(title = "Heute", subtitle = state.today.formatLong())
+        featureSuggestion?.let { FeatureSuggestionCard(it) }
 
         // First of all, because two things at the same time is the one thing on
         // this screen that cannot wait until the evening to be noticed.

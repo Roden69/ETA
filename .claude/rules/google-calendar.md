@@ -167,3 +167,14 @@ carrying this app's package name (`com.example.erik_iteration_2`) and the SHA-1 
 keystore it is signed with. None of that is configured in the repository, which is the
 point of `AuthorizationClient`.
 
+### Calendar in the first setup (#30, #31)
+
+The first page of the setup offers the connection before the routines. Once the user
+reaches the week step, `SetupViewModel.enterWeek()` calls `CalendarSyncService.refresh`
+for today and the six days after it, then reads the undecided events for that range
+(`pendingFor`). Those events are drawn read-only behind the setup week. Setup-local
+hiding is an in-memory set in `SetupViewModel`, not `CalendarRepository.ignore()`,
+because `ignore()` is a permanent decision that would also drop the event from the
+day and week planning steps. The setup never writes to Google, and a failed read only
+shows a sentence.
+

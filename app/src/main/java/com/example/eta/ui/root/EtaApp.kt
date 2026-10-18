@@ -84,6 +84,7 @@ import com.example.eta.ui.settings.SettingsViewModel
 import com.example.eta.ui.setup.SetupScreen
 import com.example.eta.ui.setup.SetupWeekReview
 import com.example.eta.ui.setup.SetupViewModel
+import com.example.eta.ui.setup.FeatureSuggestionViewModel
 import com.example.eta.domain.tutorial.TutorialId
 import com.example.eta.ui.tutorial.TutorialHost
 import com.example.eta.ui.tutorial.TutorialIntroScreen
@@ -393,6 +394,10 @@ private fun MainScaffold(
                     onReplanToday = { flow = AppFlow.PlannerToday },
                     onPlanWeek = { flow = AppFlow.WeekPlanner },
                     onCloseDay = { flow = AppFlow.Reevaluation },
+                    featureSuggestion = viewModel(
+                        key = "feature-suggestion-$dateKey",
+                        factory = featureSuggestionViewModelFactory(container),
+                    ),
                     weekPage = {
                         WeekTabScreen(
                             viewModel = viewModel(
@@ -636,7 +641,26 @@ private fun rootViewModelFactory(container: AppContainer): ViewModelProvider.Fac
 
 private fun setupViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
     viewModelFactory {
-        initializer { SetupViewModel(container.setupRepository, clock = container.clock) }
+        initializer {
+            SetupViewModel(
+                setupRepository = container.setupRepository,
+                calendarRepository = container.calendarRepository,
+                calendarSync = container.calendarSyncService,
+                clock = container.clock,
+            )
+        }
+    }
+
+private fun featureSuggestionViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
+    viewModelFactory {
+        initializer {
+            FeatureSuggestionViewModel(
+                setupRepository = container.setupRepository,
+                store = container.featureSuggestionStore,
+                tutorialStore = container.tutorialStore,
+                clock = container.clock,
+            )
+        }
     }
 
 internal fun dashboardViewModelFactory(container: AppContainer): ViewModelProvider.Factory =

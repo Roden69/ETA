@@ -1,6 +1,7 @@
 package com.example.eta.ui.setup
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.foundation.ScrollState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -38,6 +39,7 @@ import com.example.eta.ui.components.EtaScreen
 import com.example.eta.ui.components.EtaSurface
 import com.example.eta.ui.components.EtaText
 import com.example.eta.ui.components.EtaTextField
+import com.example.eta.ui.format.formatClock
 import com.example.eta.ui.format.formatLong
 import com.example.eta.ui.format.formatMinutes
 import kotlinx.datetime.DayOfWeek
@@ -50,15 +52,23 @@ fun SetupScreen(
     viewModel: SetupViewModel,
     modifier: Modifier = Modifier,
     /**
-     * The Google connection, offered on the first page so appointments can be
-     * read from the first planning phase on. Null leaves it out.
+     * The Google connection, offered first on the first page: the calendar is read
+     * before routines are chosen, so the week template starts around appointments.
+     * Null leaves it out.
      */
     calendarViewModel: CalendarSettingsViewModel? = null,
 ) {
     val draft by viewModel.draft.collectAsStateWithLifecycle()
     val saving by viewModel.saving.collectAsStateWithLifecycle()
+    val calendarEvents by viewModel.calendarEvents.collectAsStateWithLifecycle()
+    val hiddenEvents by viewModel.hiddenEvents.collectAsStateWithLifecycle()
+    val calendarBusy by viewModel.calendarBusy.collectAsStateWithLifecycle()
+    val calendarNote by viewModel.calendarNote.collectAsStateWithLifecycle()
     var planningWeek by rememberSaveable { mutableStateOf(false) }
     var routineName by rememberSaveable { mutableStateOf("") }
+    // Owned here rather than by the routine step, which leaves the composition
+    // while the week is open: the list comes back where it was left.
+    val routineScroll = rememberScrollState()
 
     BackHandler(enabled = planningWeek && !saving) { planningWeek = false }
 
@@ -75,11 +85,25 @@ fun SetupScreen(
             EtaProgressBar(fraction = if (planningWeek) 1f else 0.5f)
 
             if (planningWeek) {
+                if (calendarBusy) {
+                    EtaText(
+                        text = "Termine werden geladen …",
+                        style = EtaTheme.typography.caption,
+                        color = EtaTheme.colors.textMuted,
+                    )
+                }
+                calendarNote?.let {
+                    EtaText(text = it, style = EtaTheme.typography.caption, color = EtaTheme.colors.warning)
+                }
                 SetupWeekStep(
                     draft = draft,
                     onSavePlacement = viewModel::savePlacement,
                     onDeletePlacement = viewModel::deletePlacement,
                     onNightChange = viewModel::changeNight,
+                    calendarEvents = calendarEvents,
+                    hiddenEvents = hiddenEvents,
+                    onHideEvent = viewModel::hideEvent,
+                    onShowAllEvents = viewModel::showAllEvents,
                     modifier = Modifier.weight(1f),
                 )
                 val unplanned = draft.unscheduledRoutines
@@ -88,16 +112,15 @@ fun SetupScreen(
                 if (unplanned.isNotEmpty()) {
                     EtaText(
                         text = "Noch ohne Zeitplatz: ${unplanned.joinToString { it.name }}. " +
-                            "Plane sie ein oder gehe zurück, um sie abzuwählen.",
+                            "Plane sie ein oder gehe zurück, um sie abzuwählen. " +
+                            "Fertig bleibt gesperrt, bis jede Routine einen Zeitplatz hat.",
                         style = EtaTheme.typography.caption,
                         color = EtaTheme.colors.warning,
                     )
                 }
                 if (overlappingSleep.isNotEmpty()) {
                     EtaText(
-                        text = "Diese Nächte überschneiden sich: " +
-                            "${overlappingSleep.sortedBy { WEEK.indexOf(it) }.joinToString { it.formatLong() }}. " +
-                            "Passe sie an, damit jede Nacht für sich liegt.",
+                        text = sleepOverlapText(draft, overlappingSleep),
                         style = EtaTheme.typography.caption,
                         color = EtaTheme.colors.warning,
                     )
@@ -105,7 +128,8 @@ fun SetupScreen(
                 if (awakeMinutes > 24 * 60) {
                     EtaText(
                         text = "Zwischen zwei Schlafblöcken liegen ${formatMinutes(awakeMinutes)} ohne Schlaf. " +
-                            "Plane spätestens nach 24 Stunden wieder Schlaf ein.",
+                            "Plane spätestens nach 24 Stunden wieder Schlaf ein. " +
+                            "Fertig bleibt gesperrt, bis das passt.",
                         style = EtaTheme.typography.caption,
                         color = EtaTheme.colors.warning,
                     )
@@ -139,6 +163,7 @@ fun SetupScreen(
                     onWeekdayNight = viewModel::changeWeekdayNight,
                     onWeekendNight = viewModel::changeWeekendNight,
                     onWeekendDays = viewModel::changeWeekendDays,
+                    scroll = routineScroll,
                     modifier = Modifier.weight(1f),
                 )
                 EtaButton(
@@ -149,12 +174,29 @@ fun SetupScreen(
                         if (routineName.isNotBlank()) viewModel.addRoutine(routineName)
                         routineName = ""
                         planningWeek = true
+                        viewModel.enterWeek()
                     },
                 )
             }
         }
     }
 }
+
+/**
+ * The blocking sleep warning, naming each night that runs into another one. This is
+ * the only warning on this page that keeps "Fertig" disabled.
+ */
+private fun sleepOverlapText(draft: RoutineSetup, wakeDays: Set<DayOfWeek>): String {
+    val nights = draft.sleepNights()
+        .filter { it.wakeDay in wakeDays }
+        .joinToString("; ") { night ->
+            "Nacht zum ${night.wakeDay.formatLong()}, ${night.start.formatClock()} bis " +
+                night.night.wake.formatClock()
+        }
+    return "Diese Nächte überschneiden sich: $nights. Fertig bleibt gesperrt, bis jede Nacht " +
+        "für sich liegt. Passe sie an."
+}
+
 /**
  * The questionnaire's last screen: the standing week it has just laid down, as
  * the timetable the dashboard has under "Woche → Generell" — with a box at the
@@ -173,6 +215,9 @@ fun SetupWeekReview(
     var step by rememberSaveable { mutableStateOf(0) }
     val notes = WEEK_REVIEW_NOTES
     val note = notes[step.coerceIn(0, notes.lastIndex)]
+
+    // Back steps through the notes first; only the first one leaves the review.
+    BackHandler(enabled = step > 0) { step -= 1 }
 
     EtaScreen(modifier = modifier) {
         timetable {
@@ -250,12 +295,22 @@ private fun RoutineSelectionStep(
     onWeekdayNight: (LocalTime, LocalTime) -> Unit,
     onWeekendNight: (LocalTime, LocalTime) -> Unit,
     onWeekendDays: (Set<DayOfWeek>) -> Unit,
+    scroll: ScrollState,
     modifier: Modifier = Modifier,
 ) {
     Column(
-        modifier = modifier.fillMaxWidth().verticalScroll(rememberScrollState()),
+        modifier = modifier.fillMaxWidth().verticalScroll(scroll),
         verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.lg),
     ) {
+        calendarViewModel?.let { calendar ->
+            EtaText(
+                text = "Optional: Verbinde deinen Google Kalender, damit deine Routinen um deine " +
+                    "Termine herum geplant werden. Das geht auch später in den Einstellungen.",
+                style = EtaTheme.typography.body,
+                color = EtaTheme.colors.textSecondary,
+            )
+            CalendarSettingsBox(calendar)
+        }
         EtaText(text = "Deine Routinen", style = EtaTheme.typography.title)
         EtaText(
             text = "Welche Routinen gehören zu deiner Woche? Wähle Vorschläge aus " +
@@ -263,11 +318,21 @@ private fun RoutineSelectionStep(
             style = EtaTheme.typography.body,
             color = EtaTheme.colors.textSecondary,
         )
+
+        SectionHeading(
+            title = "Feste Grundkonfiguration",
+            explanation = "Dein Schlaf steht in jeder Woche. Du kannst die Zeiten anpassen, aber nicht abwählen.",
+        )
         SleepRhythmCard(
             draft = draft,
             onWeekdayNight = onWeekdayNight,
             onWeekendNight = onWeekendNight,
             onWeekendDays = onWeekendDays,
+        )
+
+        SectionHeading(
+            title = "Vorschläge",
+            explanation = "Optional. Wähle, was zu deiner Woche passt. Die Liste ist nicht vollständig.",
         )
         SUGGESTED_SETUP_ROUTINES.forEach { routine ->
             key(routine.id) {
@@ -283,6 +348,12 @@ private fun RoutineSelectionStep(
                 }
             }
         }
+
+        SectionHeading(
+            title = "Eigene Routinen",
+            explanation = "Beliebig viele, zum Beispiel Yoga oder Lernen. Sie werden wie andere " +
+                "wiederkehrende Aufgaben eingeplant.",
+        )
         EtaField(label = "Eigene Routine", hint = "Zum Beispiel Yoga machen oder Lernen.") {
             EtaTextField(
                 value = routineName,
@@ -321,14 +392,18 @@ private fun RoutineSelectionStep(
             style = EtaTheme.typography.caption,
             color = EtaTheme.colors.textMuted,
         )
-        calendarViewModel?.let { calendar ->
-            EtaText(
-                text = "Verbinde deinen Google Kalender, um Termine schon in der ersten " +
-                    "Planungsphase zu übernehmen. Das geht auch später in den Einstellungen.",
-                style = EtaTheme.typography.body,
-                color = EtaTheme.colors.textSecondary,
-            )
-            CalendarSettingsBox(calendar)
-        }
+    }
+}
+
+/** A heading for one group of routines, with the one line that says what the group means. */
+@Composable
+private fun SectionHeading(title: String, explanation: String) {
+    Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.xs)) {
+        EtaText(text = title, style = EtaTheme.typography.heading)
+        EtaText(
+            text = explanation,
+            style = EtaTheme.typography.caption,
+            color = EtaTheme.colors.textMuted,
+        )
     }
 }

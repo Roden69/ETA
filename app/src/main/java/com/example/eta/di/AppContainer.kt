@@ -40,6 +40,7 @@ import com.example.eta.data.repository.WeekPlanningService
 import com.example.eta.data.tutorial.TutorialSeed
 import com.example.eta.ui.theme.DesignStore
 import com.example.eta.ui.tutorial.TutorialStore
+import com.example.eta.ui.setup.FeatureSuggestionStore
 import kotlin.time.Clock
 
 /**
@@ -303,6 +304,9 @@ class AppContainer(
 
     /** Whether the tutorial is owed or was asked for; outside the database on purpose. */
     val tutorialStore: TutorialStore = TutorialStore(appContext)
+
+    /** The answers to the optional-feature suggestions; a fact about this install, like the tutorial flags. */
+    val featureSuggestionStore: FeatureSuggestionStore = FeatureSuggestionStore(appContext)
 
     /**
      * Lays the tutorial's example day down. **Null on the real container**, so
