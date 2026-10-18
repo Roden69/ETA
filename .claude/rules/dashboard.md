@@ -109,3 +109,12 @@ above everything when it has something to say.
   again. Persisted rather than held in the screen, because a warning that came back
   on every process death is one that cannot be answered.
 
+### Feature suggestion card (#13)
+
+Once the setup has been completed for seven days, the Heute tab shows at most one
+suggestion of an optional feature, decided by `dueFeatureSuggestion` (`domain/setup/FeatureSuggestion.kt`).
+Its answers are kept in the SharedPreferences `feature_suggestions`
+(`ui/setup/FeatureSuggestionStore.kt`). The card is passed to `DashboardScreen` only by the
+real dashboard, so the tutorial never shows it. Nothing is enabled without "Ausprobieren".
+See `setup.md` for the schedule rules.
+

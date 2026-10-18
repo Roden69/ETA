@@ -23,7 +23,9 @@ followed by the upstream standing-week review and the existing tutorial:
    as bedtime and wake-up, plus which days are the weekend. Defaults 23:00–07:00 and
    00:00–09:00, weekend Saturday and Sunday. Bedtime and wake-up may not be the same
    hour (that is no night, or a whole day of it); the page says so and ignores it.
-   The first page also retains the optional Google Calendar connection.
+   The first page starts with the optional Google Calendar connection, one sentence on
+   why, then the routines, under three headings: "Feste Grundkonfiguration" (sleep),
+   "Vorschläge" (Sport, Achtsamkeit) and "Eigene Routinen".
 2. **Schedule the week.** `SetupWeekStep` shows Monday–Sunday with an hourly 00–24
    grid. The viewport starts at 06:00; hours scroll vertically and the labelled day
    columns and their header scroll horizontally together. Tapping an empty time
@@ -36,6 +38,20 @@ followed by the upstream standing-week review and the existing tutorial:
    show a warning; warnings do not forbid intentional overlaps. With no routine
    besides sleep chosen there is nothing to place: the page says so and the tap and
    the button do nothing.
+   **Calendar in the week (#30, #31).** When a calendar is connected, `SetupViewModel.enterWeek()`
+   reads the next seven days (today and six after, `setupCalendarLastDay`) through
+   `CalendarSyncService.refresh` and then prefills the template. Appointments are drawn
+   behind everything in their weekday columns, read-only, in the calendar colour with
+   their title. All-day events are a band at the top of their day and never warn. Tapping
+   an appointment hides it for this setup only (`hideEvent`, in memory with the draft;
+   "Alle einblenden" restores it). Hiding deliberately does **not** call
+   `CalendarRepository.ignore()`: that decision is kept for good and would also remove
+   the appointment from the planning steps. A failed read is one sentence above the grid,
+   and the setup goes on without it.
+   **Prefill.** Each selected routine that was never placed gets one hour in the first
+   free hour from 07:00 to 22:00, counting Monday first, free of sleep, placements and
+   visible appointments (`prefilledWeek`). A routine given a slot once is not refilled, so
+   a deleted slot does not return. It is edited like any placement.
 
 ### Sleep: one night per weekday, each correctable
 
@@ -112,6 +128,21 @@ night or any correction is configured.
   `RoutineSetupTest` covers independent same-date occurrences, midnight wrapping,
   deselection, overlap detection, stable identities, the seven provisional nights,
   a single corrected night, sleep overlap and "nothing to place".
+- **Warnings and blocking** (#40). Routine against routine, routine against sleep and
+  routine against a visible appointment (`calendarClashes`) are warnings only. Each line
+  names both blocks with weekday and times and says that you can still finish. Overlapping
+  nights (`overlappingSleep`), a routine without a slot and a gap over 24 hours block
+  "Fertig", and the page names the reason.
+- **Feature suggestions (#13).** `dueFeatureSuggestion` (`FeatureSuggestion.kt`) offers at
+  most one of growthTasks, contracts, rewards, notes: first 7 days after `completedAt`,
+  then one per 7 days, only features that are off and not answered. Answers live in the
+  SharedPreferences `feature_suggestions` (`FeatureSuggestionStore`). "Ausprobieren" enables
+  the feature through `setupRepository.update { withFeature }` (the settings setter's path)
+  and offers its tutorial. "Später" changes only the last-offer day, and "Nicht mehr
+  vorschlagen" only the answers. Nothing is enabled without the tap, and the card is absent
+  from the tutorial dashboard.
+- Tests: `SetupCalendarTest` (appointment spans, clashes, prefill) and `FeatureSuggestionTest`
+  (the schedule, including the 7-day gaps and time zone).
 - The old optional questionnaire pages, summary, `SetupPart` and `skipping` path
   have been removed. `SetupSteps.kt` retains only the shared sleep and planning
   settings pages. `SetupItems.kt` / `SetupSchedule.kt` still serve settings,
