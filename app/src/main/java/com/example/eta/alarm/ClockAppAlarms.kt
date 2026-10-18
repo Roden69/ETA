@@ -5,6 +5,7 @@ import android.content.Intent
 import android.provider.AlarmClock
 import com.example.eta.domain.setup.ClockAlarm
 import kotlinx.datetime.DayOfWeek
+import kotlinx.datetime.LocalTime
 
 /**
  * The clock apps an alarm can be handed to.
@@ -59,13 +60,7 @@ object ClockAppAlarms {
     fun setUp(context: Context, alarms: List<ClockAlarm>, app: ClockApp): Boolean {
         if (alarms.isEmpty()) return false
         val intents = alarms.map { alarm ->
-            intentFor(app).apply {
-                putExtra(AlarmClock.EXTRA_HOUR, alarm.time.hour)
-                putExtra(AlarmClock.EXTRA_MINUTES, alarm.time.minute)
-                putExtra(AlarmClock.EXTRA_MESSAGE, "Eta · Aufstehen")
-                putExtra(AlarmClock.EXTRA_VIBRATE, true)
-                // Without the clock's own screen: several are being made at once.
-                putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+            alarmIntent(app, alarm.time, message = "Eta · Aufstehen").apply {
                 putIntegerArrayListExtra(
                     AlarmClock.EXTRA_DAYS,
                     ArrayList(alarm.days.sortedBy { it.ordinal }.map { it.toCalendarDay() }),
@@ -74,6 +69,28 @@ object ClockAppAlarms {
         }
         return runCatching { context.startActivities(intents.toTypedArray()) }.isSuccess
     }
+
+    /**
+     * One alarm for one morning, handed to [app]: the evening's question, which is
+     * asked once a night. No weekdays, so it does not repeat. False when the app
+     * did not take it.
+     */
+    fun setOnce(context: Context, time: LocalTime, app: ClockApp): Boolean {
+        val intent = alarmIntent(app, time, message = "Eta · Aufstehen")
+            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        return runCatching { context.startActivity(intent) }.isSuccess
+    }
+
+    /** The extras every alarm carries, without the days: those differ per caller. */
+    private fun alarmIntent(app: ClockApp, time: LocalTime, message: String): Intent =
+        intentFor(app).apply {
+            putExtra(AlarmClock.EXTRA_HOUR, time.hour)
+            putExtra(AlarmClock.EXTRA_MINUTES, time.minute)
+            putExtra(AlarmClock.EXTRA_MESSAGE, message)
+            putExtra(AlarmClock.EXTRA_VIBRATE, true)
+            // Without the clock's own screen: several are being made at once.
+            putExtra(AlarmClock.EXTRA_SKIP_UI, true)
+        }
 
     private fun intentFor(app: ClockApp): Intent =
         Intent(AlarmClock.ACTION_SET_ALARM).apply { app.packageName?.let(::setPackage) }

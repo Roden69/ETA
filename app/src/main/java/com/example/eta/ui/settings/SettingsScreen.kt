@@ -60,6 +60,7 @@ import com.example.eta.alarm.AlarmSettingsIntents
 import com.example.eta.alarm.EtaSound
 import com.example.eta.alarm.EtaSpeech
 import com.example.eta.domain.planning.TaskAnnouncement
+import com.example.eta.domain.planning.WakeRoute
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import com.example.eta.alarm.alarmReadiness
@@ -152,6 +153,8 @@ fun SettingsScreen(
     val phraseAccepted by viewModel.phraseAccepted.collectAsStateWithLifecycle()
     val alarms by viewModel.alarms.collectAsStateWithLifecycle()
     val morningSteps by viewModel.morningSteps.collectAsStateWithLifecycle()
+    val wakeRoute by viewModel.wakeRoute.collectAsStateWithLifecycle()
+    val windDown by viewModel.windDown.collectAsStateWithLifecycle()
 
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip"),
@@ -271,10 +274,11 @@ fun SettingsScreen(
                                 )
                                 SleepStep(setup, viewModel::update)
                                 MorningRoutineBox(morningSteps, viewModel::saveMorningSteps)
+                                WindDownBox(windDown, viewModel::setWindDown)
                             }
 
                             SettingsPage.WAKE -> {
-                                WakeAlarmBox(setup, viewModel::update)
+                                WakeAlarmBox(setup, viewModel::update, wakeRoute, viewModel::chooseWakeRoute)
                                 ClockAlarmsBox(setup = setup, dirty = dirty)
                             }
                             SettingsPage.STILL_ACTIVE -> StillActiveBox(setup, viewModel::update)
@@ -1290,10 +1294,11 @@ private fun CatchUpBox(
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = "Offene Tage", style = EtaTheme.typography.heading)
             EtaText(
-                text = "${openDays.size} Tage wurden nie abgerechnet. Das kostet die Serie" +
+                text = "${openDays.size} ältere Tage wurden nie abgerechnet. Das kostet die Serie" +
                     (if (LocalPointsVisible.current) " und die Punkte dieser Tage" else "") +
-                    " — so ist es gedacht. Nachtragen ist nur " +
-                    "vorgesehen, wenn technische Gründe im Weg standen.",
+                    " — so ist es gedacht. Die letzten sieben Tage holst du direkt auf dem " +
+                    "Startbildschirm nach. Ältere nachtragen ist nur vorgesehen, wenn technische " +
+                    "Gründe im Weg standen.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
             )
@@ -1537,7 +1542,7 @@ private fun DebugBox(onReset: () -> Unit) {
  * because they answered a questionnaire has overstepped.
  */
 @Composable
-private fun WakeAlarmBox(setup: UserSetup, onChange: OnSetupChange) {
+private fun WakeAlarmBox(setup: UserSetup, onChange: OnSetupChange, route: WakeRoute, onRoute: (WakeRoute) -> Unit) {
     EtaSurface(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = "Weckruf", style = EtaTheme.typography.heading)
@@ -1572,6 +1577,79 @@ private fun WakeAlarmBox(setup: UserSetup, onChange: OnSetupChange) {
                 ),
                 selected = setup.wakeAlarm,
                 onSelect = { on -> onChange { it.copy(wakeAlarm = on) } },
+            )
+            if (setup.wakeAlarm) {
+                WakeRouteBox(route = route, onRoute = onRoute)
+            }
+        }
+    }
+}
+
+/**
+ * Who rings the wake alarm: Eta, or the clock app the user already has.
+ *
+ * Only the choice is kept here. With the clock app, Eta arms nothing; the evening
+ * asks whether to set the alarm there instead. The clock app itself is chosen in the
+ * "Wecker in der Uhr-App" card below.
+ */
+@Composable
+private fun WakeRouteBox(route: WakeRoute, onRoute: (WakeRoute) -> Unit) {
+    val context = LocalContext.current
+    val clockApp = remember { ClockAppAlarms.chosen(context) }
+    val clockAppReady = remember { ClockAppAlarms.available(context).contains(clockApp) }
+    Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
+        EtaField(label = "Wecken über") {
+            EtaChoice(
+                options = listOf(WakeRoute.ETA to "Eta", WakeRoute.CLOCK_APP to "Uhr-App"),
+                selected = route,
+                onSelect = onRoute,
+            )
+        }
+        when {
+            route == WakeRoute.ETA -> EtaText(
+                text = "Eta klingelt selbst.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textMuted,
+            )
+
+            clockAppReady -> EtaText(
+                text = "Eta klingelt dann nicht. Am Abend fragt Eta, ob der Wecker in der gewählten " +
+                    "Uhr-App gestellt werden soll.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textMuted,
+            )
+
+            else -> EtaText(
+                text = "Die gewählte Uhr-App (${clockApp.label}) ist auf diesem Handy nicht da. Eta klingelt deshalb selbst.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.warning,
+            )
+        }
+    }
+}
+
+/**
+ * The calm hint after the day closing: put the phone away, let the evening end.
+ *
+ * A hint and nothing more. Nothing is locked or blocked, and the evening's own card
+ * can switch it off as well.
+ */
+@Composable
+private fun WindDownBox(enabled: Boolean, onChange: (Boolean) -> Unit) {
+    EtaSurface(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
+            EtaText(text = "Abendruhe-Hinweis", style = EtaTheme.typography.heading)
+            EtaText(
+                text = "Nach dem Tagesabschluss zeigt Eta einen ruhigen Hinweis: das Handy weglegen " +
+                    "und den Abend ausklingen lassen. Ist eine Abendroutine eingerichtet, steht sie " +
+                    "dabei. Eta sperrt nichts.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textMuted,
+            )
+            EtaChoice(
+                options = listOf(true to "An", false to "Aus"),
+                selected = enabled,
+                onSelect = onChange,
             )
         }
     }

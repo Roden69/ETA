@@ -93,6 +93,11 @@ fun DashboardScreen(
      * dashboard has none, there being nothing in its script to do there.
      */
     weekPage: (@Composable () -> Unit)? = null,
+    /**
+     * The offer to catch up the evenings that were missed, drawn under the header.
+     * Null where there is nothing to offer, such as the tutorial's practice days.
+     */
+    catchUpBanner: (@Composable () -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val editFeedback by viewModel.blockEditFeedback.collectAsStateWithLifecycle()
@@ -118,6 +123,7 @@ fun DashboardScreen(
                         onCloseDay = onCloseDay,
                         onPlanTomorrow = onPlanTomorrow,
                         onReplanToday = onReplanToday,
+                        catchUp = catchUpBanner,
                     )
 
                     DashboardPage.TOMORROW -> TomorrowPage(state, onPlanTomorrow, onPlanWeek)
@@ -199,6 +205,7 @@ private fun TodayPage(
     onCloseDay: () -> Unit,
     onPlanTomorrow: () -> Unit,
     onReplanToday: () -> Unit,
+    catchUp: (@Composable () -> Unit)?,
 ) {
     // Held as an id and resolved against the list as it is now: the row may
     // have been ticked off or called off while the dialog stood open.
@@ -212,6 +219,7 @@ private fun TodayPage(
         verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.lg),
     ) {
         PageHeader(title = "Heute", subtitle = state.today.formatLong())
+        catchUp?.invoke()
 
         // First of all, because two things at the same time is the one thing on
         // this screen that cannot wait until the evening to be noticed.

@@ -1,0 +1,53 @@
+package com.example.eta.alarm
+
+import android.content.Context
+import com.example.eta.domain.planning.WakeRoute
+import kotlinx.datetime.LocalDate
+
+/**
+ * The evening's choices, kept on the phone rather than in the database: where the
+ * wake alarm rings, whether the wind-down hint shows, and the night the clock-app
+ * question was last put for. None of it is data the plan depends on, so none of it
+ * needs the schema.
+ *
+ * The clock app itself is [ClockAppAlarms]' choice and is read from there.
+ */
+class EveningStore(context: Context) {
+
+    private val appContext = context.applicationContext
+    private val prefs = appContext.getSharedPreferences("evening", Context.MODE_PRIVATE)
+
+    /** Eta by default: the alarm rings here unless the user hands it to a clock app. */
+    fun wakeRoute(): WakeRoute =
+        WakeRoute.entries.firstOrNull { it.name == prefs.getString(KEY_ROUTE, null) } ?: WakeRoute.ETA
+
+    fun chooseWakeRoute(route: WakeRoute) {
+        prefs.edit().putString(KEY_ROUTE, route.name).apply()
+    }
+
+    /** The clock app the wake alarm would be handed to: the one chosen for the clock-app box. */
+    fun clockApp(): ClockApp = ClockAppAlarms.chosen(appContext)
+
+    /** Whether that clock app is installed and takes alarms on this phone. */
+    fun clockAppAvailable(): Boolean = ClockAppAlarms.available(appContext).contains(clockApp())
+
+    fun wakeAskedFor(): LocalDate? =
+        prefs.getString(KEY_ASKED_FOR, null)?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+
+    fun markWakeAsked(wakeDate: LocalDate) {
+        prefs.edit().putString(KEY_ASKED_FOR, wakeDate.toString()).apply()
+    }
+
+    /** On by default; "Nicht mehr anzeigen" turns it off for good. */
+    fun windDownEnabled(): Boolean = prefs.getBoolean(KEY_WIND_DOWN, true)
+
+    fun setWindDownEnabled(enabled: Boolean) {
+        prefs.edit().putBoolean(KEY_WIND_DOWN, enabled).apply()
+    }
+
+    private companion object {
+        const val KEY_ROUTE = "wakeRoute"
+        const val KEY_ASKED_FOR = "wakeAskedFor"
+        const val KEY_WIND_DOWN = "windDown"
+    }
+}

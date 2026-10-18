@@ -45,6 +45,11 @@ when there is one, Quick-Add, "Heute anstehend", and `PhaseBox` — at the top f
 minute the phase is owed, at the bottom before that. The Überschneidung box goes
 above everything when it has something to say.
 
+**The catch-up card sits under the header** whenever a day of the last week has planned
+blocks and no settlement ("Tagesabschluss vom … nachholen"). It opens the reevaluation
+for that day, oldest first; see *Making up a missed evening* in `streak-reevaluation.md`.
+It is not composed in the tutorial's sandbox.
+
 - **"Kritisch" means about to be banned onto the Sperrliste**, not about to miss a
   deadline. `Konzept.md` attaches that sentence to the one-month rule with an arrow,
   and box 3 already covers deadlines — reading it as deadlines would make the two

@@ -91,3 +91,12 @@ a visible omission rather than something that silently survives a reset. Note th
 view models outlive the screen swap: anything the setup view model latches (its
 `saving` flag) has to be cleared, or the reset comes back to a stuck questionnaire.
 
+### Evening choices (#18, #44)
+
+- **Sleep page, "Abendruhe-Hinweis" (default on):** switches the wind-down card after the
+  day closing off. The card's "Nicht mehr anzeigen" does the same.
+- **Wake page, "Wecken über" (Eta or Uhr-App):** shown only while the Weckruf is on. It
+  is stored in `EveningStore`, not in `UserSetup`, so it needs no schema change.
+- **"Offene Tage":** now only the days older than the dashboard's last seven; the
+  phrase is still required for those.
+
