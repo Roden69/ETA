@@ -15,6 +15,12 @@ The tenth `update.txt`: a Subtask-Builder reachable from every route, a confirma
 button that asks what to do with the time it freed, and three smaller things. Seven
 questions went to the user first, and the answers are the design.
 
+**On screen they are "Schritte" (#28).** The code keeps `Subtask`; every label,
+button and dialog title says *Schritte* ("Schritte anlegen / bearbeiten",
+"Weiteren Schritt hinzufügen", "Aufgaben als Schritte übernehmen"), which is the
+word the summaries ("3 Schritte") already used. The older names quoted below are
+historical.
+
 #### Subtasks are not Items
 
 `subtasks` and `subtask_checks` are tables of their own, and a subtask is **name,

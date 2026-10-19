@@ -45,3 +45,8 @@ Operational instructions: `docs/ci-cd.md`.
   own secrets. Never create production version tags merely to test the pipeline.
   Existing releases are not overwritten by re-runs. Release runs are not cancelled
   when other versions are pushed.
+- The debug job also runs `assembleFork` (build type `fork`: application-id suffix
+  `.fork`, `app_name` "Eta Fork", debug signing) and uploads `eta-fork-apk`
+  (`app/build/outputs/apk/fork/app-fork.apk`). Its signer is verified against the
+  shared debug key like the debug APK. The default debug and release identity is
+  unchanged. Testers: `docs/ci-cd.md` ("Für Tester").

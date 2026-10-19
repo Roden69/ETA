@@ -775,7 +775,7 @@ class DayPlannerViewModel(
                     block.copy(plannedDuration = block.plannedDuration + added, updatedAt = now),
                 )
             }
-            itemRepository.retireFolded(setting.folded.map { it.itemId })
+            itemRepository.retireFolded(setting.folded.map { it.itemId }, item.id)
             setting.released.forEach { draft ->
                 itemRepository.addWithoutLockCheck(
                     Item.releasedSubtask(
@@ -965,9 +965,11 @@ class DayPlannerViewModel(
     /**
      * Long-press editing: everything a card carries that this screen can change.
      *
-     * Name, category and the standing note belong to the **item** and so change
-     * every future occurrence; start, duration and the day's note belong to this
-     * **block** alone. The dialog says which is which rather than hiding it.
+     * Name, category, the standing note and the end sound belong to the **task**
+     * and change every future occurrence — but only for a card that is not a
+     * standing occurrence: those are changed in "Generell" or on the Listen tab, so
+     * that one day's window cannot rewrite the task. Start, duration and the day's
+     * note belong to this **block** alone. The dialog says which is which.
      *
      * [pointsPerHour] is the rate of a points entry from the second revolver, and
      * lives on the item as well — such an item has exactly the one block, so there
@@ -991,12 +993,13 @@ class DayPlannerViewModel(
         viewModelScope.launch {
             val now = clock.now()
             val newItemNote = itemNote.ifBlank { null }
-            if (name != entry.item.name ||
+            // A standing occurrence keeps its task as it is: see the note above.
+            val taskChanged = name != entry.item.name ||
                 category != entry.item.category ||
                 newItemNote != entry.item.note ||
                 endSound != entry.item.endSound ||
                 pointsPerHour != entry.item.pointsPerHour
-            ) {
+            if (taskChanged && entry.block.origin != BlockOrigin.RECURRING) {
                 itemRepository.update(
                     entry.item.renamed(name, now).copy(
                         category = category,

@@ -50,9 +50,9 @@ fun ReduceTasksDialog(
     val backlog = candidates.filterNot { it.inWeek }
     val selected = candidates.filter { it.itemId in chosen }
 
-    EtaDialog(title = "Task zur Subtask reduzieren", onDismiss = onDismiss) {
+    EtaDialog(title = "Aufgaben als Schritte übernehmen", onDismiss = onDismiss) {
         EtaText(
-            text = "Angehakte Tasks werden Schritte dieser Gruppe und verschwinden als eigene " +
+            text = "Angehakte Aufgaben werden Schritte dieser Gruppe und verschwinden als eigene " +
                 "Aufgaben. Ihre Dauer kommt zur Gruppe hinzu; alles andere, was sie tragen, " +
                 "geht verloren.",
             style = EtaTheme.typography.caption,
@@ -112,7 +112,7 @@ fun ReduceTasksDialog(
     if (confirming) {
         ConfirmDialog(
             title = "Wirklich einfalten?",
-            message = "Diese Tasks werden zu Subtasks von dieser Gruppe und verschwinden aus " +
+            message = "Diese Aufgaben werden zu Schritten dieser Gruppe und verschwinden aus " +
                 "ihren Listen:\n\n" +
                 selected.joinToString("\n") { "· ${it.name}" } +
                 "\n\nDie Gruppe wird dadurch um " + selected.addedDuration().formatShort() +

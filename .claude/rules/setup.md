@@ -23,7 +23,9 @@ followed by the upstream standing-week review and the existing tutorial:
    as bedtime and wake-up, plus which days are the weekend. Defaults 23:00–07:00 and
    00:00–09:00, weekend Saturday and Sunday. Bedtime and wake-up may not be the same
    hour (that is no night, or a whole day of it); the page says so and ignores it.
-   The first page also retains the optional Google Calendar connection.
+   The first page starts with the optional Google Calendar connection, one sentence on
+   why, then the routines, under three headings: "Feste Grundkonfiguration" (sleep),
+   "Vorschläge" (Sport, Achtsamkeit) and "Eigene Routinen".
 2. **Schedule the week.** `SetupWeekStep` shows Monday–Sunday with an hourly 00–24
    grid. The viewport starts at 06:00; hours scroll vertically and the labelled day
    columns and their header scroll horizontally together. Tapping an empty time
@@ -36,6 +38,20 @@ followed by the upstream standing-week review and the existing tutorial:
    show a warning; warnings do not forbid intentional overlaps. With no routine
    besides sleep chosen there is nothing to place: the page says so and the tap and
    the button do nothing.
+   **Calendar in the week (#30, #31).** When a calendar is connected, `SetupViewModel.enterWeek()`
+   reads the next seven days (today and six after, `setupCalendarLastDay`) through
+   `CalendarSyncService.refresh` and then prefills the template. Appointments are drawn
+   behind everything in their weekday columns, read-only, in the calendar colour with
+   their title. All-day events are a band at the top of their day and never warn. Tapping
+   an appointment hides it for this setup only (`hideEvent`, in memory with the draft;
+   "Alle einblenden" restores it). Hiding deliberately does **not** call
+   `CalendarRepository.ignore()`: that decision is kept for good and would also remove
+   the appointment from the planning steps. A failed read is one sentence above the grid,
+   and the setup goes on without it.
+   **Prefill.** Each selected routine that was never placed gets one hour in the first
+   free hour from 07:00 to 22:00, counting Monday first, free of sleep, placements and
+   visible appointments (`prefilledWeek`). A routine given a slot once is not refilled, so
+   a deleted slot does not return. It is edited like any placement.
 
 ### Sleep: one night per weekday, each correctable
 
@@ -112,6 +128,21 @@ night or any correction is configured.
   `RoutineSetupTest` covers independent same-date occurrences, midnight wrapping,
   deselection, overlap detection, stable identities, the seven provisional nights,
   a single corrected night, sleep overlap and "nothing to place".
+- **Warnings and blocking** (#40). Routine against routine, routine against sleep and
+  routine against a visible appointment (`calendarClashes`) are warnings only. Each line
+  names both blocks with weekday and times and says that you can still finish. Overlapping
+  nights (`overlappingSleep`), a routine without a slot and a gap over 24 hours block
+  "Fertig", and the page names the reason.
+- **Feature suggestions (#13).** `dueFeatureSuggestion` (`FeatureSuggestion.kt`) offers at
+  most one of growthTasks, contracts, rewards, notes: first 7 days after `completedAt`,
+  then one per 7 days, only features that are off and not answered. Answers live in the
+  SharedPreferences `feature_suggestions` (`FeatureSuggestionStore`). "Ausprobieren" enables
+  the feature through `setupRepository.update { withFeature }` (the settings setter's path)
+  and offers its tutorial. "Später" changes only the last-offer day, and "Nicht mehr
+  vorschlagen" only the answers. Nothing is enabled without the tap, and the card is absent
+  from the tutorial dashboard.
+- Tests: `SetupCalendarTest` (appointment spans, clashes, prefill) and `FeatureSuggestionTest`
+  (the schedule, including the 7-day gaps and time zone).
 - The old optional questionnaire pages, summary, `SetupPart` and `skipping` path
   have been removed. `SetupSteps.kt` retains only the shared sleep and planning
   settings pages. `SetupItems.kt` / `SetupSchedule.kt` still serve settings,
@@ -123,6 +154,10 @@ night or any correction is configured.
 midnight; offsets before midnight are negative. A night **belongs to the day it
 ends on**. `UserSetup.weekendNight` is nullable; null means every night is alike.
 `weekendDays` identifies the days it ends on, defaulting to Saturday and Sunday.
+The setup's sleep card and the settings' "Schlaf und Morgen" share one picker
+("Welche Tage sind dein Wochenende?", `UserSetup.withWeekendDays`): any two to six
+days, never none or all seven. Choosing days never changes the mode; a day set
+reads as `WEEKEND` (`nightMode`), and leaving and returning to the rhythm keeps them.
 
 With a separate weekend night, an explicit `nightsByDay` schedule or any correction,
 bed preparation and morning definitions are split by wake day
@@ -138,8 +173,18 @@ wake-up and a reset to the standing pattern. The wake-alarm card says
 
 The after-midnight hint and weekday labels are derived from
 `NightTimes.sleepDays` / `bedPrepDays`: 01:00 on the night into Sunday is Sunday,
-not Saturday. `WeekendNightTest` keeps this boundary, the weekend wake alarm and a
-corrected night's morning, alarm and weekly sleep covered.
+not Saturday, and with custom weekend days the same holds for those days. A bedtime
+of exactly 00:00 gets its own hint (`afterMidnightHint`): midnight starts the wake
+day, so the night belongs to the evening before, and a calendar day runs 00:00 to
+23:59. The app day boundary is unchanged. `WeekendNightTest` keeps these boundaries,
+the weekend wake alarm and a corrected night's morning, alarm and weekly sleep covered.
+
+**A morning of zero minutes has no morning definition** (`UserSetup.hasMorningRoutine`,
+`recurringItems`), so nothing can hold steps. The settings and the Listen tab then
+hide the steps editor and show `MORNING_ROUTINE_OFF_HINT` instead; it is gated on the
+stored setup (`SetupRepository.observeMorningRoutineOn`), the state the repository
+writes to. `saveMorningSteps` returns `false` and writes nothing in that state; the
+settings then report it as a message.
 
 ### Verification
 

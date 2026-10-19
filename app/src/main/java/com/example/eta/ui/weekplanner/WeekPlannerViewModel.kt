@@ -8,7 +8,10 @@ import com.example.eta.data.repository.PlanRepository
 import com.example.eta.data.repository.ScheduleMaintenance
 import com.example.eta.data.repository.SetupRepository
 import com.example.eta.data.repository.WeekPlanningService
+import com.example.eta.data.repository.AddItemResult
 import com.example.eta.data.repository.WeekScope
+import com.example.eta.domain.calendar.DateWindow
+import com.example.eta.domain.chain.isWaitingFollowUp
 import com.example.eta.domain.model.Category
 import com.example.eta.domain.model.Item
 import com.example.eta.domain.model.withExtras
@@ -18,6 +21,9 @@ import com.example.eta.domain.model.Priority
 import com.example.eta.domain.model.Stage
 import com.example.eta.domain.planning.WeekBudget
 import com.example.eta.domain.planning.weekBudget
+import com.example.eta.domain.planning.PullBlock
+import com.example.eta.domain.planning.pullBlockOf
+import com.example.eta.domain.planning.weekPool
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -58,6 +64,11 @@ data class WeekPlannerUiState(
      * `observeFoldCandidates` returns.
      */
     val foldable: List<Item> = emptyList(),
+    /**
+     * Sammelliste ToDos the week may not take on yet, each with the reason. Shown
+     * greyed out instead of being left off the column.
+     */
+    val held: List<Pair<Item, PullBlock>> = emptyList(),
 ) {
     /** New goals only once what was already committed to is worked off. */
     val canTakeOnMore: Boolean get() = unfinished.isEmpty()
@@ -78,7 +89,8 @@ class WeekPlannerViewModel(
      * The stretch being planned, and so the stretch the free hours are counted
      * over. The scheduled phase lays out the week starting tomorrow; a mid-week
      * top-up covers the seven days from today, since that is what the user is
-     * adding to.
+     * adding to. The budget is a seven-day measure (`weekBudget`); the calendar
+     * step reads its own window ([calendarWindow]) up to the next planning day.
      */
     val weekStart: LocalDate = when (scope) {
         WeekScope.SCHEDULED -> weekPlanningService.weekStart()
@@ -94,6 +106,18 @@ class WeekPlannerViewModel(
      */
     private val cycleStart = MutableStateFlow(weekPlanningService.today())
 
+    private val _calendarWindow = MutableStateFlow<DateWindow?>(null)
+
+    /**
+     * The stretch the calendar step reads for this planning: today through the day
+     * before the next weekly planning day. Null until the setup has been read.
+     */
+    val calendarWindow: StateFlow<DateWindow?> = _calendarWindow.asStateFlow()
+
+    init {
+        viewModelScope.launch { _calendarWindow.value = weekPlanningService.calendarWindow() }
+    }
+
     private val _inflation = MutableStateFlow<InflationPreview?>(null)
     val inflation: StateFlow<InflationPreview?> = _inflation.asStateFlow()
 
@@ -101,6 +125,13 @@ class WeekPlannerViewModel(
     val evaluation: StateFlow<String> = _evaluation.asStateFlow()
 
     private val _banned = MutableStateFlow<Int?>(null)
+    private val _notice = MutableStateFlow<String?>(null)
+    val notice: StateFlow<String?> = _notice.asStateFlow()
+
+    fun dismissNotice() {
+        _notice.value = null
+    }
+
     val banned: StateFlow<Int?> = _banned.asStateFlow()
 
     val uiState: StateFlow<WeekPlannerUiState> = combine(
@@ -110,19 +141,18 @@ class WeekPlannerViewModel(
         setupRepository.observe(),
         cycleStart.flatMapLatest { itemRepository.observeUnfinishedWeekGoals(it) },
     ) { collection, weekList, blocks, setup, unfinished ->
+        val pool = weekPool(collection, weekEnd, unfinished.size)
         WeekPlannerUiState(
             unfinished = unfinished,
             weekStart = weekStart,
             weekEnd = weekEnd,
-            // A ToDo whose week has not come round yet cannot be pulled in — and
-            // the Sammelliste now also holds bare recurring notes, which are not
-            // week goals at all: they belong to the standing schedule, and the
-            // evening's concretizing step is what puts them there.
-            collection = collection.filter {
-                it.type == ItemType.TODO && it.isAvailableOn(weekEnd)
-            },
+            // What may be pulled now, and every held-back card with its reason — see
+            // `weekPool`. Nothing is dropped from the screen without saying why.
+            collection = pool.pullable,
+            held = pool.held,
             weekList = weekList,
-            foldable = weekList + collection.filter { it.type == ItemType.TODO },
+            // As `observeFoldCandidates`: a follow-up still waiting is not a card to fold yet.
+            foldable = weekList + collection.filter { it.type == ItemType.TODO && !it.isWaitingFollowUp() },
             budget = weekBudget(setup, blocks, weekList),
         )
     }.stateIn(
@@ -158,7 +188,16 @@ class WeekPlannerViewModel(
         _evaluation.update { text }
     }
 
+    /**
+     * Takes a Sammelliste ToDo into the week.
+     *
+     * The gate is the phase's own rule, so it is checked here as well as drawn on
+     * screen: a tap on a card that was offered a frame ago must not take in what
+     * the week may not hold — an unlock day after the week's end, or goals of an
+     * earlier cycle still lying unplanned.
+     */
     fun pullIntoWeek(item: Item) {
+        if (pullBlockOf(item, weekEnd, uiState.value.unfinished.size) != null) return
         viewModelScope.launch { itemRepository.takeIntoWeek(item, cycleStart.value) }
     }
 
@@ -183,7 +222,7 @@ class WeekPlannerViewModel(
     fun addToCollection(name: String, attributes: TodoAttributes, onDone: () -> Unit) {
         viewModelScope.launch {
             val now = clock.now()
-            itemRepository.add(
+            val result = itemRepository.add(
                 Item.newTodo(
                     name = name,
                     category = attributes.category,
@@ -199,8 +238,16 @@ class WeekPlannerViewModel(
                 ).withExtras(attributes.extras),
                 subtasks = attributes.subtasks,
                 folded = attributes.foldedItemIds,
+                followUps = attributes.followUps,
             )
-            onDone()
+            when (result) {
+                is AddItemResult.Added -> onDone()
+                is AddItemResult.BlockedByLock -> {
+                    val blockedName = result.lockedName ?: name
+                    _notice.value = "»$blockedName« steht auf der Sperrliste. " +
+                        "Die Aufgabe und ihre Folgeaufgaben wurden nicht gespeichert."
+                }
+            }
         }
     }
 

@@ -32,6 +32,8 @@ import com.example.eta.domain.recurrence.RecurringGroup
 import com.example.eta.domain.recurrence.groupRecurring
 import com.example.eta.domain.setup.UserSetup
 import com.example.eta.domain.staging.daysUntilBan
+import com.example.eta.domain.chain.isOfferedFollowUp
+import com.example.eta.domain.chain.isWaitingFollowUp
 import com.example.eta.ui.attributes.RecurringAttributes
 import com.example.eta.ui.attributes.TodoAttributes
 import kotlin.time.Clock
@@ -57,6 +59,7 @@ import kotlinx.datetime.todayIn
 data class CollectionEntry(
     val item: Item,
     val daysLeft: Int?,
+    val predecessorName: String? = null,
 )
 
 /** A banned ToDo and the day it may be written down again. */
@@ -83,6 +86,8 @@ data class SmartListsUiState(
      * that finishing one happens with the free hours of the week in view.
      */
     val incompleteRecurring: List<CollectionEntry> = emptyList(),
+    /** Follow-ups their predecessor has released: due now, offered for the week. */
+    val offered: List<Item> = emptyList(),
     val week: List<Item> = emptyList(),
     val todayBlocks: List<BlockWithItem> = emptyList(),
     val tomorrowBlocks: List<BlockWithItem> = emptyList(),
@@ -140,10 +145,17 @@ class SmartListsViewModel(
         itemRepository.observeStage(Stage.LOCKED),
         itemRepository.observeStage(Stage.COLLECTION),
         itemRepository.observeStage(Stage.WEEK),
-    ) { locked, collection, week ->
+        itemRepository.observeFollowUpPredecessorNames(),
+    ) { locked, collection, week, predecessors ->
         Triple(
             locked.map { LockedEntry(it, it.lockedUntil?.toLocalDateTime(timeZone)?.date) },
-            collection.map { CollectionEntry(it, it.daysUntilBan(clock.now(), timeZone)) },
+            collection.map {
+                CollectionEntry(
+                    item = it,
+                    daysLeft = it.daysUntilBan(clock.now(), timeZone),
+                    predecessorName = it.followUpOfId?.let(predecessors::get),
+                )
+            },
             week,
         )
     }
@@ -177,6 +189,14 @@ class SmartListsViewModel(
         .map { it.drafts() }
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
 
+    /** Whether there is a morning routine to hold steps; the dialog shows the editor only then. */
+    val morningRoutineOn: StateFlow<Boolean> = setupRepository.observeMorningRoutineOn()
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
+
+    /**
+     * Writes the steps. The editor is only offered while a routine exists, so the
+     * false answer of the repository is not reachable from here.
+     */
     fun saveMorningSteps(steps: List<SubtaskDraft>) {
         viewModelScope.launch { setupRepository.saveMorningSteps(steps) }
     }
@@ -204,6 +224,7 @@ class SmartListsViewModel(
             locked = staged.first,
             collection = staged.second.filter { it.item.type != ItemType.RECURRING },
             incompleteRecurring = staged.second.filter { it.item.type == ItemType.RECURRING },
+            offered = staged.second.map { it.item }.filter { it.isOfferedFollowUp() },
             week = staged.third,
             todayBlocks = dayLists.todayBlocks,
             tomorrowBlocks = dayLists.tomorrowBlocks,
@@ -238,7 +259,13 @@ class SmartListsViewModel(
      * in the Sammelliste, and the notice says why. A shortcut to the week that
      * skipped the gate would make the gate optional.
      */
-    fun createTodo(name: String, note: String?, attributes: TodoAttributes, intoWeek: Boolean) {
+    fun createTodo(
+        name: String,
+        note: String?,
+        attributes: TodoAttributes,
+        intoWeek: Boolean,
+        onAdded: () -> Unit = {},
+    ) {
         viewModelScope.launch {
             val now = clock.now()
             val result = itemRepository.add(
@@ -258,26 +285,50 @@ class SmartListsViewModel(
                 ).withExtras(attributes.extras),
                 subtasks = attributes.subtasks,
                 folded = attributes.foldedItemIds,
+                followUps = attributes.followUps,
             )
             when (result) {
                 is AddItemResult.BlockedByLock -> {
+                    val blockedName = result.lockedName ?: name
                     val until = result.lockedUntil.toLocalDateTime(timeZone).date.formatLong()
-                    _notice.value = "»$name« steht auf der Sperrliste und kann erst ab " +
-                        "$until wieder notiert werden."
+                    _notice.value = "»$blockedName« steht auf der Sperrliste und kann erst ab " +
+                        "$until wieder notiert werden. Die Aufgabe und ihre Folgeaufgaben wurden nicht gespeichert."
                 }
 
-                is AddItemResult.Added -> if (intoWeek) {
-                    val cycleStart = weekPlanningService.cycleStart()
-                    val owed = itemRepository.observeUnfinishedWeekGoals(cycleStart).first()
-                    if (owed.isEmpty()) {
-                        itemRepository.takeIntoWeek(result.item, cycleStart)
-                    } else {
-                        _notice.value = "»$name« liegt in der Sammelliste. In der Wochenliste " +
-                            (if (owed.size == 1) "wartet noch ein Ziel" else "warten noch ${owed.size} Ziele") +
-                            " aus der letzten Woche — erst wenn sie abgearbeitet oder " +
-                            "zurückgegeben sind, nimmt die Woche Neues auf."
+                is AddItemResult.Added -> {
+                    onAdded()
+                    if (intoWeek) {
+                        val cycleStart = weekPlanningService.cycleStart()
+                        val owed = itemRepository.observeUnfinishedWeekGoals(cycleStart).first()
+                        if (owed.isEmpty()) {
+                            itemRepository.takeIntoWeek(result.item, cycleStart)
+                        } else {
+                            _notice.value = "»$name« liegt in der Sammelliste. In der Wochenliste " +
+                                (if (owed.size == 1) "wartet noch ein Ziel" else "warten noch ${owed.size} Ziele") +
+                                " aus der letzten Woche — erst wenn sie abgearbeitet oder " +
+                                "zurückgegeben sind, nimmt die Woche Neues auf."
+                        }
                     }
                 }
+            }
+        }
+    }
+
+    /**
+     * Takes an offered follow-up into the week — the step that is due now. Same gate
+     * as every other way into the week: while goals of an earlier cycle are open, it
+     * stays in the Sammelliste and the notice says why.
+     */
+    fun takeOfferedIntoWeek(item: Item) {
+        viewModelScope.launch {
+            val cycleStart = weekPlanningService.cycleStart()
+            val owed = itemRepository.observeUnfinishedWeekGoals(cycleStart).first()
+            if (owed.isEmpty()) {
+                itemRepository.takeIntoWeek(item, cycleStart)
+            } else {
+                _notice.value = "»${item.name}« ist jetzt dran, bleibt aber in der Sammelliste. " +
+                    (if (owed.size == 1) "Erst das offene Ziel" else "Erst die ${owed.size} offenen Ziele") +
+                    " aus der letzten Woche verplanen oder zurückgeben."
             }
         }
     }
@@ -297,8 +348,22 @@ class SmartListsViewModel(
      * the shared form cannot express "no category", so an entry that was
      * `unvollständig` before is `isConcretized` after.
      */
-    fun saveTodo(item: Item, name: String, note: String?, attributes: TodoAttributes) {
+    fun saveTodo(
+        item: Item,
+        name: String,
+        note: String?,
+        attributes: TodoAttributes,
+        onSaved: () -> Unit = {},
+    ) {
         viewModelScope.launch {
+            // Asked before anything is saved: a refused step must not leave the other
+            // edits half written, and the form stays open with what was typed.
+            itemRepository.lockedFollowUp(attributes.followUps)?.let { blocked ->
+                val until = blocked.lockedUntil.toLocalDateTime(timeZone).date.formatLong()
+                _notice.value = "»${blocked.lockedName}« steht auf der Sperrliste und kann erst ab " +
+                    "$until wieder notiert werden. Die Änderungen wurden nicht gespeichert."
+                return@launch
+            }
             val now = clock.now()
             val renamed = if (name != item.name) item.renamed(name, now) else item
             // The evening step's own call, so a card finished here is finished by
@@ -317,6 +382,11 @@ class SmartListsViewModel(
                 subtasks = attributes.subtasks,
                 folded = attributes.foldedItemIds,
             )
+            // After the save, read fresh by id: the steps inherit the attributes just saved.
+            if (attributes.followUps.any { it.isNotBlank() }) {
+                itemRepository.appendFollowUps(item.id, attributes.followUps)
+            }
+            onSaved()
         }
     }
 
@@ -405,6 +475,9 @@ class SmartListsViewModel(
      * of the day in the evening — the dialog says so before it happens.
      */
     fun completeEarly(item: Item, category: Category, duration: Duration) {
+        // A follow-up waiting for its predecessor cannot be done ahead of it: that
+        // would release the next one while the first is still open.
+        if (item.isWaitingFollowUp()) return
         viewModelScope.launch {
             val now = clock.now()
             // Written back before anything else: for a card that was never filled
@@ -439,6 +512,7 @@ class SmartListsViewModel(
                 updatedAt = now,
             )
             planRepository.addBlock(block)
+            planRepository.finishFollowUpsOf(item.id)
             // What the evening would have done anyway: a one-shot ToDo whose
             // occurrence is done leaves the active lists.
             itemRepository.retireCompletedTodos(today)

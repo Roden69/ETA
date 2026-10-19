@@ -96,6 +96,12 @@ fun DayTimeline(
      */
     freed: List<BlockWithItem> = emptyList(),
     /**
+     * Appointments the calendar still offers, drawn at their hours so the day shows
+     * what is already taken. Not blocks: they cannot be moved, edited or ticked, and
+     * they sit on top of the blocks, so a clash is seen where it happens.
+     */
+    occupied: List<OccupiedSpan> = emptyList(),
+    /**
      * The steps inside each card, by item id, and which of them this day has ticked
      * off, by block id.
      *
@@ -313,6 +319,10 @@ fun DayTimeline(
             )
         }
 
+        // Over the blocks, translucent: a clash is only a clash where it is seen on
+        // top of the block it overlaps.
+        occupied.forEach { span -> OccupiedStretch(span = span, minutePx = minutePx) }
+
         // Over the blocks: it is what is being worked on, and it may be pushed
         // across something that already stands there on its way to a free hour.
         draft?.let { DraftBlock(draft = it, minutePx = minutePx, onChange = onDraftChange) }
@@ -348,7 +358,7 @@ fun DayTimeline(
 @Composable
 private fun MarginContainer(entry: BlockWithItem, minutePx: Float, offsetPx: Float = 0f) {
     val block = entry.block
-    val accent = if (block.origin == BlockOrigin.CALENDAR_IMPORT) {
+    val accent = if (block.origin.isCalendarEvent) {
         EtaTheme.colors.calendar
     } else {
         colorOf(entry.item)
@@ -442,7 +452,7 @@ private fun NameBubble(
     checkedIds: Set<String> = emptySet(),
 ) {
     val block = entry.block
-    val accent = if (block.origin == BlockOrigin.CALENDAR_IMPORT) {
+    val accent = if (block.origin.isCalendarEvent) {
         EtaTheme.colors.calendar
     } else {
         colorOf(entry.item)
@@ -514,6 +524,44 @@ private fun NameBubble(
                 }
             }
         }
+    }
+}
+
+/**
+ * An appointment the calendar still offers, at its hours on the day.
+ *
+ * [clashes] says whether it lands on planned time: the stretch is then drawn in
+ * the danger colour rather than the calendar's ochre.
+ */
+data class OccupiedSpan(
+    val label: String,
+    val startMinute: Int,
+    val endMinute: Int,
+    val clashes: Boolean,
+)
+
+@Composable
+private fun OccupiedStretch(span: OccupiedSpan, minutePx: Float) {
+    val color = if (span.clashes) EtaTheme.colors.danger else EtaTheme.colors.calendar
+    val height = (span.endMinute - span.startMinute) * minutePx
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(start = GUTTER_WIDTH, end = EtaTheme.spacing.sm)
+            .offsetMinutes(span.startMinute, minutePx)
+            .height(with(LocalDensity.current) { height.coerceAtLeast(0f).toDp() })
+            .background(color.copy(alpha = 0.12f), EtaTheme.shapes.draggedBlock)
+            .border(1.dp, color.copy(alpha = 0.7f), EtaTheme.shapes.draggedBlock)
+            .padding(horizontal = EtaTheme.spacing.sm),
+        contentAlignment = Alignment.TopStart,
+    ) {
+        EtaText(
+            text = if (span.clashes) "Termin · überschneidet sich: ${span.label}" else "Termin: ${span.label}",
+            style = EtaTheme.typography.caption,
+            color = color,
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+        )
     }
 }
 
@@ -650,7 +698,7 @@ private fun TimelineBlock(
     val currentDragPreview by rememberUpdatedState(onDragPreview)
     val currentMoved by rememberUpdatedState(onMoved)
     val block = entry.block
-    val imported = block.origin == BlockOrigin.CALENDAR_IMPORT
+    val imported = block.origin.isCalendarEvent
 
     // Called off. The row has to stay — expansion runs forward from today and
     // would lay a deleted occurrence down again — so "Absagen" can only be a
@@ -724,6 +772,13 @@ private fun TimelineBlock(
     // tasks that share an hour on alternating weeks can both be read where the
     // standing week draws them on top of each other.
     val parity = (entry.item.recurrenceRule as? RecurrenceRule.Biweekly)?.parity
+    // The task's steps: listed in the block when every one fits the room below the
+    // name and time; otherwise counted, and the bubble that a tap opens lists them.
+    val counted = entry.item.quantityLabel() != null && height > 58.dp
+    val stepsListed = steps.isNotEmpty() &&
+        height > (if (counted) 76.dp else 58.dp) &&
+        ((height - (if (counted) 62.dp else 44.dp)) / 15.dp).toInt() >= steps.size
+    val stepCount = "${steps.size} Schritte".takeIf { steps.isNotEmpty() && !stepsListed }
 
     Box(
         modifier = Modifier
@@ -830,7 +885,7 @@ private fun TimelineBlock(
             ),
         ) {
             EtaText(
-                text = entry.item.name,
+                text = stepCount?.takeIf { height <= 34.dp }?.let { "${entry.item.name} · $it" } ?: entry.item.name,
                 style = EtaTheme.typography.bodyStrong,
                 color = if (cancelled) EtaTheme.colors.textMuted else EtaTheme.colors.textPrimary,
                 textDecoration = if (cancelled) TextDecoration.LineThrough else null,
@@ -858,6 +913,7 @@ private fun TimelineBlock(
                                 block.effectiveDuration.formatShort()
                             },
                         )
+                        stepCount?.let { append(" · $it") }
                         if (imported) append(" · Kalender")
                         if (cancelled) append(" · abgesagt")
                         else if (block.isCompleted) append(" · erledigt")
@@ -874,12 +930,11 @@ private fun TimelineBlock(
             // where the day's progress inside a task is visible at all.
             // The count comes before the steps and the note: it is the one number
             // the task is done with today, and it takes the first spare line.
-            val counted = entry.item.quantityLabel() != null && height > 58.dp
             if (counted) QuantityText(entry.item)
-            if (steps.isNotEmpty() && height > (if (counted) 76.dp else 58.dp)) {
-                val room = ((height - (if (counted) 62.dp else 44.dp)) / 15.dp).toInt().coerceAtLeast(1)
-                val shown = steps.sortedBy { it.position }.take(room)
-                shown.forEach { step ->
+            // Listed only when every step fits; otherwise the count stands in the
+            // time line, and a tap opens the bubble that lists them all.
+            if (stepsListed) {
+                steps.sortedBy { it.position }.forEach { step ->
                     EtaText(
                         text = stepLabel(step, step.id in checkedIds),
                         style = EtaTheme.typography.caption,
@@ -890,14 +945,6 @@ private fun TimelineBlock(
                         },
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                    )
-                }
-                if (steps.size > shown.size) {
-                    EtaText(
-                        text = "+${steps.size - shown.size} weitere",
-                        style = EtaTheme.typography.caption,
-                        color = EtaTheme.colors.textMuted,
-                        maxLines = 1,
                     )
                 }
             }

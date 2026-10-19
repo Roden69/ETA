@@ -19,10 +19,11 @@ import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
-import com.example.eta.alarm.AudioMode
 import com.example.eta.alarm.ClockApp
 import com.example.eta.alarm.ClockAppAlarms
+import com.example.eta.domain.audio.AudioMode
 import com.example.eta.domain.setup.clockAlarms
+import com.example.eta.ui.subtasks.MORNING_ROUTINE_OFF_HINT
 import com.example.eta.ui.components.EtaSwatch
 import com.example.eta.ui.components.EtaIcon
 import com.example.eta.ui.components.EtaIconImage
@@ -60,6 +61,7 @@ import com.example.eta.alarm.AlarmSettingsIntents
 import com.example.eta.alarm.EtaSound
 import com.example.eta.alarm.EtaSpeech
 import com.example.eta.domain.planning.TaskAnnouncement
+import com.example.eta.domain.planning.WakeRoute
 import androidx.compose.runtime.rememberCoroutineScope
 import kotlinx.coroutines.launch
 import com.example.eta.alarm.alarmReadiness
@@ -152,6 +154,9 @@ fun SettingsScreen(
     val phraseAccepted by viewModel.phraseAccepted.collectAsStateWithLifecycle()
     val alarms by viewModel.alarms.collectAsStateWithLifecycle()
     val morningSteps by viewModel.morningSteps.collectAsStateWithLifecycle()
+    val morningRoutineOn by viewModel.morningRoutineOn.collectAsStateWithLifecycle()
+    val wakeRoute by viewModel.wakeRoute.collectAsStateWithLifecycle()
+    val windDown by viewModel.windDown.collectAsStateWithLifecycle()
 
     val exportLauncher = rememberLauncherForActivityResult(
         contract = ActivityResultContracts.CreateDocument("application/zip"),
@@ -270,11 +275,16 @@ fun SettingsScreen(
                                     color = EtaTheme.colors.textMuted,
                                 )
                                 SleepStep(setup, viewModel::update)
-                                MorningRoutineBox(morningSteps, viewModel::saveMorningSteps)
+                                MorningRoutineBox(
+                                    routineOn = morningRoutineOn,
+                                    steps = morningSteps,
+                                    onSave = viewModel::saveMorningSteps,
+                                )
+                                WindDownBox(windDown, viewModel::setWindDown)
                             }
 
                             SettingsPage.WAKE -> {
-                                WakeAlarmBox(setup, viewModel::update)
+                                WakeAlarmBox(setup, viewModel::update, wakeRoute, viewModel::chooseWakeRoute)
                                 ClockAlarmsBox(setup = setup, dirty = dirty)
                             }
                             SettingsPage.STILL_ACTIVE -> StillActiveBox(setup, viewModel::update)
@@ -764,9 +774,9 @@ private fun AudioModeBox() {
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = "Audio", style = EtaTheme.typography.heading)
             EtaText(
-                text = "Wie Eta sich meldet: bei Aufgaben, Pomodoro und Timer, bei den " +
-                    "Planungsphasen und bei Erinnerungen. Gilt sofort. Der Weckruf am " +
-                    "Morgen klingelt immer.",
+                text = "Gilt für alles, was Eta meldet: Aufgabenbeginn und -ende, Pomodoro, " +
+                    "Nachfragen, Planungsphasen und Erinnerungen. Gilt sofort. Der Weckruf " +
+                    "ist davon getrennt: Er hat keinen eigenen Modus und klingelt immer.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
             )
@@ -1096,8 +1106,8 @@ private fun InflationBox(setup: UserSetup, onChange: OnSetupChange) {
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = "Wertverfall", style = EtaTheme.typography.heading)
             EtaText(
-                text = "Einmal pro Woche verlieren gesparte Punkte 30 %. Der Abzug wird beim " +
-                    "ersten Öffnen nach diesem Tag gebucht — auch ohne Wochenplanung.",
+                text = "Einmal pro Woche verlierst du 30 % deiner gesparten Punkte. Der Abzug wird " +
+                    "beim ersten Öffnen nach diesem Tag gebucht, auch ohne Wochenplanung.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
             )
@@ -1290,10 +1300,11 @@ private fun CatchUpBox(
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = "Offene Tage", style = EtaTheme.typography.heading)
             EtaText(
-                text = "${openDays.size} Tage wurden nie abgerechnet. Das kostet die Serie" +
+                text = "${openDays.size} ältere Tage wurden nie abgerechnet. Das kostet die Serie" +
                     (if (LocalPointsVisible.current) " und die Punkte dieser Tage" else "") +
-                    " — so ist es gedacht. Nachtragen ist nur " +
-                    "vorgesehen, wenn technische Gründe im Weg standen.",
+                    " — so ist es gedacht. Die letzten sieben Tage holst du direkt auf dem " +
+                    "Startbildschirm nach. Ältere nachtragen ist nur vorgesehen, wenn technische " +
+                    "Gründe im Weg standen.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
             )
@@ -1401,24 +1412,36 @@ private fun MessageBox(message: SettingsMessage, onDismiss: () -> Unit) {
  * set. Saved at once, unlike the answers around it: the steps are not part of
  * the draft, and a list edited in a dialog with its own "Sichern" that then
  * waited for a second one further down would lose edits.
+ *
+ * Without a routine — a stored duration of zero — there is no editor: steps
+ * typed into one would have nothing to be saved onto.
  */
 @Composable
 private fun MorningRoutineBox(
+    routineOn: Boolean,
     steps: List<SubtaskDraft>,
     onSave: (List<SubtaskDraft>) -> Unit,
 ) {
     EtaSurface(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = "Morgenroutine", style = EtaTheme.typography.heading)
-            EtaText(
-                text = "Beginnt mit dem Aufstehen und dauert so lange, wie oben unter " +
-                    "„Morgenroutine“ steht. Die Schritte laufen im Routine-Modus: " +
-                    "„Gerade“ zeigt immer nur den nächsten, Abhaken hält die Uhrzeit " +
-                    "fest. Änderungen an den Schritten gelten sofort.",
-                style = EtaTheme.typography.caption,
-                color = EtaTheme.colors.textMuted,
-            )
-            MorningRoutineSteps(steps = steps, onSave = onSave)
+            if (routineOn) {
+                EtaText(
+                    text = "Beginnt mit dem Aufstehen und dauert so lange, wie oben unter " +
+                        "„Morgenroutine“ steht. Die Schritte laufen im Routine-Modus: " +
+                        "„Gerade“ zeigt immer nur den nächsten, Abhaken hält die Uhrzeit " +
+                        "fest. Änderungen an den Schritten gelten sofort.",
+                    style = EtaTheme.typography.caption,
+                    color = EtaTheme.colors.textMuted,
+                )
+                MorningRoutineSteps(steps = steps, onSave = onSave)
+            } else {
+                EtaText(
+                    text = MORNING_ROUTINE_OFF_HINT,
+                    style = EtaTheme.typography.caption,
+                    color = EtaTheme.colors.textMuted,
+                )
+            }
         }
     }
 }
@@ -1537,7 +1560,7 @@ private fun DebugBox(onReset: () -> Unit) {
  * because they answered a questionnaire has overstepped.
  */
 @Composable
-private fun WakeAlarmBox(setup: UserSetup, onChange: OnSetupChange) {
+private fun WakeAlarmBox(setup: UserSetup, onChange: OnSetupChange, route: WakeRoute, onRoute: (WakeRoute) -> Unit) {
     EtaSurface(modifier = Modifier.fillMaxWidth()) {
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = "Weckruf", style = EtaTheme.typography.heading)
@@ -1572,6 +1595,80 @@ private fun WakeAlarmBox(setup: UserSetup, onChange: OnSetupChange) {
                 ),
                 selected = setup.wakeAlarm,
                 onSelect = { on -> onChange { it.copy(wakeAlarm = on) } },
+            )
+            if (setup.wakeAlarm) {
+                WakeRouteBox(route = route, onRoute = onRoute)
+            }
+        }
+    }
+}
+
+/**
+ * Who rings the wake alarm: Eta, or the clock app the user already has.
+ *
+ * Only the choice is kept here. With the clock app, Eta arms nothing; the evening
+ * asks whether to set the alarm there instead. The clock app itself is chosen in the
+ * "Wecker in der Uhr-App" card below.
+ */
+@Composable
+private fun WakeRouteBox(route: WakeRoute, onRoute: (WakeRoute) -> Unit) {
+    val context = LocalContext.current
+    val clockApp = remember { ClockAppAlarms.chosen(context) }
+    val clockAppReady = remember { ClockAppAlarms.available(context).contains(clockApp) }
+    Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
+        EtaField(label = "Wecken über") {
+            EtaChoice(
+                options = listOf(WakeRoute.ETA to "Eta", WakeRoute.CLOCK_APP to "Uhr-App"),
+                selected = route,
+                onSelect = onRoute,
+            )
+        }
+        when {
+            route == WakeRoute.ETA -> EtaText(
+                text = "Eta klingelt selbst.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textMuted,
+            )
+
+            clockAppReady -> EtaText(
+                text = "Eta klingelt dann nicht. Nach dem Tagesabschluss fragt Eta, ob der Wecker " +
+                    "für morgen in der gewählten Uhr-App gestellt werden soll. Ohne diese " +
+                    "Bestätigung steht morgens kein Wecker.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textMuted,
+            )
+
+            else -> EtaText(
+                text = "Die gewählte Uhr-App (${clockApp.label}) ist auf diesem Handy nicht da. Eta klingelt deshalb selbst.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.warning,
+            )
+        }
+    }
+}
+
+/**
+ * The calm hint after the day closing: put the phone away, let the evening end.
+ *
+ * A hint and nothing more. Nothing is locked or blocked, and the evening's own card
+ * can switch it off as well.
+ */
+@Composable
+private fun WindDownBox(enabled: Boolean, onChange: (Boolean) -> Unit) {
+    EtaSurface(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
+            EtaText(text = "Abendruhe-Hinweis", style = EtaTheme.typography.heading)
+            EtaText(
+                text = "Nach dem Tagesabschluss zeigt Eta einen ruhigen Hinweis: das Handy weglegen " +
+                    "und den Abend ausklingen lassen. Ist eine Abendroutine eingerichtet, steht sie " +
+                    "dabei. Eta sperrt nichts.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textMuted,
+            )
+            EtaChoice(
+                options = listOf(true to "An", false to "Aus"),
+                selected = enabled,
+                onSelect = onChange,
             )
         }
     }
@@ -1635,9 +1732,11 @@ private fun AlarmBox(alarms: AlarmSchedule) {
 
             EtaField(
                 label = "Bei „Nicht stören“",
-                hint = "Gilt sofort, für Töne und Ansagen. Bei „Lautlos komplett“ " +
-                    "schaltet das Handy auch Wecker stumm — daran kann Eta nichts ändern. " +
-                    "Der Weckruf klingelt ohnehin immer.",
+                hint = "Standard ist „Still bleiben“. Gilt sofort, für Töne und Ansagen. " +
+                    "Mit „Trotzdem spielen“ klingen sie auch bei „Nicht stören“; ist das " +
+                    "Handy stumm oder auf Vibration, vibriert Eta stattdessen. Bei „Lautlos " +
+                    "komplett“ schaltet das Handy auch Wecker stumm — daran kann Eta nichts " +
+                    "ändern. Der Weckruf klingelt ohnehin immer.",
             ) {
                 EtaChoice(
                     options = listOf(false to "Still bleiben", true to "Trotzdem spielen"),

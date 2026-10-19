@@ -158,7 +158,7 @@ sealed interface PlanRelief {
  */
 fun planRelief(existing: List<PlannedBlock>, wanted: PlacementSpan): List<PlanRelief> =
     wanted.collisions(existing).map { block ->
-        if (block.origin == BlockOrigin.CALENDAR_IMPORT) return@map PlanRelief.Kept(block)
+        if (block.origin.isCalendarEvent) return@map PlanRelief.Kept(block)
 
         val front = block.shortenedBefore(wanted.containerStart)
         val back = block.trimmedAfter(wanted.containerEnd)

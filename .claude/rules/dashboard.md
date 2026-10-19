@@ -40,10 +40,21 @@ either opens `PomodoroDialog`.
 "Dashboard", and Heute, Morgen and Woche are tabs across its top (*Step 39*). What
 follows describes that page; cross-references still call it *The Heute tab*.
 
+Each page keeps its scroll position while another page is in front. A page leaves the
+composition when it is not shown, so `DashboardScreen` wraps the shown page in a
+`rememberSaveableStateHolder().SaveableStateProvider(page.name)` (issue #7). System
+back on "Morgen" or "Woche" goes to "Heute" first (`BackHandler`, issue #25); on
+"Heute" it leaves the tab as before.
+
 Top to bottom: box 0 ("Kritisch"), the "now" box, the points box, the deadlines box
 when there is one, Quick-Add, "Heute anstehend", and `PhaseBox` — at the top from the
 minute the phase is owed, at the bottom before that. The Überschneidung box goes
 above everything when it has something to say.
+
+**The catch-up card sits under the header** whenever a day of the last week has planned
+blocks and no settlement ("Tagesabschluss vom … nachholen"). It opens the reevaluation
+for that day, oldest first; see *Making up a missed evening* in `streak-reevaluation.md`.
+It is not composed in the tutorial's sandbox.
 
 - **"Kritisch" means about to be banned onto the Sperrliste**, not about to miss a
   deadline. `Konzept.md` attaches that sentence to the one-month rule with an arrow,
@@ -102,4 +113,13 @@ above everything when it has something to say.
   per day, so the same two tasks colliding tomorrow are a different pair and ask
   again. Persisted rather than held in the screen, because a warning that came back
   on every process death is one that cannot be answered.
+
+### Feature suggestion card (#13)
+
+Once the setup has been completed for seven days, the Heute tab shows at most one
+suggestion of an optional feature, decided by `dueFeatureSuggestion` (`domain/setup/FeatureSuggestion.kt`).
+Its answers are kept in the SharedPreferences `feature_suggestions`
+(`ui/setup/FeatureSuggestionStore.kt`). The card is passed to `DashboardScreen` only by the
+real dashboard, so the tutorial never shows it. Nothing is enabled without "Ausprobieren".
+See `setup.md` for the schedule rules.
 

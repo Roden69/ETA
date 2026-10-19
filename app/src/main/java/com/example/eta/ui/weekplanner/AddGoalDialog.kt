@@ -78,6 +78,7 @@ fun AddGoalDialog(
                     value = attributes,
                     onChange = { attributes = it },
                     today = today,
+                    offerFollowUps = true,
                     groupName = name,
                     onGroupName = { name = it },
                     foldCandidates = foldCandidates,

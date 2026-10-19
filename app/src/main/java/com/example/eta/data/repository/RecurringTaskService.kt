@@ -14,6 +14,7 @@ import com.example.eta.domain.recurrence.Rhythm
 import com.example.eta.domain.subtask.SubtaskDraft
 import com.example.eta.domain.recurrence.reassignRows
 import com.example.eta.domain.recurrence.rescheduleRows
+import com.example.eta.domain.recurrence.weekdaysOf
 import com.example.eta.domain.recurrence.rulesWithTimes
 import kotlin.time.Clock
 import kotlin.time.Duration
@@ -163,8 +164,36 @@ class RecurringTaskService(
 
         itemDao.upsertAll(written + retired)
         edit.subtasks?.let { drafts -> written.forEach { subtaskRepository.save(it.id, drafts) } }
-        itemDao.retireFolded(edit.folded, now)
+        written.firstOrNull()?.let { itemDao.retireFolded(edit.folded, now, it.id) }
         relayOccurrences((written + retired).map { it.id })
+    }
+
+    /**
+     * Writes an edited group for **one** of its weekdays only — "Nur Dienstag".
+     *
+     * The day is split off first, the way a drag splits a daily row
+     * ([rescheduleRows]): a daily task standing on seven days becomes seven weekly
+     * rows, the day keeping its place and the others copies that carry the steps.
+     * The day's own row is then written as [saveGroup] writes a group, for that one
+     * weekday. The other weekdays keep their attributes.
+     */
+    suspend fun saveWeekday(ids: Collection<String>, day: DayOfWeek, edit: RecurringEdit) {
+        val existing = ids.mapNotNull { itemDao.findById(it) }.filter { it.completedAt == null }
+        val own = existing.firstOrNull { day in it.recurrenceRule?.weekdaysOf().orEmpty() } ?: return
+        val start = own.startTime ?: return
+        val length = own.estimatedDuration ?: return
+        val (rows, copiedFrom) = rescheduleRows(existing, setOf(day), start, length, clock.now()) {
+            UUID.randomUUID().toString()
+        }
+        if (rows.isEmpty()) return
+
+        itemDao.upsertAll(rows)
+        copiedFrom.forEach { (copyId, sourceId) ->
+            subtaskRepository.copy(subtaskRepository.forItem(sourceId), copyId)
+        }
+        val dayRow = rows.first { day in it.recurrenceRule?.weekdaysOf().orEmpty() }
+        saveGroup(listOf(dayRow.id), edit.copy(weekdays = setOf(day)))
+        relayOccurrences(rows.map { it.id })
     }
 
     /**
@@ -211,7 +240,7 @@ class RecurringTaskService(
         }
         itemDao.upsertAll(rows)
         edit.subtasks?.let { drafts -> rows.forEach { subtaskRepository.save(it.id, drafts) } }
-        itemDao.retireFolded(edit.folded, now)
+        rows.firstOrNull()?.let { itemDao.retireFolded(edit.folded, now, it.id) }
         // Laid down at once: a task that exists without a single occurrence while
         // the user is looking at the screen that just created it reads as broken.
         scheduleMaintenance.topUp()

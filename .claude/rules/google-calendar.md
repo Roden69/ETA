@@ -163,7 +163,90 @@ has synced.
 **What the Google side needs, once:** a Cloud project with the **Calendar API**
 enabled, `.../auth/calendar.readonly` on the OAuth consent screen, the account on the
 **tester** list while the project is in testing, and an **Android** OAuth client
-carrying this app's package name (`com.example.erik_iteration_2`) and the SHA-1 of the
-keystore it is signed with. None of that is configured in the repository, which is the
-point of `AuthorizationClient`.
+carrying this app's package name (`com.example.erik_iteration_2`, or
+`com.example.erik_iteration_2.fork` for the fork build) and the SHA-1 of the keystore
+it is signed with. One client per package and SHA-1 pair. None of that is configured
+in the repository, which is the point of `AuthorizationClient`. The step-by-step
+guide for own builds is `docs/calendar-oauth.md`. When authorization fails,
+`GoogleAuth` shows a German hint (package, signature, tester) and the original
+Play Services message.
 
+### Calendar in the first setup (#30, #31)
+
+The first page of the setup offers the connection before the routines. Once the user
+reaches the week step, `SetupViewModel.enterWeek()` calls `CalendarSyncService.refresh`
+for today and the six days after it, then reads the undecided events for that range
+(`pendingFor`). Those events are drawn read-only behind the setup week. Setup-local
+hiding is an in-memory set in `SetupViewModel`, not `CalendarRepository.ignore()`,
+because `ignore()` is a permanent decision that would also drop the event from the
+day and week planning steps. The setup never writes to Google, and a failed read only
+shows a sentence.
+
+### Background refresh, time blockers, series and conflicts (#15, #16, #17, #32, #33, #34)
+
+- **The planning window** (`domain/calendar/PlanningWindow.kt`, `planningWindow`) is
+  today through the day before the next weekly planning day, both included; the
+  next planning day is the first one strictly after today, so on the planning day
+  itself the window covers the seven days it opens. The week planning and "Woche
+  ergänzen" read exactly this window and show its dates. Dated appointments are
+  only ever read into it, never moved.
+- **Background refresh** (`alarm/CalendarRefreshAlarm.kt`): one chained
+  `setWindow` alarm (request code 1300, about every 60 min, 10 min window, no
+  exact-alarm permission, no WorkManager) while an account is connected. Armed on
+  app start (`EtaApplication`, `RootViewModel`), after boot and whenever the
+  connection changes in the calendar box (connect, consent, disconnect). The due
+  time is kept with each arming (SharedPreferences `calendar_refresh`): a standing
+  alarm is not pushed back, but one whose due time has passed — a run killed
+  before it re-armed — is armed again. A run arms the next one *before* it reads,
+  so a slow network cannot end the chain. Disconnecting cancels alarm and intent;
+  the sandbox never arms one. `CalendarRefreshService.run` refreshes the planning
+  window and swallows consent/network failures (no Activity to ask). On the
+  planning day the window ends the day before the next one; that day's own
+  appointments come in through the evening's calendar step for tomorrow.
+- **New clashes are announced once** (`domain/calendar/CalendarClashes.kt`,
+  `pendingClashes`): an undecided appointment that lands on planned time gets one
+  low-importance notification on its own soundless channel `calendar_conflicts`
+  (id 6000, tagged by event id); `calendar_events.conflictNotified` records it.
+  The calendar step names the blocks each appointment clashes with, and the week
+  view ("Aktuell", with "Termine anzeigen") draws imported and undecided
+  appointments with their time and marks overlaps with Eta blocks.
+- **Three decisions per appointment:** Ignorieren, Übernehmen (points by the
+  hour as before) and **"Als Zeitblocker (ohne Punkte)"**, imported with
+  `BlockOrigin.CALENDAR_BLOCKER`: it holds its time and is as immovable as an
+  import (`BlockOrigin.isCalendarEvent`), and `yieldOf` pays 0 for it. It is
+  outside the scoring altogether: unticked it still counts as held time
+  (`heldItsTime`), so it is not charged as unplanned, and calling it off costs no
+  cancellation (`cancellationCharged`). Without a local decision the normal points
+  stay. Nothing is ever written to Google.
+- **Series** (`domain/calendar/SeriesPattern.kt`): occurrences carry Google's
+  `recurringEventId` as `calendar_events.seriesId`. "Als wiederkehrende Aufgabe
+  übernehmen" asks Google for the series master on demand and converts
+  `FREQ=WEEKLY` with `INTERVAL` and `BYDAY` into one standing card per weekday:
+  weekly, or `RecurrenceRule.EveryWeeks` (every N weeks counted from an anchor
+  date, stored as `E:<weekday>:<weeks>:<anchor>`) for intervals above one week,
+  so a three-weekly series stays three-weekly. Other rules are refused with the
+  reason. `calendar_series` links the cards to the series, one row per weekday
+  card. An occurrence counts as taken by the series only while a **live card of the
+  series runs on that very day** (`CalendarRepository.syncEvents`): the card is
+  neither deleted nor ended, its date is not past `repeatUntil`, and its rule
+  matches the date. Delete or end the card, or drop a weekday from it, and the
+  occurrences it no longer covers revert to pending at the next read instead of
+  disappearing from the plan for good. Decisions of single imports and ignored
+  events are kept.
+  Occurrences already taken one by one give way from tomorrow on: their open
+  import block is removed, the single card deleted and the occurrence pointed at the
+  series card. **Today's and ticked-off single imports stay as they are** (history,
+  no retroactive credit), and `ScheduleMaintenance.topUp` does not lay the series'
+  block on those dates (`findRetainedIndividualSeriesImports` → the `suppressed`
+  set of `expandRecurring`), nor keeps an open one, so a day never carries the
+  appointment twice. Later changes to the series in Google are not followed.
+  One-off events are never turned into recurring tasks. Weekdays of one
+  every-N-weeks series are grouped by their phase, so they edit as one task.
+- **Conflict answers while planning:** skip this occurrence, shorten, move after
+  the appointment, or **split around it** (`splitAround` in `ConflictRelief.kt`):
+  the block keeps the part in front, the part behind becomes a make-up ToDo in
+  the week list (`Item.newMakeUpTodo`), because one block per `(itemId, date)`
+  stays the rule. A block that already carries a make-up is not split again. The
+  standing series is never changed by an answer; the appointment keeps priority.
+- **System Back** in the calendar step returns to the concretizing step; only
+  "Weiter" moves on to the planner.

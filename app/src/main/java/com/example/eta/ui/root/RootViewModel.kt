@@ -2,6 +2,7 @@ package com.example.eta.ui.root
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.eta.alarm.CalendarRefreshCoordinator
 import com.example.eta.alarm.PlanningAlarmCoordinator
 import com.example.eta.alarm.ReminderCoordinator
 import com.example.eta.alarm.TaskStartCoordinator
@@ -29,9 +30,12 @@ class RootViewModel(
     private val planningAlarmCoordinator: PlanningAlarmCoordinator,
     private val taskStartCoordinator: TaskStartCoordinator,
     private val reminderCoordinator: ReminderCoordinator,
+    private val calendarRefreshCoordinator: CalendarRefreshCoordinator,
     private val scheduleMaintenance: ScheduleMaintenance,
     private val weekPlanningService: WeekPlanningService,
     private val tutorialStore: TutorialStore,
+    /** The other on-device answers a first start does not have: evening and feature offers. */
+    private val resetLocalStores: () -> Unit = {},
 ) : ViewModel() {
 
     val destination: StateFlow<RootDestination> = setupRepository.observe()
@@ -58,6 +62,7 @@ class RootViewModel(
             // of the next one has to be re-aimed.
             taskStartCoordinator.reschedule()
             reminderCoordinator.reschedule()
+            calendarRefreshCoordinator.reschedule()
         }
     }
 
@@ -71,11 +76,13 @@ class RootViewModel(
             // tutorial that follows the questionnaire. First, so the page is
             // already owed when the missing setup row swaps the screen.
             tutorialStore.reset()
+            resetLocalStores()
             setupRepository.resetEverything()
             // Without a setup there is nothing to ring for; this clears the alarms.
             planningAlarmCoordinator.rescheduleAll()
             taskStartCoordinator.reschedule()
             reminderCoordinator.reschedule()
+            calendarRefreshCoordinator.reschedule()
         }
     }
 }

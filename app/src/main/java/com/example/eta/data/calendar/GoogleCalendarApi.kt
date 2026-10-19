@@ -39,6 +39,18 @@ data class RemoteEvent(
     val duration: Duration,
     val allDay: Boolean,
     val updatedAt: Instant?,
+    /** The series this occurrence belongs to (`recurringEventId`), or null for a one-off. */
+    val seriesId: String? = null,
+)
+
+/**
+ * The series master, as far as Eta reads it: the rule lines Google keeps for it,
+ * and its first date, which the every-N-weeks phase is counted from.
+ */
+data class RemoteSeries(
+    /** The `recurrence` lines: `RRULE:…`, and any `EXDATE`/`RDATE` next to it. */
+    val recurrence: List<String>,
+    val start: LocalDate?,
 )
 
 /** What an all-day event is offered at until the user says otherwise. */
@@ -152,9 +164,34 @@ class GoogleCalendarApi(private val timeZone: TimeZone = TimeZone.currentSystemD
      * passing over a definition without a start time: an invented hour would be
      * planned against, and nothing would tell it apart from one the user chose.
      */
+    /**
+     * The series master of one occurrence: its rule and its first date.
+     *
+     * Read once per series a user chooses to adopt, never during the sync. The
+     * occurrences alone do not say how a series repeats — only the master does.
+     * The first date is taken in the user's time zone, which is the one the
+     * occurrences were expanded in too.
+     */
+    suspend fun seriesMaster(token: String, calendarId: String, seriesId: String): RemoteSeries =
+        withContext(Dispatchers.IO) {
+            val url = "https://www.googleapis.com/calendar/v3/calendars/" +
+                "${encode(calendarId)}/events/${encode(seriesId)}"
+            val item = get(url, token)
+            val recurrence = item.optJSONArray("recurrence")
+            val lines = (0 until (recurrence?.length() ?: 0)).map { recurrence!!.getString(it) }
+            val start = item.optJSONObject("start")
+            val day = start?.optString("dateTime")?.ifBlank { null }
+                ?.let { runCatching { Instant.parse(it) }.getOrNull() }
+                ?.toLocalDateTime(timeZone)?.date
+                ?: start?.optString("date")?.ifBlank { null }
+                    ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            RemoteSeries(recurrence = lines, start = day)
+        }
+
     private fun parseEvent(calendarId: String, item: JSONObject): RemoteEvent? {
         val id = item.optString("id")
         if (id.isBlank()) return null
+        val seriesId = item.optString("recurringEventId").ifBlank { null }
         val start = item.optJSONObject("start") ?: return null
         val title = item.optString("summary").ifBlank { "(ohne Titel)" }
         val updated = item.optString("updated").ifBlank { null }
@@ -177,6 +214,7 @@ class GoogleCalendarApi(private val timeZone: TimeZone = TimeZone.currentSystemD
                 duration = ALL_DAY_SUGGESTED_DURATION,
                 allDay = true,
                 updatedAt = updated,
+                seriesId = seriesId,
             )
         }
 
@@ -200,6 +238,7 @@ class GoogleCalendarApi(private val timeZone: TimeZone = TimeZone.currentSystemD
             duration = length.inWholeSeconds.seconds,
             allDay = false,
             updatedAt = updated,
+            seriesId = seriesId,
         )
     }
 

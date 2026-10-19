@@ -117,10 +117,10 @@ fun ContractsScreen(
                         EtaText(text = "Legacy-Verträge", style = EtaTheme.typography.heading)
                         EtaText(
                             text = if (LocalPointsVisible.current) {
-                                "Kosten keinen Slot, zahlen ein Fünftel — und müssen trotzdem " +
-                                    "gehalten werden. Zusammen höchstens 2 Punkte am Tag."
+                                "Sie belegen keinen Slot und bringen ein Fünftel der Punkte, müssen " +
+                                    "aber trotzdem eingehalten werden. Zusammen höchstens 2 Punkte am Tag."
                             } else {
-                                "Kosten keinen Slot — und müssen trotzdem gehalten werden."
+                                "Sie belegen keinen Slot, müssen aber trotzdem eingehalten werden."
                             },
                             style = EtaTheme.typography.caption,
                             color = EtaTheme.colors.textMuted,

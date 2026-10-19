@@ -172,7 +172,10 @@ how it is left:
 it means the thing happened and not that a button was pressed. Only what no table
 holds comes in as a **signal** — which page of a pager is in front — through
 `TutorialGuide.report`. `remembering` keeps "a note was made" and its name once
-the note has left the Sammelliste by being filled in.
+the note has left the Sammelliste by being filled in. The two Quick-Add checks count
+a note only with the script's name (`tutorialFacts`: trimmed, case-insensitive,
+inner spaces collapsed) and of the right kind, so "Katzen" or "Katzenstreu kaufen"
+as a recurring note does not tick them (issue #42).
 
 - **"Zurück" on the coach** goes to the step before, across screens too. Nothing
   is undone: what was ticked stays ticked, so a task come back to shows as done.
@@ -266,6 +269,19 @@ reason; done is `forceMajeure` on the block.
   it was a locked card in a revolver). A Custom Spend already on a day is left
   alone. The practice account is at zero or below by the time the
   tutorial reaches the planner, and its text says the button is locked.
+
+#### Fifth round: the week tab and the planning window (#38)
+
+- The dashboard step names the page "Heute" and the "Morgen" page, and says that
+  the real app adds "Woche" (the week as a timetable, with Google appointments);
+  the sandbox has no week page.
+- The week planning step speaks of the days up to the next planning day (#34),
+  says that the real flow shows the Google appointments after the retrospective,
+  and that the practice week has no calendar — hence still two "Weiter".
+- The plan step names the Sammelliste column and that a card which may not enter
+  the week says why (#49). The closing step mentions "Anpassungen vornehmen",
+  absent in the sandbox. No step was added, so the step count and gates are
+  unchanged.
 
 #### The hooks in the real screens
 

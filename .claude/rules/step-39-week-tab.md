@@ -215,3 +215,34 @@ that writes a definition. No schema change.
 
 **Verified by the compiler, the suite (684), `assembleRelease` and `lint`.**
 Nobody has seen it.
+
+#### Issue sweep: one weekday, one night, the colours named
+
+- **"Generell", one weekday.** A long press remembers its weekday (`editingDay`).
+  The edit window then offers **"Nur <Tag> sichern"** where the task has more than
+  this day: `WeekTabViewModel.saveWeekday` → `RecurringTaskService.saveWeekday`.
+  The day is split off with `rescheduleRows(days = {day})` (a daily row becomes
+  seven weekly rows, the copies get the steps), then `saveGroup` writes that one
+  row. The other weekdays keep their attributes.
+- **"Aktuell", one night.** A long press on the shaded hours names the **night**
+  (`nightDateAt` with the overrides), so a night over midnight opens as one window,
+  titled "Diese Nacht". It writes that night only (`WeekTabViewModel.changeNight` →
+  `NightService.overrideNight`); "Zurück zu den üblichen Zeiten" clears it. A night
+  that is over is refused (`refusePastNight`). "Generell" stays the weekday's rule
+  (`NightTarget.Standing` → `saveNight`).
+- **A standing occurrence never writes its task.** `BlockEditDialog` shows name,
+  category, the note for every occurrence and the end sound read-only, with a
+  pointer to "Generell" and the Listen tab (`locked`: origin `RECURRING`).
+  `DayPlannerViewModel.edit` skips the `Item` write for that origin too. Subtasks
+  stay the task's by design, so folding in the subtask editor still changes the
+  task's length.
+- **One meaning per colour.** Free time is the plain surface in every picture,
+  booked is the grey, a task its own colour, the form in edit the accent, a
+  collision the danger colour. `WeekSchemeChart` draws a `WeekLegend` under itself
+  naming the colours it uses; the week tab shows one above the timeline
+  (`weekLegendEntries`: own colour — routines coloured by name are listed by name —
+  or category, calendar, night, free). Stretches
+  that overlap on a day sit side by side in lanes (`overlapLanes`).
+- Pinned: `WeekLanesTest`, `BackToBackTest`. Nothing else in this section has a test.
+
+**Verified by the compiler and the unit tests named above. Nobody has seen it.**

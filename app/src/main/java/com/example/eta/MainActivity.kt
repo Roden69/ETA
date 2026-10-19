@@ -18,6 +18,7 @@ import com.example.eta.domain.planning.PlanningPhase
 import com.example.eta.ui.root.EtaApp
 import com.example.eta.ui.root.LAUNCH_SCREEN_MILLIS
 import com.example.eta.ui.root.LaunchScreen
+import com.example.eta.ui.root.ProvideRoutineColors
 import com.example.eta.ui.theme.EtaTheme
 import com.example.eta.ui.theme.applyDesignToWindow
 import kotlinx.coroutines.delay
@@ -58,13 +59,15 @@ class MainActivity : ComponentActivity() {
             }
 
             EtaTheme(design) {
-                EtaApp(
-                    container = container,
-                    deferPhase = deferPhase,
-                    onDeferHandled = { deferPhase = null },
-                    openPhase = openPhase,
-                    onOpenHandled = { openPhase = null },
-                )
+                ProvideRoutineColors(container) {
+                    EtaApp(
+                        container = container,
+                        deferPhase = deferPhase,
+                        onDeferHandled = { deferPhase = null },
+                        openPhase = openPhase,
+                        onOpenHandled = { openPhase = null },
+                    )
+                }
             }
             AnimatedVisibility(
                 visible = launching,

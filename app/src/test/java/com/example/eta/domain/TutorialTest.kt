@@ -262,6 +262,44 @@ class TutorialTest {
     }
 
     @Test
+    fun `a note ticks its check with the script's name, whatever the case and spacing`() {
+        val todo = Item.newQuickTodo("  katzenstreu   KAUFEN ", now)
+        val recurring = Item.newQuickRecurring("regelmäßig  sport", now)
+
+        val facts = tutorialFacts(listOf(todo, recurring), emptyList(), exampleDay(), emptyList(), false)
+
+        assertTrue(facts.todoNoted && facts.recurringNoted)
+    }
+
+    @Test
+    fun `a half-typed name does not tick the check`() {
+        val partial = Item.newQuickTodo("Katzen", now)
+
+        val facts = tutorialFacts(listOf(partial), emptyList(), exampleDay(), emptyList(), false)
+
+        assertFalse(facts.todoNoted)
+        assertNull(facts.todoName)
+        assertEquals("»Katzenstreu kaufen«", facts.todoLabel)
+    }
+
+    @Test
+    fun `a note of the other kind does not tick either check`() {
+        val todoAsRecurring = Item.newQuickRecurring("Katzenstreu kaufen", now)
+        val recurringAsTodo = Item.newQuickTodo("Regelmäßig Sport", now)
+
+        val facts = tutorialFacts(
+            listOf(todoAsRecurring, recurringAsTodo),
+            emptyList(),
+            exampleDay(),
+            emptyList(),
+            false,
+        )
+
+        assertFalse(facts.todoNoted)
+        assertFalse(facts.recurringNoted)
+    }
+
+    @Test
     fun `a note that has left the Sammelliste is still remembered`() {
         val recurring = Item.newQuickRecurring("Regelmäßig Sport", now)
         val before = tutorialFacts(listOf(recurring), emptyList(), exampleDay(), emptyList(), false)

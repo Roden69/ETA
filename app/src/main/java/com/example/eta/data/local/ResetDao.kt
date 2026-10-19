@@ -29,6 +29,7 @@ abstract class ResetDao {
         clearVacationRules()
         clearVacations()
         clearCalendarEvents()
+        clearCalendarSeries()
         clearCalendarSources()
         clearReminders()
         clearConflictDismissals()
@@ -73,6 +74,9 @@ abstract class ResetDao {
 
     @Query("DELETE FROM calendar_events")
     abstract suspend fun clearCalendarEvents()
+
+    @Query("DELETE FROM calendar_series")
+    abstract suspend fun clearCalendarSeries()
 
     @Query("DELETE FROM calendar_sources")
     abstract suspend fun clearCalendarSources()

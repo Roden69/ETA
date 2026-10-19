@@ -21,6 +21,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.eta.data.local.BlockWithItem
 import com.example.eta.data.repository.ConflictingBlock
+import com.example.eta.domain.calendar.SeriesPattern
+import com.example.eta.domain.model.BlockOrigin
 import com.example.eta.domain.model.CalendarEvent
 import com.example.eta.domain.planning.endMinute
 import com.example.eta.domain.planning.minuteToLocalTime
@@ -34,7 +36,9 @@ import com.example.eta.ui.components.EtaText
 import com.example.eta.ui.format.formatClock
 import com.example.eta.ui.format.formatLong
 import com.example.eta.ui.format.formatShort
+import com.example.eta.ui.format.formatWeekdays
 import com.example.eta.ui.theme.EtaTheme
+import kotlinx.datetime.LocalDate
 
 /**
  * The calendar step's contents, without a frame of its own.
@@ -52,6 +56,8 @@ fun CalendarEventsSection(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val consent by viewModel.consent.collectAsStateWithLifecycle()
     val conflicts by viewModel.conflicts.collectAsStateWithLifecycle()
+    val seriesOffer by viewModel.seriesOffer.collectAsStateWithLifecycle()
+    val seriesNotice by viewModel.seriesNotice.collectAsStateWithLifecycle()
 
     // The account picker and the consent screen are Google's, and only an Activity
     // can put them on screen — so the `PendingIntent` travels up from the sync and
@@ -77,6 +83,13 @@ fun CalendarEventsSection(
             text = "Übernimm zuerst Termine aus dem Google-Kalender, dann plane den Rest.",
             style = EtaTheme.typography.caption,
             color = EtaTheme.colors.textMuted,
+        )
+        // The stretch being read, said out loud: the weekly planning reads up to
+        // the day before the next one, and that edge is only understood if shown.
+        EtaText(
+            text = "Zeitraum: " + viewModel.from.rangeText(viewModel.to),
+            style = EtaTheme.typography.caption,
+            color = EtaTheme.colors.textSecondary,
         )
 
         state.error?.let { reason ->
@@ -127,8 +140,11 @@ fun CalendarEventsSection(
                 key(event.id) {
                     EventCard(
                         event = event,
+                        clashes = state.clashes[event.id].orEmpty(),
+                        seriesNotice = seriesNotice?.takeIf { it.eventId == event.id }?.reason,
                         onIgnore = { viewModel.ignore(event) },
-                        onImport = { attributes -> viewModel.import(event, attributes) },
+                        onImport = { attributes, origin -> viewModel.import(event, attributes, origin) },
+                        onSeries = { viewModel.requestSeries(event) },
                     )
                 }
             }
@@ -150,27 +166,40 @@ fun CalendarEventsSection(
             onCarryIntoWeek = viewModel::carryConflictIntoWeek,
             onShorten = viewModel::shortenConflict,
             onPush = viewModel::pushConflict,
+            onSplit = viewModel::splitConflict,
             onKeep = viewModel::keepConflict,
             onDismiss = viewModel::dismissConflicts,
+        )
+    }
+
+    seriesOffer?.let { offer ->
+        SeriesDialog(
+            offer = offer,
+            onAdopt = viewModel::adoptSeries,
+            onDismiss = viewModel::dismissSeries,
         )
     }
 }
 
 /**
- * One undecided event: what the calendar says, and the two things to do about it.
+ * One undecided event: what the calendar says, and what to do about it.
  *
- * "Übernehmen" opens the form rather than importing straight away, because the
- * calendar only supplies three of the answers a card needs — name, time and
- * length. Category and the margins are the user's, and asking for them here is
- * what makes the result an ordinary card rather than a second kind of block.
+ * Three decisions, each its own button: **Übernehmen** and **Als Zeitblocker (ohne
+ * Punkte)** both open the form, because the calendar only supplies name, time and
+ * length — the category and the margins are the user's — and **Ignorieren** files
+ * it away at once. A recurring appointment also offers to take its whole series on.
  */
 @Composable
 private fun EventCard(
     event: CalendarEvent,
+    clashes: List<String>,
+    seriesNotice: String?,
     onIgnore: () -> Unit,
-    onImport: (AppointmentAttributes) -> Unit,
+    onImport: (AppointmentAttributes, BlockOrigin) -> Unit,
+    onSeries: () -> Unit,
 ) {
-    var open by remember { mutableStateOf(false) }
+    // Which decision the form is for; null while the card shows its three buttons.
+    var form by remember { mutableStateOf<BlockOrigin?>(null) }
     var attributes by remember {
         mutableStateOf(
             AppointmentAttributes(start = event.start, duration = event.duration),
@@ -200,32 +229,83 @@ private fun EventCard(
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textSecondary,
             )
+            if (clashes.isNotEmpty()) {
+                // Said before any decision: an appointment that sits on planned time
+                // is a fact the day has to be planned around, not a surprise later.
+                EtaText(
+                    text = "Überschneidet sich mit: " + clashes.joinToString(", "),
+                    style = EtaTheme.typography.caption,
+                    color = EtaTheme.colors.danger,
+                )
+            }
 
-            if (open) {
+            val chosen = form
+            if (chosen != null) {
                 AppointmentAttributeFields(
                     value = attributes,
                     onChange = { attributes = it },
                     allDay = event.allDay,
                 )
+                EtaText(
+                    text = if (chosen == BlockOrigin.CALENDAR_BLOCKER) {
+                        "Der Termin hält seine Zeit frei und bringt keine Punkte."
+                    } else {
+                        "Der Termin zählt wie gewohnt: je volle Stunde ein halber Punkt."
+                    },
+                    style = EtaTheme.typography.caption,
+                    color = EtaTheme.colors.textMuted,
+                )
                 Row(horizontalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
                     EtaButton(
                         text = "Zurück",
                         style = EtaButtonStyle.Secondary,
-                        onClick = { open = false },
+                        onClick = { form = null },
                     )
                     Spacer(Modifier.weight(1f))
-                    EtaButton(text = "Eintragen", onClick = { onImport(attributes) })
+                    EtaButton(
+                        text = if (chosen == BlockOrigin.CALENDAR_BLOCKER) "Als Zeitblocker eintragen" else "Eintragen",
+                        onClick = { onImport(attributes, chosen) },
+                    )
                 }
             } else {
-                Row(horizontalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
+                EtaButton(
+                    text = "Übernehmen",
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { form = BlockOrigin.CALENDAR_IMPORT },
+                )
+                EtaButton(
+                    text = "Als Zeitblocker (ohne Punkte)",
+                    style = EtaButtonStyle.Secondary,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { form = BlockOrigin.CALENDAR_BLOCKER },
+                )
+                if (event.seriesId != null) {
                     EtaButton(
-                        text = "Ignorieren",
+                        text = "Als wiederkehrende Aufgabe übernehmen",
                         style = EtaButtonStyle.Secondary,
-                        onClick = onIgnore,
+                        modifier = Modifier.fillMaxWidth(),
+                        onClick = onSeries,
                     )
-                    Spacer(Modifier.weight(1f))
-                    EtaButton(text = "Übernehmen", onClick = { open = true })
                 }
+                seriesNotice?.let { reason ->
+                    EtaText(
+                        text = reason,
+                        style = EtaTheme.typography.caption,
+                        color = EtaTheme.colors.danger,
+                    )
+                }
+                EtaButton(
+                    text = "Ignorieren",
+                    style = EtaButtonStyle.Secondary,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onIgnore,
+                )
+                EtaText(
+                    text = "Ignorierte Termine findest du unter Einstellungen → Ignorierte Events. " +
+                        "Der Google-Kalender bleibt unverändert.",
+                    style = EtaTheme.typography.caption,
+                    color = EtaTheme.colors.textMuted,
+                )
             }
         }
     }
@@ -236,18 +316,14 @@ private fun EventCard(
  *
  * The appointment itself is not on the table: it comes from a calendar, which
  * means somebody else's expectation as often as not, and the app has no business
- * moving it. What it *can* offer is what to do with the activity now underneath
- * it — and there are four answers, because a collision is usually **partial**.
+ * moving it. What it *can* offer is what to do with each activity now underneath
+ * it — and there are several answers, because a collision is usually **partial**.
  *
- * The two whole-activity ones drop it or carry it into the week. The two partial
- * ones keep it: **kürzen** ends it where the appointment begins, **verschieben**
- * starts it again once the appointment is over. Each is shown only where the
- * arithmetic allows it, so a button that appears is a button that works — an
- * appointment that swallows a block whole offers neither, which is the case the
- * user named.
- *
- * Leaving it alone is the fifth answer, and a real one: a walk during a phone
- * meeting is two things at once on purpose.
+ * Every answer says what it does to the activity, and each is shown only where the
+ * arithmetic allows it, so a button that appears is a button that works. An
+ * appointment that swallows a block whole offers only the whole-activity answers.
+ * Leaving it alone is a real answer too: a walk during a phone meeting is two
+ * things at once on purpose.
  */
 @Composable
 private fun ConflictDialog(
@@ -256,13 +332,15 @@ private fun ConflictDialog(
     onCarryIntoWeek: (BlockWithItem) -> Unit,
     onShorten: (ConflictingBlock) -> Unit,
     onPush: (ConflictingBlock) -> Unit,
+    onSplit: (ConflictingBlock) -> Unit,
     onKeep: (BlockWithItem) -> Unit,
     onDismiss: () -> Unit,
 ) {
     EtaDialog(title = "Terminkonflikt", onDismiss = onDismiss) {
         EtaText(
-            text = "»${prompt.appointment}« überschneidet sich mit geplanten Aufgaben. " +
-                "Der Termin bleibt; was soll mit den Aufgaben geschehen?",
+            text = "»${prompt.appointment}« (${prompt.time}) bleibt, wie der Kalender es sagt. " +
+                "Diese Aufgaben liegen darauf. Jede entscheidest du einzeln; die Serie bleibt " +
+                "in jedem Fall unverändert.",
             style = EtaTheme.typography.body,
             color = EtaTheme.colors.textSecondary,
         )
@@ -279,10 +357,13 @@ private fun ConflictDialog(
             key(conflict.entry.block.id) {
                 ConflictCard(
                     conflict = conflict,
+                    appointment = prompt.appointment,
+                    time = prompt.time,
                     onCancelBlock = { onCancelBlock(conflict.entry) },
                     onCarryIntoWeek = { onCarryIntoWeek(conflict.entry) },
                     onShorten = { onShorten(conflict) },
                     onPush = { onPush(conflict) },
+                    onSplit = { onSplit(conflict) },
                     onKeep = { onKeep(conflict.entry) },
                 )
             }
@@ -296,17 +377,21 @@ private fun ConflictDialog(
     }
 }
 
-/** One collision, with every answer that actually applies to it. */
+/** One collision, named with what it collides with, and every answer that applies to it. */
 @Composable
 private fun ConflictCard(
     conflict: ConflictingBlock,
+    appointment: String,
+    time: String,
     onCancelBlock: () -> Unit,
     onCarryIntoWeek: () -> Unit,
     onShorten: () -> Unit,
     onPush: () -> Unit,
+    onSplit: () -> Unit,
     onKeep: () -> Unit,
 ) {
     val block = conflict.entry.block
+    val shortened = conflict.shortened
 
     EtaSurface(modifier = Modifier.fillMaxWidth(), contentPadding = EtaTheme.spacing.md) {
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
@@ -317,8 +402,9 @@ private fun ConflictCard(
                 overflow = TextOverflow.Ellipsis,
             )
             EtaText(
-                text = block.start.formatClock() + " – " +
-                    minuteToLocalTime(block.endMinute()).formatClock(),
+                text = "Geplant ${block.start.formatClock()} – " +
+                    minuteToLocalTime(block.endMinute()).formatClock() +
+                    " · überschneidet sich mit »$appointment« ($time)",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textSecondary,
             )
@@ -326,13 +412,17 @@ private fun ConflictCard(
             // The partial answers first: they keep the activity, and keeping it is
             // what the user most often wants. Each says the time it would produce,
             // so the consequence is read rather than guessed at.
-            conflict.shortened?.let { shortened ->
+            shortened?.let {
                 EtaButton(
-                    text = "Kürzen bis " +
-                        minuteToLocalTime(shortened.endMinute()).formatClock(),
+                    text = "Kürzen bis " + minuteToLocalTime(it.endMinute()).formatClock(),
                     style = EtaButtonStyle.Secondary,
                     modifier = Modifier.fillMaxWidth(),
                     onClick = onShorten,
+                )
+                EtaText(
+                    text = "Die Aufgabe endet vor dem Termin.",
+                    style = EtaTheme.typography.caption,
+                    color = EtaTheme.colors.textMuted,
                 )
             }
             conflict.pushed?.let { pushed ->
@@ -342,8 +432,29 @@ private fun ConflictCard(
                     modifier = Modifier.fillMaxWidth(),
                     onClick = onPush,
                 )
+                EtaText(
+                    text = "Die Aufgabe beginnt nach dem Termin, mit ihrer ganzen Länge.",
+                    style = EtaTheme.typography.caption,
+                    color = EtaTheme.colors.textMuted,
+                )
             }
-            if (conflict.shortened != null || conflict.pushed != null) {
+            val back = conflict.split
+            if (shortened != null && back != null) {
+                EtaButton(
+                    text = "Aufteilen: davor bis ${minuteToLocalTime(shortened.endMinute()).formatClock()}, " +
+                        "danach ${back.formatShort()}",
+                    style = EtaButtonStyle.Secondary,
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = onSplit,
+                )
+                EtaText(
+                    text = "Der Teil vor dem Termin bleibt hier. Der Rest danach kommt als " +
+                        "Nachholen in die Wochenliste.",
+                    style = EtaTheme.typography.caption,
+                    color = EtaTheme.colors.textMuted,
+                )
+            }
+            if (shortened != null || conflict.pushed != null) {
                 EtaText(
                     text = "Nur die Aktivität ändert sich. Anfahrt, Rückweg und Pause " +
                         "behalten ihre Länge.",
@@ -365,7 +476,7 @@ private fun ConflictCard(
                 )
             }
             EtaText(
-                text = "»Fällt aus« sagt die Aktivität im Voraus kostenlos ab. " +
+                text = "»Fällt aus« sagt diese Aufgabe nur für diesen Tag ab, kostenlos. " +
                     "»In die Woche« legt sie als Nachholen-Karte in die Wochenliste.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
@@ -379,3 +490,48 @@ private fun ConflictCard(
         }
     }
 }
+
+/**
+ * The series, before it becomes recurring tasks: how it repeats, and the hour the
+ * cards will have. The same form as an ordinary appointment, asked once for the
+ * whole series.
+ */
+@Composable
+private fun SeriesDialog(
+    offer: SeriesOffer,
+    onAdopt: (AppointmentAttributes) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    var attributes by remember {
+        mutableStateOf(AppointmentAttributes(start = offer.event.start, duration = offer.event.duration))
+    }
+    EtaDialog(title = "Wiederkehrende Aufgabe", onDismiss = onDismiss) {
+        EtaText(
+            text = "»${offer.event.title}« wiederholt sich ${offer.pattern.describe()}. Eta legt dafür " +
+                "wiederkehrende Aufgaben an, eine je Wochentag. Änderungen an der Serie in Google " +
+                "werden nicht übernommen.",
+            style = EtaTheme.typography.body,
+            color = EtaTheme.colors.textSecondary,
+        )
+        AppointmentAttributeFields(
+            value = attributes,
+            onChange = { attributes = it },
+            allDay = offer.event.allDay,
+        )
+        Row(horizontalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
+            EtaButton(text = "Abbrechen", style = EtaButtonStyle.Secondary, onClick = onDismiss)
+            Spacer(Modifier.weight(1f))
+            EtaButton(text = "Übernehmen", onClick = { onAdopt(attributes) })
+        }
+    }
+}
+
+/** "jede Woche (Mi, Fr)", "alle 3 Wochen (Mi)" — how a series repeats, as the dialog says it. */
+private fun SeriesPattern.describe(): String {
+    val days = formatWeekdays(weekdays)
+    return if (weeks == 1) "jede Woche ($days)" else "alle $weeks Wochen ($days)"
+}
+
+/** "Mo, 19. Oktober bis Sa, 24. Oktober", or the one day when both ends are the same. */
+private fun LocalDate.rangeText(to: LocalDate): String =
+    if (this == to) formatLong() else "${formatLong()} bis ${to.formatLong()}"

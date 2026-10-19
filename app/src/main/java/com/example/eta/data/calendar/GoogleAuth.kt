@@ -79,7 +79,7 @@ class GoogleAuth(private val context: Context) {
             .addOnFailureListener { error ->
                 if (continuation.isActive) {
                     continuation.resume(
-                        AuthOutcome.Failed(error.message ?: "Google-Anmeldung fehlgeschlagen."),
+                        AuthOutcome.Failed(authorizationFailureMessage(error.message)),
                     )
                 }
             }
@@ -95,4 +95,19 @@ class GoogleAuth(private val context: Context) {
     }.getOrElse { error ->
         AuthOutcome.Failed(error.message ?: "Der Zugriff wurde nicht erteilt.")
     }
+}
+
+/**
+ * What the settings card shows when Play Services refuses the sign-in.
+ *
+ * When this build's package name and signing certificate do not match a registered
+ * Android OAuth client, Play Services refuses before any network call, and the
+ * message it returns does not name the cause. The hint names the two usual causes
+ * and keeps the original text for lookup. Setup: docs/calendar-oauth.md.
+ */
+internal fun authorizationFailureMessage(original: String?): String {
+    val detail = original?.takeIf { it.isNotBlank() } ?: "keine Details von Google"
+    return "Anmeldung fehlgeschlagen. Mögliche Ursache: Paket-ID oder Signatur dieses " +
+        "Builds ist nicht als Android-OAuth-Client registriert, oder das Konto steht " +
+        "nicht als Testnutzer in der Google-Cloud-Konfiguration. Originalmeldung: $detail"
 }

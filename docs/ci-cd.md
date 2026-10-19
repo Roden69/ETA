@@ -39,6 +39,17 @@ wer das Secret kennt, kann APKs signieren, die diese Debug-Installationen ersetz
 base64 -w0 ~/.android/debug.keystore | gh secret set ANDROID_DEBUG_KEYSTORE_BASE64 --repo Roden69/ETA
 ```
 
+## Für Tester: APK herunterladen
+
+Den passenden Weg wählen:
+
+- **Letzter Stand von `main`** (Debug, mit dem gemeinsamen Debug-Schlüssel signiert): [Actions](https://github.com/Roden69/ETA/actions) → Lauf **Android CI/CD** auf `main` mit grünem Haken → **Artifacts**. Verfügbar sind `eta-debug-apk` (`app-debug.apk`) und `eta-fork-apk` (`app-fork.apk`, die getrennt installierbare Variante „Eta Fork“, siehe [Entwicklung](development.md#fork-build-neben-dem-original)). Jedes Artifact ist ein ZIP mit genau einer APK.
+- **Versionierte Veröffentlichung**: [Releases](https://github.com/Roden69/ETA/releases) → `Eta-vX.Y.Z.apk`. Das ist die signierte Release-APK aus einem Versions-Tag.
+
+Für Artifacts braucht man ein GitHub-Konto mit Lesezugriff auf das Repository. Wer kein Konto hat, nutzt die Releases; dort liegen nur getaggte Versionen. Ein Artifact verfällt nach der Aufbewahrungsfrist der Actions-Einstellungen; ein Release bleibt bestehen.
+
+Vor der Installation: Auf dem Gerät „Installation aus unbekannten Quellen“ für die App erlauben, mit der die APK geöffnet wird. Eine APK aktualisiert nur eine Installation mit demselben Schlüssel; bei einer Signaturabweichung nicht deinstallieren, sondern die passende Variante neben der bisherigen installieren.
+
 ## Neue Version veröffentlichen
 
 Zuerst den Workflow nach `main` mergen. Einen geprüften `main`-Commit mit einem
@@ -57,7 +68,8 @@ Der getaggte Commit muss den Workflow und die Gradle-Anpassung enthalten.
 Ein Tag-Push baut nach Tests und Lint eine signierte Release-APK, prüft ihre
 Signatur und veröffentlicht `Eta-v1.2.3.apk` unter
 [Releases](https://github.com/Roden69/ETA/releases).
-GitHub generiert die Release Notes automatisch. Normale Branch-Pushes,
+GitHub generiert die Release Notes automatisch; die redaktionelle Fassung pflegt
+[`CHANGELOG.md`](../CHANGELOG.md). Normale Branch-Pushes,
 Pull Requests und manuelle Starts veröffentlichen niemals einen Release.
 Ein bestehender Release wird nicht überschrieben; der Veröffentlichungsjob
 schlägt beim erneuten Erstellen desselben Releases fehl.

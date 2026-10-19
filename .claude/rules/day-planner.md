@@ -63,6 +63,13 @@ snapping, and where a block can actually go.
   the category's place — a category pays it nothing — and `edit` writes
   `pointsPerHour` to the item, safe there because a points entry has exactly one
   block.
+- **A standing occurrence shows its task read-only** in `BlockEditDialog`: name,
+  category, note for every occurrence and the end sound are said to belong to the
+  task and are changed in "Generell" or on the Listen tab. Only the block's own
+  start, length, margins, note and "Flexibel" are editable there.
+- **Steps in a block** (issue #43): listed in the block when every step fits the
+  room below the name and time; otherwise the time line says "n Schritte". A tap
+  opens the bubble, which lists them all. The same block draws them in the week tab.
 - **Long-press also offers a copy into the week list**, for a task that did not
   finish inside the time it was given. That copy is a **new ToDo, not a moved one**:
   the occurrence keeps its history and stays on its day, and the copy carries name,
@@ -124,7 +131,9 @@ those is a place for them to come apart. As columns there is nothing to keep in 
   dragged and offsets the frame with it.)
 - **`Item.travelBefore` / `returnAfter` / `breakAfter` are the defaults**, stamped
   onto every block the definition produces, each defaulting to **15 minutes** when
-  ticked. `BlockEditDialog` edits them **per occurrence** — adding a journey to today
+  ticked. Every margin picker steps in **5-minute** units from a minimum of 5
+  (`MARGIN_STEP`, `MIN_MARGIN` in `ui/attributes/ItemAttributes.kt`), in the Listen tab
+  and in the block dialog alike, so no value appears off the grid. `BlockEditDialog` edits them **per occurrence** — adding a journey to today
   does not add one to every Tuesday — while the Listen tab edits the definition's
   defaults. They travel with both copies the app makes of a task,
   `Item.newMakeUpTodo` and "in die Woche kopieren", both being the same work on

@@ -76,6 +76,15 @@ android {
                 signingConfig = signingConfigs.getByName("release")
             }
         }
+        // Side-by-side test build: its own id, data and Google OAuth client, debug
+        // signing. The default debug and release identity above is unchanged.
+        // See docs/development.md ("Fork-Build neben dem Original").
+        create("fork") {
+            initWith(getByName("debug"))
+            applicationIdSuffix = ".fork"
+            versionNameSuffix = "-fork"
+            resValue("string", "app_name", "Eta Fork")
+        }
     }
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_11
@@ -85,6 +94,8 @@ android {
     }
     buildFeatures {
         compose = true
+        // The fork build type sets app_name through resValue.
+        resValues = true
     }
     testOptions {
         unitTests.isIncludeAndroidResources = true

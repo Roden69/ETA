@@ -33,7 +33,7 @@ const val REMAINDER_NAME_PREFIX = "Rest von "
  */
 @Entity(
     tableName = "items",
-    indices = [Index("normalizedName"), Index("stage"), Index("type")],
+    indices = [Index("normalizedName"), Index("stage"), Index("type"), Index("followUpOfId")],
 )
 data class Item(
     @PrimaryKey val id: String = UUID.randomUUID().toString(),
@@ -199,6 +199,15 @@ data class Item(
     val weekStartedOn: LocalDate? = null,
     /** When this entered the Sammelliste — drives the one-month rule into the Sperrliste. */
     val enteredCollectionAt: Instant? = null,
+    /**
+     * The ToDo this one follows (Folgeaufgabe), or null for an ordinary card.
+     *
+     * A follow-up is waiting while it has no [enteredCollectionAt]: it is not
+     * plannable, does not age towards the Sperrliste, and is shown as "danach: …".
+     * Its predecessor's completion stamps [enteredCollectionAt] and releases it —
+     * see `domain/chain/FollowUpChain.kt`. A permanent link, kept after release.
+     */
+    val followUpOfId: String? = null,
     /** Stage.LOCKED only: blocked from re-creation until this instant. */
     val lockedUntil: Instant? = null,
     /** Retires a one-shot item (TODO/DEADLINE/SPEND). RECURRING items are never retired this way. */
@@ -405,6 +414,36 @@ data class Item(
             stage = Stage.WEEK,
             note = note,
             weekStartedOn = today,
+            createdAt = now,
+            updatedAt = now,
+        )
+
+        /**
+         * A step of a chain: the next ToDo after [of], waiting for it.
+         *
+         * It takes over the predecessor's answers — category, priority, length and
+         * the journeys and break around it — so it is a finished card and never
+         * needs concretizing. Pass [enteredCollectionAt] only when the predecessor
+         * is already done; otherwise it waits with none.
+         */
+        fun newFollowUp(
+            name: String,
+            of: Item,
+            now: Instant,
+            enteredCollectionAt: Instant? = null,
+        ) = Item(
+            type = ItemType.TODO,
+            name = name,
+            stage = Stage.COLLECTION,
+            category = of.category,
+            priority = of.priority,
+            estimatedDuration = of.estimatedDuration,
+            travelBefore = of.travelBefore,
+            returnAfter = of.returnAfter,
+            breakAfter = of.breakAfter,
+            endSound = of.endSound,
+            followUpOfId = of.id,
+            enteredCollectionAt = enteredCollectionAt,
             createdAt = now,
             updatedAt = now,
         )

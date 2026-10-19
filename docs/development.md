@@ -38,6 +38,24 @@ Die Formulare sind unter `.github/ISSUE_TEMPLATE/` versioniert und werden nach d
 
 Issues halten Arbeitsaufträge und Entscheidungen fest. Dauerhaft gültige Anforderungen und Implementierungsnotizen bleiben in den bestehenden kanonischen Dokumentationsquellen; ihre Pflege beschreibt der [Dokumentationsworkflow](workflow.md).
 
+## Fork-Build neben dem Original
+
+Der Build-Typ `fork` erzeugt eine zweite App, die neben der regulären Eta-Installation bestehen kann:
+
+```bash
+bash ./gradlew --console=plain assembleFork
+```
+
+Das Ergebnis ist `app/build/outputs/apk/fork/app-fork.apk`. Die Variante hat die Application-ID `com.example.erik_iteration_2.fork`, den Namen „Eta Fork“ und die Versionsbezeichnung mit Suffix `-fork`. Sie wird mit dem Debug-Schlüssel des Rechners signiert, nicht mit dem Release-Schlüssel. `debug` und `release` behalten ihre Identität unverändert; `namespace` bleibt `com.example.eta`, Klassen und Intents tragen also keine Paket-ID im Namen.
+
+Beide Installationen sind getrennt:
+
+- **Eigene Daten:** Jede Application-ID hat ein eigenes Datenverzeichnis mit eigener Datenbank `erik.db`, eigenen Einstellungen und eigenen Benachrichtigungskanälen. Eine Änderung in der Fork-Variante berührt die Originaldaten nicht und umgekehrt. Daten wechseln nur über Sicherung und Wiederherstellung in der App.
+- **Eigener Google-Client:** Die Kalenderanmeldung braucht für `.fork` einen eigenen Android-OAuth-Client; siehe [Google-Kalender für eigene Builds](calendar-oauth.md).
+- **Eigene Wecker im Gerät:** Wecker, die Eta in die Uhr-App des Telefons schreibt, landen in deren Liste. Installiert man beide Varianten, kann es so doppelte Wecker geben. Das ist ein offener Punkt, keine Schutzmaßnahme.
+- **Signatur:** Ein Update mit einer anderen Signatur derselben Application-ID ist nicht möglich. Für die Fork-Variante ist das unkritisch, weil sie eine eigene ID hat; die Originalinstallation bleibt unangetastet.
+
+Zum Testen des Originals ist die Fork-Variante gedacht, nicht als Ersatz. Die Instrumentierungstests erwarten die Basis-ID und laufen gegen den Debug-Build.
 
 ## Lokale Voraussetzungen und SDK
 

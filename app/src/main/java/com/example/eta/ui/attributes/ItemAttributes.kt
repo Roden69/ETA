@@ -116,6 +116,13 @@ val MIN_TASK_DURATION: Duration = 15.minutes
 val MIN_MARGIN: Duration = 5.minutes
 
 /**
+ * The grid every margin is stepped on: 5, 10, 15 … minutes, the same from every
+ * place a margin is set. Stepping in quarter hours from the minimum gave 5, 20,
+ * 35, 50 and then "1:05 h", which no one expects from a picker.
+ */
+val MARGIN_STEP: Duration = 5.minutes
+
+/**
  * No "ohne Kategorie" here, and that is deliberate.
  *
  * A ToDo without one is not `isConcretized` and cannot be planned, so offering it
@@ -181,6 +188,11 @@ data class TodoAttributes(
      * Carried rather than acted on, so cancelling the form leaves them standing.
      */
     val foldedItemIds: List<String> = emptyList(),
+    /**
+     * The steps that come after this ToDo, in order (Folgeaufgaben). Created as
+     * waiting ToDos when the card is saved; blank names are dropped.
+     */
+    val followUps: List<String> = emptyList(),
 ) {
     companion object {
         /**
@@ -347,6 +359,8 @@ fun TodoAttributeFields(
     onChange: (TodoAttributes) -> Unit,
     today: LocalDate,
     showTargetDate: Boolean = true,
+    /** Whether the form asks for the steps that come after this ToDo. */
+    offerFollowUps: Boolean = false,
     /**
      * The card's own name, which the Subtask-Builder edits along with the list —
      * a group is a task, and renaming the group renames the task. Null is "no
@@ -436,6 +450,9 @@ fun TodoAttributeFields(
         )
     }
 
+    if (offerFollowUps) {
+        FollowUpsField(names = value.followUps, onNames = { onChange(value.copy(followUps = it)) })
+    }
     ExtrasBox(
         endSound = value.endSound,
         onEndSound = { onChange(value.copy(endSound = it)) },
@@ -1002,7 +1019,7 @@ fun ExtrasBox(
         modifier = Modifier.tutorialSpot(TutorialSpot.EXTRAS),
         hint = "Wege, Pause, Töne, Pomodoro, Erinnerung" +
             (if (today != null) ", Deadline" else "") +
-            (if (onSubtasks != null) ", Subtasks" else "") +
+            (if (onSubtasks != null) ", Schritte" else "") +
             (if (offerQuantity) ", Mengen-Inkrement" else "") +
             if (onGrowth != null) " und Timer-Task." else ".",
         summary = when (active) {
@@ -1110,7 +1127,7 @@ private fun SubtaskSection(
     var open by remember { mutableStateOf(false) }
 
     EtaExpander(
-        label = "Subtasks",
+        label = "Schritte",
         hint = "Schritte innerhalb der Aufgabe, zum Abhaken während sie läuft.",
         summary = when (val count = setting.subtasks.size) {
             0 -> "Keine"
@@ -1126,7 +1143,7 @@ private fun SubtaskSection(
             )
         }
         EtaButton(
-            text = "Subtasks erstellen / bearbeiten",
+            text = "Schritte anlegen / bearbeiten",
             style = EtaButtonStyle.Secondary,
             onClick = { open = true },
         )
@@ -1566,6 +1583,8 @@ private fun RhythmField(rhythm: Rhythm, onRhythm: (Rhythm) -> Unit) {
         add(Rhythm.Biweekly(WeekParity.EVEN) to "Alle zwei Wochen — gerade KW")
         add(Rhythm.Biweekly(WeekParity.ODD) to "Alle zwei Wochen — ungerade KW")
         if (rhythm is Rhythm.Monthly) add(rhythm to "Monatlich — ${rhythm.weekOfMonth}. Woche")
+        // Taken from a Google series: kept as it is rather than shown as nothing chosen.
+        if (rhythm is Rhythm.EveryWeeks) add(rhythm to "Alle ${rhythm.weeks} Wochen")
     }
     EtaField(
         label = "Rhythmus",
@@ -1746,6 +1765,7 @@ private fun MarginRow(
             EtaDurationPicker(
                 value = value,
                 onValueChange = onValueChange,
+                step = MARGIN_STEP,
                 minimum = MIN_MARGIN,
             )
         }

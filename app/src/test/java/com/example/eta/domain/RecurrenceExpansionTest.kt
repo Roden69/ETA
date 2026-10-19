@@ -133,6 +133,48 @@ class RecurrenceExpansionTest {
     }
 
     @Test
+    fun `an occurrence kept as its own import is not laid down a second time`() {
+        // The Monday the user took one by one before adopting the series stays theirs;
+        // the standing card lays down every other Monday.
+        val item = recurring(RecurrenceRule.Weekly(DayOfWeek.MONDAY))
+        val blocks = expandRecurring(
+            definitions = listOf(item),
+            from = LocalDate(2026, 9, 1),
+            to = LocalDate(2026, 9, 30),
+            existing = emptySet(),
+            now = now,
+            suppressed = setOf(item.id to LocalDate(2026, 9, 14)),
+        )
+
+        assertEquals(
+            listOf(LocalDate(2026, 9, 7), LocalDate(2026, 9, 21), LocalDate(2026, 9, 28)),
+            blocks.map { it.date },
+        )
+    }
+
+    @Test
+    fun `two time slots of one routine both lay down on the same day`() {
+        // A second "weiterer Zeitplatz" is its own definition under the same name,
+        // so the per-(item, date) uniqueness never sees the two as one.
+        val morning = recurring(RecurrenceRule.Weekly(DayOfWeek.MONDAY))
+            .copy(name = "Achtsamkeit", startTime = LocalTime(8, 0))
+        val noon = recurring(RecurrenceRule.Weekly(DayOfWeek.MONDAY))
+            .copy(name = "Achtsamkeit", startTime = LocalTime(12, 30))
+
+        val blocks = expandRecurring(
+            definitions = listOf(morning, noon),
+            from = LocalDate(2026, 9, 7),
+            to = LocalDate(2026, 9, 7),
+            existing = emptySet(),
+            now = now,
+        )
+
+        assertEquals(2, blocks.size)
+        assertEquals(setOf(morning.id, noon.id), blocks.map { it.itemId }.toSet())
+        assertEquals(setOf(LocalTime(8, 0), LocalTime(12, 30)), blocks.map { it.start }.toSet())
+    }
+
+    @Test
     fun `expansion is idempotent for occurrences that already exist`() {
         val item = recurring(RecurrenceRule.Weekly(DayOfWeek.MONDAY))
         val alreadyThere = setOf(

@@ -65,6 +65,8 @@ one `setup:morning-<day>` per night when the weekend has its own.
   app's, and a rename would be undone by the next save of the settings.
 - The migration renames only rows still called "Morgenzeit" and switches the mode
   on for every morning row. A morning with no steps is simply a block, as before.
+  A morning of zero minutes has no row at all, so its steps editor is hidden
+  (Settings and Listen tab) rather than accepting steps that would be dropped.
 
 #### A bug this turned up: steps on a multi-weekday task
 

@@ -7,7 +7,7 @@ paths:
 
 ### The database and its migrations
 
-**Version 33.** When changing an entity, diff the hand-written SQL against the
+**Version 34.** When changing an entity, diff the hand-written SQL against the
 matching `app/schemas/…/N.json`: Room validates at open time and a mismatch is a
 runtime crash, not a compile error. A new *enum value* needs no migration at all —
 Room stores enums by name in a TEXT column.
@@ -51,6 +51,7 @@ night corrections and an existing task.
 | 30→31 | the tables `sleep_logs` (keyed by the day an answer is about) and `notes`; `planned_blocks.timerExtension`, `originalStart`, `originalDuration`, `quantityDone`, all nullable; `user_setup.statistics` (1), `statsHidden` (`TEXT NOT NULL DEFAULT ''`) and `notes` (0) — see *Step 43* |
 | 31→32 | `items.color` (`INTEGER`, nullable: a colour of the task's own, null being its category's) — see *Step 46* |
 | 32→33 | `user_setup.nightOverrides` (`TEXT NOT NULL DEFAULT ''`): the nights that differ from their standing pattern, `DAY=bedPrep,sleep,wake` joined by `;` in week order; empty for every existing row — see *First setup* in `setup.md` |
+| 33→34 | `items.followUpOfId` (`TEXT`, nullable, indexed as `index_items_followUpOfId`): the predecessor a follow-up ToDo waits for; null for every existing card — see *Follow-up ToDos* in `lists.md`. `calendar_events.seriesId` (`TEXT`, nullable) and `conflictNotified` (`INTEGER NOT NULL DEFAULT 0`), and the table `calendar_series` (`itemId` primary key, `calendarId`, `seriesId`, `createdAt`; index on `calendarId, seriesId`) — see *Background refresh, time blockers, series and conflicts* in `google-calendar.md`. One migration for both, `SCHEMA_34_FOLLOW_UPS` then `SCHEMA_34_CALENDAR` |
 | 19→20 | `user_setup.taskAnnouncement` (`TEXT NOT NULL DEFAULT 'SOUND'`, an enum by name) and `speakNotes` (0) — see *Reading a task's name aloud* |
 
 **The two shipped version-28 layouts converge at version 33.** The exported

@@ -2,7 +2,9 @@ package com.example.eta.data.repository
 
 import com.example.eta.data.local.DayPlanDao
 import com.example.eta.data.local.PlannedBlockDao
+import com.example.eta.domain.reevaluation.DAILY_CATCH_UP_DAYS
 import com.example.eta.domain.reevaluation.DailySettlement
+import com.example.eta.domain.reevaluation.unsettledDays
 import com.example.eta.domain.streak.CATCH_UP_PHRASE
 import com.example.eta.domain.streak.CATCH_UP_WINDOW_DAYS
 import kotlin.time.Clock
@@ -21,10 +23,14 @@ sealed interface CatchUpResult {
 /**
  * Making up a day that the evening never settled.
  *
- * Deliberately hard to reach. A skipped day costs the streak and its points, and
- * that consequence is the mechanic — so this exists only for the case the user
- * named: the app or the phone got in the way. The phrase has to be typed out in
- * full, which is friction on purpose rather than a checkbox to click past.
+ * Two paths, split by age. The last [DAILY_CATCH_UP_DAYS] days are offered on the
+ * dashboard and settled by the ordinary reevaluation, one tap each — a missed
+ * evening is the most common way the app's rhythm breaks, and hiding its repair
+ * made it worse. Older days stay behind the phrase here: they are a different
+ * kind of mistake, and that friction is deliberate.
+ *
+ * A skipped day still costs the streak and its points; catching it up later
+ * does not undo that, it only books what is there to book.
  *
  * **Contracts are not paid retroactively.** A contract is a promise attested to
  * on the day; saying a week later that it was kept is a different act, and one
@@ -39,24 +45,32 @@ class CatchUpService(
     private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) {
 
+    /** The dashboard's days: yesterday and the six before it, oldest first. */
+    suspend fun dailyDays(): List<LocalDate> =
+        unsettledWithin(clock.todayIn(timeZone), 1..DAILY_CATCH_UP_DAYS)
+
     /**
-     * Past days the app planned but never settled, newest first.
+     * Older past days the app planned but never settled, newest first.
      *
      * Bounded by the window: a day a month gone cannot meaningfully be recalled,
      * and offering it would only invite guessing.
      */
-    suspend fun openDays(): List<LocalDate> {
-        val today = clock.todayIn(timeZone)
-        val from = today.minus(DatePeriod(days = CATCH_UP_WINDOW_DAYS))
-        val yesterday = today.minus(DatePeriod(days = 1))
-
-        val settled = dayPlanDao.findSettledDates(from, yesterday).toSet()
-        return blockDao.findDatesWithBlocks(from, yesterday)
-            .filterNot { it in settled }
+    suspend fun openDays(): List<LocalDate> =
+        unsettledWithin(clock.todayIn(timeZone), (DAILY_CATCH_UP_DAYS + 1)..CATCH_UP_WINDOW_DAYS)
             .sortedDescending()
+
+    private suspend fun unsettledWithin(today: LocalDate, daysBack: IntRange): List<LocalDate> {
+        val from = today.minus(DatePeriod(days = daysBack.last))
+        val to = today.minus(DatePeriod(days = daysBack.first))
+        return unsettledDays(
+            today = today,
+            daysBack = daysBack,
+            planned = blockDao.findDatesWithBlocks(from, to),
+            settled = dayPlanDao.findSettledDates(from, to).toSet(),
+        )
     }
 
-    /** Settles [date] after the fact, if the phrase was typed exactly. */
+    /** Settles an older [date] after the fact, if the phrase was typed exactly. */
     suspend fun catchUp(date: LocalDate, phrase: String): CatchUpResult {
         if (phrase.trim() != CATCH_UP_PHRASE) {
             return CatchUpResult.Refused("Die Eingabe stimmt nicht.")
@@ -64,6 +78,9 @@ class CatchUpService(
         val today = clock.todayIn(timeZone)
         if (date >= today) {
             return CatchUpResult.Refused("Heute wird über den Tagesabschluss abgerechnet.")
+        }
+        if (date >= today.minus(DatePeriod(days = DAILY_CATCH_UP_DAYS))) {
+            return CatchUpResult.Refused("Dieser Tag steht auf dem Startbildschirm zum Nachholen bereit.")
         }
         if (date < today.minus(DatePeriod(days = CATCH_UP_WINDOW_DAYS))) {
             return CatchUpResult.Refused("Der Tag liegt zu lange zurück.")

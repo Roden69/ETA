@@ -31,7 +31,7 @@ enum class TutorialId(
     ),
     EXTRAS(
         title = "Extras",
-        summary = "Wege, Pause, Töne, Pomodoro, Erinnerung, Deadline und Subtasks — Schritt für Schritt.",
+        summary = "Wege, Pause, Töne, Pomodoro, Erinnerung, Deadline und Schritte, eins nach dem anderen.",
         advanced = false,
     ),
     GROWTH(
@@ -261,7 +261,7 @@ val EXTRAS_STEPS: List<TutorialStep> = listOf(
     ),
     text(
         TutorialStage.EXTRAS,
-        "Subtasks",
+        "Schritte",
         "Die Schritte innerhalb einer Aufgabe, einzeln abhakbar. Bleibt am Abend " +
             "etwas offen, kannst du den Rest in die nächste Woche übernehmen. Im " +
             "Routine-Modus arbeitest du die Schritte der Reihe nach ab.",

@@ -104,9 +104,9 @@ data class DesignChoice(
 /**
  * What the tab bar draws for each destination: its name, an icon, or both.
  *
- * Names are the default and were the only answer until step 44 — the
- * destinations are words this app can say in full. Icons alone make the bar
- * short enough that most of it fits without scrolling.
+ * Both is the default: the icon makes the bar findable at a glance and the name
+ * keeps every destination readable in full. Icons alone make the bar short
+ * enough that most of it fits without scrolling, which is why it stays a choice.
  */
 enum class TabStyle(val label: String) {
     NAMES("Nur Namen"),
@@ -117,7 +117,7 @@ enum class TabStyle(val label: String) {
     val showsName: Boolean get() = this != ICONS
 
     companion object {
-        val DEFAULT = NAMES
+        val DEFAULT = BOTH
     }
 }
 
@@ -142,10 +142,15 @@ fun EtaColors.withAccent(accent: Color): EtaColors = copy(
  *
  * Mid-tones on purpose: each has to carry white text as a button and still be
  * readable as text on white and on near-black.
+ *
+ * And hues the app already means something by are left out: Fokus (indigo),
+ * Nebenbei (cyan), Achtsam (green), the calendar's ochre, the red of a conflict
+ * and the grey of what is booked. A task painted in one of those would read as
+ * the category, or as a warning. A stored accent outside this list keeps its
+ * colour; it just is not offered as a swatch any more.
  */
 val ACCENT_PRESETS: List<Int> = listOf(
-    0xFFE5322D, 0xFFE0662B, 0xFFC99A1E, 0xFF4E9F3D, 0xFF1F9E8F, 0xFF2A8FD0,
-    0xFF4F5BD5, 0xFF8A4FD5, 0xFFC94FB0, 0xFFD5456E, 0xFF6B7280,
+    0xFFE0662B, 0xFF65A30D, 0xFFC94FB0, 0xFFD5456E, 0xFF8A4FD5, 0xFF9A5B2E,
 ).map { it.toInt() }
 
 /** A hue of the user's own, at the saturation and value the presets sit at. */
@@ -163,6 +168,17 @@ fun shapesOf(design: AppDesign): EtaShapes = when (design) {
 }
 
 /**
+ * Whether a stored tab style was picked on purpose rather than being the default.
+ *
+ * Installs from before the default changed stored a style on every save, so the
+ * stored name alone does not say. Icons or both can only have come from a pick (the
+ * old default was names); names without a flag is the old default, which moves to
+ * the new one. [storedFlag] is null when no pick was ever recorded.
+ */
+internal fun tabStylePicked(storedStyle: String?, storedFlag: Boolean?): Boolean =
+    storedFlag ?: (storedStyle == TabStyle.ICONS.name || storedStyle == TabStyle.BOTH.name)
+
+/**
  * Which design is on, and how bright.
  *
  * In `SharedPreferences` and not in `user_setup` like the other settings: the
@@ -175,12 +191,17 @@ class DesignStore(context: Context) {
     private val prefs =
         context.applicationContext.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
 
+    private var tabStyleChosen = tabStylePicked(
+        storedStyle = prefs.getString(KEY_TAB_STYLE, null),
+        storedFlag = if (prefs.contains(KEY_TAB_STYLE_CHOSEN)) prefs.getBoolean(KEY_TAB_STYLE_CHOSEN, false) else null,
+    )
+
     private val _choice = MutableStateFlow(
         DesignChoice.fromStored(
             design = prefs.getString(KEY_DESIGN, null),
             brightness = prefs.getString(KEY_BRIGHTNESS, null),
             accent = if (prefs.contains(KEY_ACCENT)) prefs.getInt(KEY_ACCENT, 0) else null,
-            tabStyle = prefs.getString(KEY_TAB_STYLE, null),
+            tabStyle = if (tabStyleChosen) prefs.getString(KEY_TAB_STYLE, null) else null,
         ),
     )
     val choice: StateFlow<DesignChoice> = _choice.asStateFlow()
@@ -192,13 +213,17 @@ class DesignStore(context: Context) {
     /** An accent of the user's own, or null for the design's. */
     fun selectAccent(accent: Int?) = store(_choice.value.copy(accent = accent))
 
-    fun select(tabStyle: TabStyle) = store(_choice.value.copy(tabStyle = tabStyle))
+    fun select(tabStyle: TabStyle) {
+        tabStyleChosen = true
+        store(_choice.value.copy(tabStyle = tabStyle))
+    }
 
     private fun store(choice: DesignChoice) {
         prefs.edit {
             putString(KEY_DESIGN, choice.design.name)
             putString(KEY_BRIGHTNESS, choice.brightness.name)
             putString(KEY_TAB_STYLE, choice.tabStyle.name)
+            putBoolean(KEY_TAB_STYLE_CHOSEN, tabStyleChosen)
             if (choice.accent == null) remove(KEY_ACCENT) else putInt(KEY_ACCENT, choice.accent)
         }
         _choice.value = choice
@@ -210,5 +235,6 @@ class DesignStore(context: Context) {
         const val KEY_BRIGHTNESS = "brightness"
         const val KEY_ACCENT = "accent"
         const val KEY_TAB_STYLE = "tabStyle"
+        const val KEY_TAB_STYLE_CHOSEN = "tabStyleChosen"
     }
 }

@@ -46,7 +46,7 @@ private fun DayOfWeek.next(): DayOfWeek = WEEK[(WEEK.indexOf(this) + 1) % WEEK.s
  * Zero-length stretches are skipped: an answer of "no morning time" should not
  * show up as an appointment.
  */
-private fun MutableList<SetupSpan>.addSpan(
+internal fun MutableList<SetupSpan>.addSpan(
     label: String,
     weekday: DayOfWeek,
     start: LocalTime,

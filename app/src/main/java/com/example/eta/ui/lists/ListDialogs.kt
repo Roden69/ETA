@@ -4,6 +4,7 @@ import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.widthIn
 import androidx.compose.foundation.rememberScrollState
@@ -17,6 +18,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.window.Dialog
+import com.example.eta.domain.chain.isWaitingFollowUp
 import com.example.eta.domain.model.Category
 import com.example.eta.domain.model.Item
 import com.example.eta.domain.model.ItemType
@@ -31,6 +33,7 @@ import com.example.eta.domain.recurrence.recurringOverlaps
 import com.example.eta.domain.recurrence.slotOccupancy
 import com.example.eta.domain.recurrence.weekOccupancy
 import com.example.eta.domain.setup.UserSetup
+import com.example.eta.domain.setup.isMorningRoutine
 import com.example.eta.ui.attributes.CategoryField
 import com.example.eta.ui.attributes.DEFAULT_DURATION
 import com.example.eta.ui.attributes.MIN_TASK_DURATION
@@ -59,6 +62,7 @@ import com.example.eta.ui.format.formatShort
 import com.example.eta.ui.format.formatWeekdays
 import com.example.eta.ui.subtasks.FoldCandidate
 import com.example.eta.domain.subtask.SubtaskDraft
+import com.example.eta.ui.subtasks.MORNING_ROUTINE_OFF_HINT
 import com.example.eta.ui.subtasks.MorningRoutineSteps
 import com.example.eta.ui.theme.EtaTheme
 import kotlin.time.Duration
@@ -142,8 +146,9 @@ fun ItemDetailDialog(
 ) {
     // A standing task is never finished — checking one off would retire the
     // definition and with it every occurrence still to come. It is ended on the
-    // Wiederkehrend list instead, which is where a task itself lives.
-    val completable = editable && item.type != ItemType.RECURRING
+    // Wiederkehrend list instead, which is where a task itself lives. A follow-up
+    // still waiting for its predecessor is not finished either: the order is the point.
+    val completable = editable && item.type != ItemType.RECURRING && !item.isWaitingFollowUp()
 
     ListDialog(
         title = item.name,
@@ -268,10 +273,10 @@ fun CompleteItemDialog(
         if (owesAnswers) {
             EtaText(
                 text = if (pointsVisible) {
-                    "Diese Karte ist nie ausgefüllt worden. Kategorie und Dauer entscheiden " +
-                        "die Punkte — bitte beides noch nachtragen."
+                    "Diese Karte wurde nie ausgefüllt. Für die Punkte fehlen Kategorie " +
+                        "und Dauer – bitte beides nachtragen."
                 } else {
-                    "Diese Karte ist nie ausgefüllt worden. Bitte noch nachtragen, welche " +
+                    "Diese Karte wurde nie ausgefüllt. Bitte trag noch nach, welche " +
                         "Kategorie sie hat und wie lange sie gedauert hat."
                 },
                 style = EtaTheme.typography.caption,
@@ -400,6 +405,7 @@ fun ItemEditDialog(
                 value = todo,
                 onChange = { todo = it },
                 today = today,
+                offerFollowUps = true,
                 groupName = name,
                 onGroupName = { name = it },
                 foldCandidates = foldCandidates,
@@ -479,6 +485,7 @@ fun TodoCreateDialog(
             value = attributes,
             onChange = { attributes = it },
             today = today,
+            offerFollowUps = true,
             groupName = name,
             onGroupName = { name = it },
             foldCandidates = foldCandidates,
@@ -518,9 +525,14 @@ fun RecurringCreateDialog(
      * length of the box that was shaped there; everything else is the default.
      */
     initial: RecurringAttributes = RecurringAttributes(),
+    /** The heading; a second time slot of a routine says so. */
+    title: String = "Neue wiederkehrende Aufgabe",
+    /** What the name and note open on: a second slot starts as a copy of its routine. */
+    initialName: String = "",
+    initialNote: String = "",
 ) {
-    var name by remember { mutableStateOf("") }
-    var note by remember { mutableStateOf("") }
+    var name by remember { mutableStateOf(initialName) }
+    var note by remember { mutableStateOf(initialNote) }
     var attributes by remember { mutableStateOf(initial) }
 
     val overlaps = remember(attributes, definitions) {
@@ -531,7 +543,7 @@ fun RecurringCreateDialog(
     }
     val booked = remember(definitions, setup) { weekOccupancy(definitions, setup) }
 
-    ListDialog(title = "Neue wiederkehrende Aufgabe", onDismiss = onDismiss) {
+    ListDialog(title = title, onDismiss = onDismiss) {
         EtaText(
             text = "Kommt in den festen Wochenplan; die Termine werden sofort angelegt.",
             style = EtaTheme.typography.caption,
@@ -592,6 +604,7 @@ fun recurringSummary(group: RecurringGroup): String = buildString {
             if (rhythm.parity == WeekParity.EVEN) " (gerade KW)" else " (ungerade KW)",
         )
         is Rhythm.Monthly -> append(" (${rhythm.weekOfMonth}. im Monat)")
+        is Rhythm.EveryWeeks -> append(" (alle ${rhythm.weeks} Wochen)")
     }
     group.representative.startTime?.let { append(" · ${it.formatClock()}") }
     // A Timer-Task says the time on its timer; the buffer behind it is slack.
@@ -623,6 +636,11 @@ fun RecurringGroupDialog(
     onEnd: () -> Unit,
     morningSteps: List<SubtaskDraft>? = null,
     onMorningSteps: (List<SubtaskDraft>) -> Unit = {},
+    /**
+     * A second time slot for the same routine on the same days — Achtsamkeit at
+     * noon as well as in the morning. Null leaves the action out.
+     */
+    onAddSlot: (() -> Unit)? = null,
 ) {
     val item = group.representative
     var confirmingEnd by remember(group.ids) { mutableStateOf(false) }
@@ -648,6 +666,7 @@ fun RecurringGroupDialog(
         }
 
         if (ownedBySettings) {
+            val morningRoutine = group.ids.any(::isMorningRoutine)
             if (morningSteps != null) {
                 EtaField(
                     label = "Schritte",
@@ -657,11 +676,11 @@ fun RecurringGroupDialog(
                 }
             }
             EtaText(
-                text = if (morningSteps != null) {
-                    "Uhrzeit und Dauer hängen an deinen Schlafzeiten und werden in den " +
+                text = when {
+                    morningSteps != null -> "Uhrzeit und Dauer hängen an deinen Schlafzeiten und werden in den " +
                         "Einstellungen unter „Schlaf und Morgen“ geändert."
-                } else {
-                    "Hängt an deinen Schlafzeiten und wird in den Einstellungen " +
+                    morningRoutine -> MORNING_ROUTINE_OFF_HINT
+                    else -> "Hängt an deinen Schlafzeiten und wird in den Einstellungen " +
                         "unter „Schlaf und Morgen“ geändert."
                 },
                 style = EtaTheme.typography.caption,
@@ -685,6 +704,7 @@ fun RecurringGroupDialog(
                 onClick = { if (confirmingEnd) onEnd() else confirmingEnd = true },
             )
             Spacer(Modifier.weight(1f))
+            onAddSlot?.let { EtaButton(text = "Weiterer Zeitplatz", style = EtaButtonStyle.Secondary, onClick = it) }
             EtaButton(text = "Bearbeiten", onClick = onEdit)
         }
     }
@@ -711,6 +731,10 @@ fun RecurringGroupEditDialog(
     subtasks: List<Subtask> = emptyList(),
     /** ToDos this task can swallow as steps. */
     foldCandidates: List<FoldCandidate> = emptyList(),
+    /** The weekday the task was opened on in the week timetable, when it was. */
+    singleDay: DayOfWeek? = null,
+    /** Saves that weekday alone; the other weekdays of the task stay as they are. */
+    onSaveSingleDay: ((name: String, note: String?, attributes: RecurringAttributes) -> Unit)? = null,
 ) {
     val item = group.representative
     var name by remember(group.ids) { mutableStateOf(item.name) }
@@ -774,6 +798,28 @@ fun RecurringGroupEditDialog(
             onGroupName = { name = it },
             foldCandidates = foldCandidates,
         )
+        // "Nur Dienstag": the form's answers for this one weekday, the rest of the
+        // task left as it is. Only where the task has more than this one day.
+        if (singleDay != null && onSaveSingleDay != null && group.weekdays.size > 1) {
+            EtaText(
+                text = "Ändert nur ${singleDay.formatLong()}. Die anderen Tage dieser Aufgabe " +
+                    "bleiben, wie sie sind.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textMuted,
+            )
+            EtaButton(
+                text = "Nur ${singleDay.formatLong()} sichern",
+                style = EtaButtonStyle.Secondary,
+                modifier = Modifier.fillMaxWidth(),
+                onClick = {
+                    onSaveSingleDay(
+                        name.trim().ifEmpty { item.name },
+                        note.trim().ifBlank { null },
+                        attributes.copy(weekdays = setOf(singleDay)),
+                    )
+                },
+            )
+        }
 
         Row(horizontalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
             EtaButton(text = "Abbrechen", style = EtaButtonStyle.Secondary, onClick = onDismiss)
@@ -824,7 +870,7 @@ internal fun SchemePreview(
     )
 }
 
-private fun categoryLabel(category: Category): String = when (category) {
+internal fun categoryLabel(category: Category): String = when (category) {
     Category.FOKUS -> "Fokus"
     Category.NEBENBEI -> "Nebenbei"
     Category.ACHTSAM -> "Achtsam"

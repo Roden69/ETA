@@ -743,6 +743,22 @@ private fun BreakWarnings(
             onDismiss = { onDismiss(PlannerWarning.BREAK_STRETCH) },
         )
     }
+    // Not a shortage: two tasks that meet with nothing between them. Said once,
+    // with the pair and the time, and waved away like the others.
+    val pair = findings.backToBack.firstOrNull()
+    if (pair != null && PlannerWarning.BACK_TO_BACK !in dismissed) {
+        val more = findings.backToBack.size - 1
+        WarningBar(
+            text = "Ohne Pause direkt hintereinander: »${pair.first}« und »${pair.second}« " +
+                "um ${minuteToLocalTime(pair.atMinute).formatClock()}" +
+                when (more) {
+                    0 -> "."
+                    1 -> " — und an einer weiteren Stelle des Tages."
+                    else -> " — und an $more weiteren Stellen des Tages."
+                },
+            onDismiss = { onDismiss(PlannerWarning.BACK_TO_BACK) },
+        )
+    }
 }
 
 /** "keine" reads better than "0 min" in the middle of that sentence. */

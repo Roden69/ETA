@@ -17,7 +17,7 @@ val DEFAULT_BREAK_MAX_STRETCH: Duration = 3.hours
 private const val BREAK_UNIT_MINUTES = 120
 
 /** The two warnings the planner can raise about breaks, each waved away by itself. */
-enum class PlannerWarning { BREAK_TOTAL, BREAK_STRETCH }
+enum class PlannerWarning { BREAK_TOTAL, BREAK_STRETCH, BACK_TO_BACK }
 
 /**
  * What a block is to the Pausenchecker.
@@ -43,7 +43,7 @@ fun BlockWithItem.breakKind(): BreakKind = when {
     item.category == Category.ACHTSAM -> BreakKind.REST
     item.role == ItemRole.BED_PREP || item.role == ItemRole.MORNING -> BreakKind.NEUTRAL
     item.category != null || item.role != null -> BreakKind.TASK
-    block.origin == BlockOrigin.CALENDAR_IMPORT -> BreakKind.TASK
+    block.origin.isCalendarEvent -> BreakKind.TASK
     else -> BreakKind.NEUTRAL
 }
 
@@ -58,12 +58,51 @@ data class LongStretch(
     val taskMinutes: Int,
 )
 
+/**
+ * Two activities that run straight into each other: no time between them, and no
+ * break planned after the first. Said as a hint, not counted: the totals cannot
+ * tell a deliberate chain from a forgotten break.
+ */
+data class BackToBack(
+    val first: String,
+    val second: String,
+    /** The minute they meet: where the second one's own time begins. */
+    val atMinute: Int,
+)
+
+/**
+ * The back-to-back pairs of a day: each task followed directly by the next task,
+ * with no free time and no planned break in between.
+ *
+ * Only **task** blocks take part, and only neighbours on the day: a rest or a
+ * neutral block between two tasks is what makes them not back-to-back. The
+ * measure is the planner's own container, so a journey that leads into the next
+ * task counts as the time between them — it was planned. A break planned after
+ * the first one answers the question outright. Overlapping blocks are not this
+ * hint's business; the overlap box already reports them.
+ */
+fun backToBackPairs(blocks: List<BlockWithItem>): List<BackToBack> =
+    blocks.filter { it.occupiesTime() }
+        .sortedBy { it.block.startMinute() }
+        .zipWithNext()
+        .mapNotNull { (first, second) ->
+            if (first.breakKind() != BreakKind.TASK || second.breakKind() != BreakKind.TASK) {
+                return@mapNotNull null
+            }
+            if ((first.block.breakAfter ?: Duration.ZERO) > Duration.ZERO) return@mapNotNull null
+            val meeting = first.block.containerEndMinute()
+            if (meeting != second.block.containerStartMinute()) return@mapNotNull null
+            BackToBack(first.item.name, second.item.name, meeting)
+        }
+
 data class BreakFindings(
     val taskMinutes: Int,
     val restMinutes: Int,
     /** What the tasks of the day ask for: so much for every full two hours. */
     val neededMinutes: Int,
     val longStretches: List<LongStretch>,
+    /** Task pairs without any time between them, in the order of the day. */
+    val backToBack: List<BackToBack> = emptyList(),
 ) {
     val tooFew: Boolean get() = restMinutes < neededMinutes
 }
@@ -137,5 +176,6 @@ fun checkBreaks(
         restMinutes = restMinutes,
         neededMinutes = (taskMinutes / BREAK_UNIT_MINUTES) * perTwoHours.inWholeMinutes.toInt(),
         longStretches = stretches,
+        backToBack = backToBackPairs(day),
     )
 }

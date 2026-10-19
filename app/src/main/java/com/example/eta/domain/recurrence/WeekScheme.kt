@@ -81,6 +81,34 @@ fun freeSpans(booked: List<IntRange>): List<IntRange> = buildList {
 }
 
 /**
+ * The side-by-side lane each stretch of one day is drawn in, and how many lanes
+ * the day needs.
+ *
+ * Stretches that overlap in time must not be drawn on top of each other, or the
+ * one underneath vanishes. Greedy by start: a stretch takes the first lane whose
+ * previous stretch has ended before it begins, and a new lane only when none is
+ * free. Answers the lane of each stretch in the order given, and the count.
+ */
+fun overlapLanes(stretches: List<IntRange>): Pair<List<Int>, Int> {
+    val laneEnds = mutableListOf<Int>()
+    val lanes = IntArray(stretches.size)
+    stretches.indices
+        .sortedWith(compareBy({ stretches[it].first }, { stretches[it].last }))
+        .forEach { index ->
+            val stretch = stretches[index]
+            var lane = laneEnds.indexOfFirst { it < stretch.first }
+            if (lane < 0) {
+                laneEnds += stretch.last
+                lane = laneEnds.lastIndex
+            } else {
+                laneEnds[lane] = stretch.last
+            }
+            lanes[index] = lane
+        }
+    return lanes.toList() to laneEnds.size
+}
+
+/**
  * The next start at which what [slots] describe sits in free time on **every**
  * one of its weekdays — or null when the rest of the day holds no such stretch.
  *

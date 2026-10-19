@@ -26,6 +26,7 @@ import com.example.eta.domain.model.Item
 import com.example.eta.domain.model.ItemType
 import com.example.eta.ui.attributes.CheckRow
 import com.example.eta.ui.attributes.DEFAULT_MARGIN
+import com.example.eta.ui.attributes.MARGIN_STEP
 import com.example.eta.ui.attributes.MIN_MARGIN
 import com.example.eta.ui.attributes.TodoAttributeFields
 import com.example.eta.ui.attributes.TodoAttributes
@@ -172,6 +173,9 @@ fun BlockEditDialog(
     // property of the kind of thing it is. The row below says so.
     var endSound by remember(entry.block.id) { mutableStateOf(entry.item.endSound) }
     val recurring = entry.item.recurrenceRule != null
+    // A standing occurrence shows its task's fields read-only: they are written
+    // where the task is, and a window on one day must not rewrite it.
+    val locked = entry.block.origin == BlockOrigin.RECURRING
     // Custom Earn, Custom Spend and Social: what they are worth is their rate.
     val spend = entry.item.type == ItemType.SPEND
     var rate by remember(entry.block.id) { mutableDoubleStateOf(entry.item.pointsPerHour ?: 0.0) }
@@ -187,7 +191,20 @@ fun BlockEditDialog(
 
     PlannerDialog(title = "Bearbeiten", onDismiss = onDismiss) {
         EtaField(label = "Name") {
-            EtaTextField(value = name, onValueChange = { name = it })
+            if (locked) {
+                EtaText(text = name, style = EtaTheme.typography.bodyStrong)
+            } else {
+                EtaTextField(value = name, onValueChange = { name = it })
+            }
+        }
+        if (locked) {
+            EtaText(
+                text = "Name, Kategorie, Notiz und Endton gelten für alle Termine dieser Aufgabe " +
+                    "und bleiben hier unverändert. Dauerhaft ändern unter »Generell« in der " +
+                    "Wochenansicht oder in der Liste.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textMuted,
+            )
         }
         // Directly under the name, because it is read together with it: the note
         // about *this* occurrence is what the name alone does not say. The one for
@@ -215,7 +232,7 @@ fun BlockEditDialog(
                     hint = "Gilt für diesen Eintrag. Positiv schreibt gut, negativ zehrt vom Konto.",
                 )
             }
-        } else {
+        } else if (!locked) {
             EtaField(
                 label = "Kategorie",
                 hint = "Gilt für alle künftigen Vorkommen dieser Aufgabe.",
@@ -253,7 +270,7 @@ fun BlockEditDialog(
             )
         }
 
-        val activeExtras = listOf(endSound, travel != null, returnAfter != null, breakAfter != null)
+        val activeExtras = listOf(endSound && !locked, travel != null, returnAfter != null, breakAfter != null)
             .count { it }
         EtaExpander(
             label = "Extras",
@@ -282,7 +299,7 @@ fun BlockEditDialog(
                 value = breakAfter,
                 onValueChange = { breakAfter = it },
             )
-            CheckRow(
+            if (!locked) CheckRow(
                 checked = endSound,
                 onCheckedChange = { endSound = it },
                 label = "Ton am Ende",
@@ -294,7 +311,7 @@ fun BlockEditDialog(
             )
         }
 
-        if (recurring) {
+        if (recurring && !locked) {
             EtaField(
                 label = "Notiz für alle Termine",
                 hint = "Gehört zur Aufgabe selbst und begleitet jedes Vorkommen.",
@@ -350,15 +367,15 @@ fun BlockEditDialog(
                 text = if (!pointsVisible) {
                     "Abgesagt bleibt der Termin am Tag stehen, und seine Stunden sind " +
                         "wieder frei." +
-                        if (cancellationCosts) " Gedrückt halten, wenn wegen höherer Gewalt." else ""
+                        if (cancellationCosts) " Bei höherer Gewalt gedrückt halten." else ""
                 } else if (cancellationCosts) {
-                    "Absagen kostet die abgesagten Stunden an Punkten. " +
+                    "Eine Absage kostet dich die abgesagten Stunden an Punkten. " +
                         if (entry.block.isHandPlaced) {
                             "»Vom Tag nehmen« nicht — die Aufgabe wandert zurück in die Woche. "
                         } else {
                             ""
                         } +
-                        "Gedrückt halten, wenn wegen höherer Gewalt."
+                        "Bei höherer Gewalt gedrückt halten."
                 } else {
                     "Der Tag läuft noch nicht — im Voraus abzusagen kostet nichts. " +
                         "Die Stunden sind dann wieder frei."
@@ -388,7 +405,7 @@ fun BlockEditDialog(
         // everything else in this dialog it writes on its own Sichern, the card
         // being one that already exists.
         EtaExpander(
-            label = "Subtasks",
+            label = "Schritte",
             hint = "Schritte innerhalb der Aufgabe. Gilt für die Aufgabe, nicht nur für heute.",
             summary = when (subtasks.size) {
                 0 -> "Keine"
@@ -404,7 +421,7 @@ fun BlockEditDialog(
                 )
             }
             EtaButton(
-                text = "Subtasks erstellen / bearbeiten",
+                text = "Schritte anlegen / bearbeiten",
                 style = EtaButtonStyle.Secondary,
                 modifier = Modifier.fillMaxWidth(),
                 onClick = { building = true },
@@ -504,6 +521,7 @@ private fun MarginField(
             EtaDurationPicker(
                 value = value,
                 onValueChange = onValueChange,
+                step = MARGIN_STEP,
                 minimum = MIN_MARGIN,
             )
         }
@@ -560,9 +578,9 @@ fun ClearDayDialog(
             text = if (!LocalPointsVisible.current) {
                 "Die Stunden sind danach wieder frei."
             } else if (costs && cancelledHours > 0.0) {
-                "Der Tag läuft bereits: die Absagen kosten rund " +
+                "Der Tag läuft schon: Die Absagen kosten etwa " +
                     "${"%.1f".format(cancelledHours)} h an Punkten. " +
-                    "Der Abendrückblick lässt »höhere Gewalt« gelten."
+                    "Im Abendrückblick kannst du »höhere Gewalt« angeben."
             } else {
                 "Der Tag läuft noch nicht — im Voraus abzusagen kostet nichts."
             },
@@ -710,7 +728,7 @@ fun OverlapDialog(
             }
             if (callsOff && costs && pointsVisible) {
                 EtaText(
-                    text = "Der Tag läuft bereits: Absagen kostet die abgesagten Stunden an Punkten.",
+                    text = "Der Tag läuft schon: Eine Absage kostet dich die abgesagten Stunden an Punkten.",
                     style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.warning,
                 )
@@ -780,8 +798,8 @@ fun NewEntryKindDialog(
                 )
                 if (!canSpend) {
                     EtaText(
-                        text = "Ausgeben braucht Guthaben — dein Punktestand liegt bei 0 " +
-                            "oder darunter.",
+                        text = "Zum Ausgeben brauchst du Punkte. Dein Punktestand liegt gerade " +
+                            "bei 0 oder darunter.",
                         style = EtaTheme.typography.caption,
                         color = EtaTheme.colors.warning,
                     )

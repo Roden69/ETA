@@ -36,7 +36,8 @@ onboarding uses its own routine selection and weekly calendar. The settings draf
 stays null until stored answers arrive, so defaults cannot be saved by accident.
 
 **Since step 18 only the answers that are configuration are here**: sleep and
-morning, the wake alarm, the still-active question, the planning times,
+morning (the morning steps editor is shown only while the stored morning has minutes),
+the wake alarm, the still-active question, the planning times,
 the four "Advanced Features" switches (`AdvancedFeaturesBox` — see *Step 36*; they
 apply at once, and the points one folds the next two away), inflation and the cancellation rate. Meals, housekeeping, sport, free time,
 mindfulness and work are standing *tasks* and are edited on the Listen tab. Saving
@@ -66,7 +67,10 @@ events, vacation mode, the open-days catch-up and the debug reset.
 vibrate replaces task sounds and speech with vibration; the app's **Still** mode
 and DND without an override suppress vibration as well. The DND override never
 unmutes the ringer. The speech probe follows the same policy without mistaking a
-muted phone for a missing speech engine. See [the audio policy](alarms.md).
+muted phone for a missing speech engine. See [the audio policy](alarms.md). The
+help text under the Ton/Vibration/Still choice says these modes cover Eta's own
+messages only; the wake alarm has no mode and always rings (issue 22). The DND
+override's hint names its default, "Still bleiben" (issue 27).
 The Audio page and its sound/vibration explanations were checked on a Pixel 8
 emulator, including the speech probe in vibration mode without a false
 missing-engine message. Physical-device audio remains a separate check.
@@ -90,4 +94,13 @@ the questionnaire. `ResetDao` lists its tables by hand on purpose, so a new tabl
 a visible omission rather than something that silently survives a reset. Note that
 view models outlive the screen swap: anything the setup view model latches (its
 `saving` flag) has to be cleared, or the reset comes back to a stuck questionnaire.
+
+### Evening choices (#18, #44)
+
+- **Sleep page, "Abendruhe-Hinweis" (default on):** switches the wind-down card after the
+  day closing off. The card's "Nicht mehr anzeigen" does the same.
+- **Wake page, "Wecken über" (Eta or Uhr-App):** shown only while the Weckruf is on. It
+  is stored in `EveningStore`, not in `UserSetup`, so it needs no schema change.
+- **"Offene Tage":** now only the days older than the dashboard's last seven; the
+  phrase is still required for those.
 

@@ -66,13 +66,24 @@ sound from a resource or a content URI, so they are **copied** into
 `app/src/main/res/raw/` — `sounds/` stays the source folder, `res/raw/` is what
 ships. Re-copy after changing one; nothing watches the folder.
 
-**Audio policy (issue 48):** `EtaSound.effectiveMode` decides once for both mp3s
-and speech. The selected **Still** mode always suppresses sound and vibration.
-**Do-Not-Disturb** suppresses both unless "Trotzdem spielen" is enabled.
-Otherwise a phone on **silent or vibrate** replaces the announcement with a short
-vibration, even when Eta's selected mode is **Ton**. The DND override bypasses
-only DND, never the muted ringer. With a normal ringer, **Ton** plays the selected
-sound or speech and **Vibration** only buzzes. The separate wake alarm is unchanged.
+**Audio policy (issues 48, 6, 27):** `domain/audio/AudioModeRule.kt`
+(`effectiveAudioMode`, pure and unit-tested) decides once for both mp3s and speech,
+from the chosen mode, the ringer switch, Do-Not-Disturb and its override. The
+selected **Still** mode always suppresses sound and vibration. **Do-Not-Disturb**
+suppresses both unless "Trotzdem spielen" is enabled; that override is **off by
+default** and a fresh install never has it on. Otherwise a phone on **silent or
+vibrate** never plays a sound: it buzzes instead, even when Eta's selected mode is
+**Ton**. The DND override bypasses only DND, never the muted ringer. With a normal
+ringer, **Ton** plays the selected sound or speech and **Vibration** only buzzes.
+The separate wake alarm is unchanged.
+
+**The buzz carries alarm usage.** Android treats a vibration like a sound: without
+an alarm usage it is a notification or touch buzz, which the system drops on a
+silent or vibrate ringer. `alarm/AlarmVibration.kt` marks every Eta buzz as alarm:
+`VibrationAttributes.USAGE_ALARM` from API 33, `AudioAttributes` `USAGE_ALARM` on
+26–32, nothing below. This is the same routing the sounds use. [INFERENCE from AOSP
+behaviour; not verified on the Xiaomi device.] Both `EtaSound.vibrate` and the wake
+ringer's buzz (`WakeAlarmRinger`) go through it.
 
 `EtaSpeech.speak` returns false for the vibration outcome so the task coordinator
 uses `EtaSound.play` as its vibration fallback; requested silence is handled
@@ -97,11 +108,14 @@ permission check, which is also what turned `lint` green.
 **A channel's sound is fixed when the channel is created** — `setSound` on an
 existing `NotificationChannel` is ignored — so every change to one needs a **new
 channel id**, with `deleteNotificationChannel` on the old one so no dead entry
-lingers in the system settings. That is why the ids read `planning_v3`,
-`task_start_v2`, `task_end_v2`: they carried sounds until step 18 and are silent
-now, `ensureSilentChannel` deleting their predecessors. `NotificationCompat.setSound`
-is still set on the builder, ignored from Android 8 on, for the 7.x devices
-`minSdk 24` still covers.
+lingers in the system settings. Audit of every channel (`git log -p` on the channel
+definitions, issue 48): only `planning`, `planning_v2`, `task_start` and `task_end`
+ever carried a sound. They are migrated to `planning_v3`, `task_start_v2` and
+`task_end_v2`, with their predecessors deleted by `ensureSilentChannel`. `wake`,
+`reminders`, `still_active` and `pomodoro` were created silent and never had a
+sound, so they need no migration. Eta-announcement channels stay soundless, because
+Eta plays its own sounds. `NotificationCompat.setSound` is still set on the builder,
+ignored from Android 8 on, for the 7.x devices `minSdk 24` still covers.
 
 `planning_start.mp3` plays on **every** ring of a planning phase, the five-minute
 retries included: "planmäßig" reads as "at its scheduled time, as opposed to
@@ -221,6 +235,11 @@ through the Android clock app; what it takes:
   DND is not an alarm clock.
 - **The notification is `ongoing` and back does nothing.** An alarm that can be
   swiped away half asleep without answering it is not an alarm.
+- **Snooze is ten minutes, on purpose** (`WAKE_SNOOZE` in `domain/planning/PlanningSchedule.kt`,
+  issue 26). The earlier nine had no reason behind them, and the owner named no other
+  value, so ten stays. It is longer than the five-minute planning snooze because the
+  wake alarm exists to get you up; long enough to be on your feet before the second
+  ring. Changing it means changing the constant, `ClockAlarmsTest` and this note together.
 
 **What the system clock app still has that this does not:** OEM allow-listing.
 Samsung, Xiaomi and others exempt their own clock unconditionally, so the
@@ -234,4 +253,17 @@ weekend pattern, then the weekday pattern. Planner shading and the alarm therefo
 follow the same corrected night. Settings save reschedules the alarm as before.
 The next wake time for an individually edited night was checked on a physical phone;
 no ringing or sound was triggered by that smoke scenario.
+
+**Who rings: the route (#18).** `EveningStore.wakeRoute()` (SharedPreferences `evening`)
+is Eta by default. With *Uhr-App* and that app installed, `WakeAlarmCoordinator.reschedule`
+arms nothing: `etaRingsWakeAlarm` decides, and a vanished clock app gives the alarm back
+to Eta, so it is never lost. The hand-over is the evening's one-shot question
+(`ClockAppAlarms.setOnce`, see `streak-reevaluation.md`), not a repeating alarm. Eta still
+cannot read, change or delete the alarms a clock app holds. The Settings choice "Wecken
+über" is shown only while the Weckruf is on, and the wake time shown as due is Eta's own,
+so it is empty while the clock app holds the alarm. The Settings text says that without
+the evening's confirmation no alarm stands. System Back in the evening's planner leads on
+to the evening screens like its own button, so the gesture cannot skip the question; and
+when the evening finds the clock app gone, it re-arms Eta's alarm on the spot, so
+"Eta weckt dich selbst" is true.
 

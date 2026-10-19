@@ -1,6 +1,7 @@
 package com.example.eta.domain.reevaluation
 
 import com.example.eta.data.local.BlockWithItem
+import com.example.eta.domain.model.BlockOrigin
 import com.example.eta.domain.model.Contract
 import com.example.eta.domain.model.ContractState
 import com.example.eta.domain.model.ItemRole
@@ -103,9 +104,14 @@ data class DailySettlement(
  * carried are still counted here, whether or not anything is planned into them
  * afterwards. Two questions, two honest answers: the time was spent, and the slot
  * is free.
+ *
+ * **A time blocker holds its time without being ticked** (#16): the user chose to
+ * keep the appointment out of the scoring, so it neither earns nor leaves its hours
+ * to be charged as unplanned. Called off, it gives them back like any block.
  */
 fun BlockWithItem.heldItsTime(): Boolean =
-    block.isCompleted || item.role == ItemRole.FREE_TIME
+    block.isCompleted || item.role == ItemRole.FREE_TIME ||
+        (block.origin == BlockOrigin.CALENDAR_BLOCKER && occupiesTime())
 
 /**
  * How much of [date]'s available time carries a block, counting overlaps once.

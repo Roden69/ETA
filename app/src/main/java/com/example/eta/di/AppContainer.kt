@@ -2,9 +2,11 @@ package com.example.eta.di
 
 import android.content.Context
 import androidx.room3.Room
+import com.example.eta.alarm.CalendarRefreshCoordinator
 import com.example.eta.alarm.PlanningAlarmCoordinator
 import com.example.eta.alarm.ReminderCoordinator
 import com.example.eta.alarm.TaskStartCoordinator
+import com.example.eta.alarm.EveningStore
 import com.example.eta.alarm.WakeAlarmCoordinator
 import com.example.eta.data.backup.BackupService
 import com.example.eta.data.calendar.GoogleAuth
@@ -12,6 +14,7 @@ import com.example.eta.data.calendar.GoogleCalendarApi
 import com.example.eta.data.local.EtaDatabase
 import com.example.eta.data.local.ETA_DATABASE_MIGRATIONS
 import com.example.eta.data.repository.CalendarImportService
+import com.example.eta.data.repository.CalendarRefreshService
 import com.example.eta.data.repository.CalendarRepository
 import com.example.eta.data.repository.CalendarSyncService
 import com.example.eta.data.repository.CatchUpService
@@ -40,6 +43,7 @@ import com.example.eta.data.repository.WeekPlanningService
 import com.example.eta.data.tutorial.TutorialSeed
 import com.example.eta.ui.theme.DesignStore
 import com.example.eta.ui.tutorial.TutorialStore
+import com.example.eta.ui.setup.FeatureSuggestionStore
 import kotlin.time.Clock
 
 /**
@@ -96,6 +100,7 @@ class AppContainer(
     val planRepository: PlanRepository = PlanRepository(
         database.plannedBlockDao(),
         database.dayPlanDao(),
+        database.itemDao(),
         clock = clock,
     )
 
@@ -124,6 +129,7 @@ class AppContainer(
         itemDao = database.itemDao(),
         planRepository = planRepository,
         vacationRepository = vacationRepository,
+        calendarDao = database.calendarDao(),
         clock = clock,
     )
 
@@ -242,9 +248,29 @@ class AppContainer(
         itemRepository = itemRepository,
         planRepository = planRepository,
         calendarRepository = calendarRepository,
+        recurringTaskService = recurringTaskService,
         dayClosingService = dayClosingService,
         weekPlanningService = weekPlanningService,
+        scheduleMaintenance = scheduleMaintenance,
         clock = clock,
+    )
+
+    /** The background read of the planning window, and the one quiet word about new clashes. */
+    val calendarRefreshService: CalendarRefreshService = CalendarRefreshService(
+        syncService = calendarSyncService,
+        calendarRepository = calendarRepository,
+        planRepository = planRepository,
+        setupRepository = setupRepository,
+        clock = clock,
+    )
+
+    /** Reads the calendar about hourly while an account is connected. Off in the sandbox. */
+    val calendarRefreshCoordinator: CalendarRefreshCoordinator = CalendarRefreshCoordinator(
+        context = appContext,
+        calendarRepository = calendarRepository,
+        refresh = calendarRefreshService,
+        clock = clock,
+        enabled = !sandbox,
     )
 
     val planningPhaseService: PlanningPhaseService = PlanningPhaseService(
@@ -292,10 +318,14 @@ class AppContainer(
         enabled = !sandbox,
     )
 
-    /** Off unless the setup says otherwise; rings at the setup's wake time. */
+    /** The evening's choices: where the wake alarm rings, and whether the wind-down hint shows. */
+    val eveningStore: EveningStore = EveningStore(appContext)
+
+    /** Off unless the setup says otherwise; rings at the setup's wake time, or leaves it to the clock app. */
     val wakeAlarmCoordinator: WakeAlarmCoordinator = WakeAlarmCoordinator(
         context = appContext,
         setupRepository = setupRepository,
+        preferences = eveningStore,
         clock = clock,
         enabled = !sandbox,
         nightService = nightService,
@@ -303,6 +333,9 @@ class AppContainer(
 
     /** Whether the tutorial is owed or was asked for; outside the database on purpose. */
     val tutorialStore: TutorialStore = TutorialStore(appContext)
+
+    /** The answers to the optional-feature suggestions; a fact about this install, like the tutorial flags. */
+    val featureSuggestionStore: FeatureSuggestionStore = FeatureSuggestionStore(appContext)
 
     /**
      * Lays the tutorial's example day down. **Null on the real container**, so

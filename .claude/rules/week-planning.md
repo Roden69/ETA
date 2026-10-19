@@ -9,6 +9,9 @@ paths:
 `ui/weekplanner/` runs the three parts `Planungsphase.md` names, with the maths in
 `domain/planning/WeekPlanning.kt` and `WeekPlanningService` doing the writing.
 
+- **Each step keeps its scroll position** (`pageScrolls` in `WeekPlannerScreen`, one
+  per `Step`): paging away and "Anpassungen vornehmen" (the timetable over the phase)
+  both leave the page's composition, and would otherwise start it at the top (issue #7).
 - **The week is the seven days after the planning day**, not a calendar week. The
   user chooses which weekday they plan on, so the plan covers the seven days that
   follow whenever that happens.
@@ -85,3 +88,14 @@ too meant a week could be planned out completely — revolver empty, nothing lef
 place — and still refuse anything new, the opposite of the rule's intent. An emptied
 revolver now always means the week can be filled again.
 
+
+**Nothing leaves the Sammelliste column without a reason.** `weekPool`
+(`domain/planning/WeekPool.kt`) splits the ToDos into pullable and held, and each held
+card carries its `PullBlock`: a follow-up still waiting for its predecessor, an unlock
+day after the week's end ("Einplanbar ab …"), or open goals of an earlier cycle. Held
+cards are listed greyed out under "Noch nicht in dieser Woche". Before, a card that
+unlocked after the week's end was dropped from the column without a word, and the open
+goals case blanked the whole column to "Gesperrt." while the Listen tab listed the
+cards. `pullIntoWeek` checks the same `pullBlockOf` rule, so a stale tap cannot take in
+what the screen would hold back. A pull writes stage and stamp only from the screen's
+copy of the card: it persists, and the Listen tab shows it straight away.

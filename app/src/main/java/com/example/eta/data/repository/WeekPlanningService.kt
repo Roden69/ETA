@@ -2,6 +2,8 @@ package com.example.eta.data.repository
 
 import com.example.eta.data.local.JournalDao
 import com.example.eta.data.local.PointsDao
+import com.example.eta.domain.calendar.DateWindow
+import com.example.eta.domain.calendar.planningWindow
 import com.example.eta.domain.model.JournalEntry
 import com.example.eta.domain.model.JournalKind
 import com.example.eta.domain.model.PointsReason
@@ -11,12 +13,14 @@ import com.example.eta.domain.reward.isInflationDue
 import com.example.eta.domain.reward.weeklyInflationOn
 import kotlin.time.Clock
 import kotlinx.datetime.DatePeriod
+import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
+import com.example.eta.ui.format.formatPoints
 
 /**
  * Which stretch the weekly planner is looking at.
@@ -58,6 +62,19 @@ class WeekPlanningService(
     fun weekStart(): LocalDate = today().plus(DatePeriod(days = 1))
 
     fun weekEnd(): LocalDate = today().plus(DatePeriod(days = DAYS_PER_WEEK))
+
+    /**
+     * The calendar stretch a weekly planning on today reads: today through the day
+     * before the next weekly planning day, see [planningWindow].
+     *
+     * Without a setup there is no planning day to read, and the seven days from
+     * today stand in for it; no planning screen is reachable without a setup.
+     */
+    suspend fun calendarWindow(): DateWindow {
+        val planningDay = setupRepository.find()?.weeklyPlanningDay
+            ?: return DateWindow(today(), weekEnd())
+        return planningWindow(today(), planningDay)
+    }
 
     /** The day the cycle running now began: the last weekly planning day. */
     suspend fun cycleStart(): LocalDate {
@@ -132,7 +149,7 @@ class WeekPlanningService(
                 amount = -preview.loss,
                 reason = PointsReason.INFLATION,
                 occurredAt = clock.now(),
-                note = "30% von ${preview.balance}",
+                note = "30 % von ${formatPoints(preview.balance)} Punkten",
             ),
         )
         return preview.loss

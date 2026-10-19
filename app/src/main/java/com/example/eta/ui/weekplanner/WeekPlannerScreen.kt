@@ -33,9 +33,11 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.eta.data.repository.InflationPreview
 import com.example.eta.domain.model.Item
 import com.example.eta.domain.planning.WeekBudget
+import com.example.eta.domain.planning.PullBlock
 import com.example.eta.domain.planning.costOf
 import com.example.eta.ui.calendar.CalendarEventsSection
 import com.example.eta.ui.calendar.CalendarEventsViewModel
+import com.example.eta.ui.components.ConfirmDialog
 import com.example.eta.ui.components.EtaButton
 import com.example.eta.ui.components.LocalPointsVisible
 import com.example.eta.ui.components.ReportToTutorial
@@ -105,6 +107,7 @@ fun WeekPlannerScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val inflation by viewModel.inflation.collectAsStateWithLifecycle()
     val evaluation by viewModel.evaluation.collectAsStateWithLifecycle()
+    val notice by viewModel.notice.collectAsStateWithLifecycle()
     val banned by viewModel.banned.collectAsStateWithLifecycle()
     val steps = stepsFor(viewModel.isMidWeek, LocalPointsVisible.current, calendarViewModel != null)
     val pagerState = rememberPagerState { steps.size }
@@ -114,6 +117,9 @@ fun WeekPlannerScreen(
     )
     val scope = rememberCoroutineScope()
     var adding by remember { mutableStateOf(false) }
+    // Each step's scroll position, held up here: paging away from a step, or the
+    // timetable replacing the whole screen, would otherwise start it at the top.
+    val pageScrolls = Step.entries.associateWith { rememberScrollState() }
     // The timetable lies **over** the phase rather than replacing it: the pager
     // above keeps its page, so coming back lands on "Auffüllen" again.
     var adjusting by rememberSaveable { mutableStateOf(false) }
@@ -168,7 +174,7 @@ fun WeekPlannerScreen(
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
+                        .verticalScroll(pageScrolls.getValue(steps[page]))
                         .padding(EtaTheme.spacing.lg),
                     verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.lg),
                 ) {
@@ -235,6 +241,18 @@ fun WeekPlannerScreen(
             }
         }
     }
+    notice?.let { message ->
+        // The goal was refused, so its form stays open behind this: nothing typed is lost.
+        ConfirmDialog(
+            title = "Nicht gespeichert",
+            message = message,
+            confirm = "Verstanden",
+            dismiss = "Schließen",
+            onDismiss = viewModel::dismissNotice,
+            onConfirm = viewModel::dismissNotice,
+        )
+    }
+
 
     if (adding) {
         AddGoalDialog(
@@ -255,7 +273,7 @@ private fun InflationStep(preview: InflationPreview?, banned: Int?) {
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = "Inflation", style = EtaTheme.typography.heading)
             EtaText(
-                text = "Jede Woche verlieren 30 % der angesparten Punkte ihren Wert. " +
+                text = "Jede Woche verlierst du 30 % deiner angesparten Punkte. " +
                     "Punkte sind zum Ausgeben da.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
@@ -376,8 +394,8 @@ private fun PlanStep(state: WeekPlannerUiState, viewModel: WeekPlannerViewModel,
                     color = EtaTheme.colors.warning,
                 )
                 EtaText(
-                    text = "Aus der letzten Woche liegen noch ${state.unfinished.size} " +
-                        "unverplante Ziele in der Wochenliste. Neues wird erst aufgenommen, wenn sie " +
+                    text = "Aus der letzten Woche sind noch ${state.unfinished.size} Ziele " +
+                        "nicht verplant. Neues kommt erst in die Wochenliste, wenn diese " +
                         "verplant oder zurückgegeben sind.",
                     style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.textSecondary,
@@ -396,8 +414,8 @@ private fun PlanStep(state: WeekPlannerUiState, viewModel: WeekPlannerViewModel,
     Row(horizontalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
         ItemColumn(
             title = "Sammelliste",
-            items = if (state.canTakeOnMore) state.collection else emptyList(),
-            emptyHint = if (state.canTakeOnMore) "Leer." else "Gesperrt.",
+            items = state.collection,
+            emptyHint = if (state.held.isEmpty()) "Leer." else "Nichts verplanbar, siehe unten.",
             modifier = Modifier.weight(1f),
             onPick = viewModel::pullIntoWeek,
         )
@@ -410,6 +428,17 @@ private fun PlanStep(state: WeekPlannerUiState, viewModel: WeekPlannerViewModel,
         )
     }
 
+    // A card the week may not take on is said so, with the reason, rather than
+    // vanishing from the Sammelliste column or hiding behind a one-word hint.
+    if (state.held.isNotEmpty()) {
+        EtaSurface(modifier = Modifier.fillMaxWidth(), contentPadding = EtaTheme.spacing.md) {
+            Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
+                EtaText(text = "Noch nicht in dieser Woche", style = EtaTheme.typography.heading)
+                state.held.forEach { (item, reason) -> HeldCard(item = item, reason = reason) }
+            }
+        }
+    }
+
     // The Sammelliste can be empty exactly when it is needed most — a fresh setup
     // has nothing in it, and without this the whole phase has nothing to work with.
     EtaButton(
@@ -419,8 +448,8 @@ private fun PlanStep(state: WeekPlannerUiState, viewModel: WeekPlannerViewModel,
     )
 
     EtaText(
-        text = "Tippen schiebt eine Karte in die andere Spalte. Verplant wird sie erst " +
-            "in der Tagesplanung.",
+        text = "Ein Tipp verschiebt eine Karte in die andere Spalte. Verplant wird sie " +
+            "erst in der Tagesplanung.",
         style = EtaTheme.typography.caption,
         color = EtaTheme.colors.textMuted,
     )
@@ -462,8 +491,8 @@ private fun BudgetBox(budget: WeekBudget) {
                     color = EtaTheme.colors.warning,
                 )
                 EtaText(
-                    text = "Das darf so sein — der Verzicht wird ja vergütet. Es sollte nur " +
-                        "eine Entscheidung sein und kein Versehen.",
+                    text = "Das ist in Ordnung, der Verzicht wird ja vergütet. Wichtig ist nur, " +
+                        "dass es eine bewusste Entscheidung ist und kein Versehen.",
                     style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.textMuted,
                 )
@@ -527,6 +556,39 @@ private fun ItemCard(item: Item, onClick: () -> Unit) {
                 duration == null -> "noch ohne Dauer"
                 // What it really costs the week, break and all.
                 else -> "${duration.formatShort()} · kostet ${costOf(duration).formatShort()}"
+            },
+            style = EtaTheme.typography.caption,
+            color = EtaTheme.colors.textMuted,
+        )
+    }
+}
+
+/** A Sammelliste card the week may not take on yet: greyed, not tappable, with why. */
+@Composable
+private fun HeldCard(item: Item, reason: PullBlock) {
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .background(EtaTheme.colors.background, EtaTheme.shapes.small)
+            .padding(EtaTheme.spacing.sm),
+        verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.xs),
+    ) {
+        EtaText(
+            text = item.name,
+            style = EtaTheme.typography.body,
+            color = EtaTheme.colors.textMuted,
+            maxLines = 2,
+            overflow = TextOverflow.Ellipsis,
+        )
+        EtaText(
+            text = when (reason) {
+                is PullBlock.NotYetAvailable -> "Einplanbar ab ${reason.from.formatLong()}"
+                PullBlock.AfterPredecessor -> "Erst die Aufgabe davor erledigen."
+                is PullBlock.OpenGoals -> if (reason.count == 1) {
+                    "Erst das offene Ziel der letzten Woche verplanen oder zurückgeben."
+                } else {
+                    "Erst die ${reason.count} offenen Ziele der letzten Woche verplanen oder zurückgeben."
+                }
             },
             style = EtaTheme.typography.caption,
             color = EtaTheme.colors.textMuted,

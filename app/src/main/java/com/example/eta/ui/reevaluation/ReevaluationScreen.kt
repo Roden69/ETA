@@ -74,6 +74,7 @@ import com.example.eta.ui.format.formatPoints
 import com.example.eta.ui.format.formatShort
 import com.example.eta.ui.theme.EtaTheme
 import kotlinx.coroutines.launch
+import androidx.activity.compose.BackHandler
 
 private enum class Step {
     TASKS,
@@ -97,6 +98,11 @@ fun ReevaluationScreen(
     viewModel: ReevaluationViewModel,
     modifier: Modifier = Modifier,
     onClose: () -> Unit = {},
+    /**
+     * Leaves this day unsettled and moves on. Set when the screen is one of several
+     * missed evenings being caught up; null wherever a skip would make no sense.
+     */
+    onSkip: (() -> Unit)? = null,
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val journal by viewModel.journal.collectAsStateWithLifecycle()
@@ -107,12 +113,13 @@ fun ReevaluationScreen(
     val pointsVisible = LocalPointsVisible.current
     val features = LocalFeatures.current
     val filling = state.rewards?.head != null && features.rewards
-    val steps = remember(pointsVisible, filling, features.contracts) {
+    val steps = remember(pointsVisible, filling, features.contracts, state.catchUp) {
         Step.entries.filter { step ->
             when (step) {
                 // Not asked while the contracts are out of sight; an unanswered
-                // contract counts as kept, which is the default it always had.
-                Step.CONTRACTS -> features.contracts
+                // contract counts as kept, which is the default it always had. A
+                // caught-up evening asks none: contracts are checked on their evening.
+                Step.CONTRACTS -> features.contracts && !state.catchUp
                 Step.REWARD -> pointsVisible
                 Step.REWARD_FILL -> filling
                 else -> true
@@ -121,6 +128,20 @@ fun ReevaluationScreen(
     }
     val pagerState = rememberPagerState { steps.size }
     val scope = rememberCoroutineScope()
+    // System Back turns back a page before it leaves the evening. This is the
+    // innermost handler, so it takes precedence over the flow's own.
+    BackHandler(enabled = pagerState.currentPage > 0) {
+        scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
+    }
+    // A day booked on an earlier evening has nothing left to settle here: leave, so
+    // the evening carries on to whatever is still owed.
+    LaunchedEffect(state.alreadySettled) {
+        if (state.alreadySettled) onClose()
+    }
+    // One scroll position per page, held here rather than in the page: the pager
+    // composes only the pages near the one in front, so a page's own state would
+    // start again at the top every time it came back.
+    val scrollStates = Step.entries.associateWith { rememberScrollState() }
     val currentStep = steps[pagerState.currentPage.coerceIn(0, steps.lastIndex)]
     ReportToTutorial(TutorialSignal.REEVALUATION_STEP, currentStep.name)
     ReportToTutorial(
@@ -162,10 +183,11 @@ fun ReevaluationScreen(
                 userScrollEnabled = !tasksPending && mayTurn,
                 modifier = Modifier.weight(1f).fillMaxWidth(),
             ) { page ->
+                val pageScroll = steps.getOrNull(page)?.let { scrollStates.getValue(it) }
                 Column(
                     modifier = Modifier
                         .fillMaxSize()
-                        .verticalScroll(rememberScrollState())
+                        .then(if (pageScroll != null) Modifier.verticalScroll(pageScroll) else Modifier)
                         .padding(EtaTheme.spacing.lg),
                     verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.lg),
                 ) {
@@ -202,6 +224,13 @@ fun ReevaluationScreen(
                         onClick = {
                             scope.launch { pagerState.animateScrollToPage(pagerState.currentPage - 1) }
                         },
+                    )
+                }
+                if (onSkip != null && state.settled == null) {
+                    EtaButton(
+                        text = "Überspringen",
+                        style = EtaButtonStyle.Secondary,
+                        onClick = onSkip,
                     )
                 }
                 if (tasksPending) {
@@ -494,9 +523,9 @@ private fun BlockRow(
             } else if (excusable) {
                 EtaText(
                     text = if (pointsVisible) {
-                        "Kostet Punkte. Halten für »höhere Gewalt«."
+                        "Kostet Punkte. Gedrückt halten, wenn höhere Gewalt im Spiel war."
                     } else {
-                        "Halten für »höhere Gewalt«."
+                        "Gedrückt halten, wenn höhere Gewalt im Spiel war."
                     },
                     style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.warning,
@@ -643,9 +672,9 @@ private fun ContractQuestion(
         if (onProbation) {
             EtaText(
                 text = if (pointsVisible) {
-                    "Weitergeführt nach dem Bruch — die Frage bleibt, die Punkte nicht."
+                    "Nach dem Bruch weitergeführt: Die Frage bleibt, die Punkte nicht."
                 } else {
-                    "Weitergeführt nach dem Bruch — die Frage bleibt."
+                    "Nach dem Bruch weitergeführt: Die Frage bleibt."
                 },
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.danger,

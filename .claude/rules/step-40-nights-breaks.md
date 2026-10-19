@@ -35,15 +35,14 @@ stored: `SAME`, `WEEKEND`, `PER_DAY`.
   the day each night **ends** on. Non-null it overrules `weekendNight`, which is
   *kept* — `withNightMode(WEEKEND)` finds it again. Always all seven
   (`allNights`). `nightEndingOn(weekday)` is still the one place that decides.
-- **The weekend is Friday and Saturday evening again.** The picker from step 33
-  is gone and `withNightMode(WEEKEND)` writes `DEFAULT_WEEKEND`. A setup from
-  between that still carries other `weekendDays` **reads as `PER_DAY`** and keeps
-  sleeping exactly as it did — `nightEndingOn` still honours the set — until its
-  first edit writes it as seven nights. No data migration, and `WeekendNightTest`
-  stands unchanged for that reason.
+- **The weekend days are the user's again (superseded the step-40 default).** The
+  setup picker of step 33 is back, and the settings show the same one under the
+  weekend rhythm. `withNightMode(WEEKEND)` keeps `weekendDays`; any chosen set reads
+  as `WEEKEND`, not `PER_DAY`. The Friday/Saturday wording of the step-40 hint is gone.
 - **`recurringItems` asks `nightMode == SAME`** where it asked `weekendNight ==
   null`: one pair of tasks per night in both other modes.
-- **`SleepStep`**: "Schlafrhythmus" with the three options. Choosing the third
+- **`SleepStep`**: "Schlafrhythmus" with the three options; under `WEEKEND` the
+  weekend days picker and the labels follow `weekendDays`. Choosing the third
   asks first (`ConfirmDialog`, "Trotzdem") — offered and advised against in one
   breath, as asked. In `PER_DAY` the three ordinary pickers are hidden (they
   would be an eighth answer that means nothing) and each night is an
@@ -117,6 +116,12 @@ carries "Nebenbei" so that it pays and is still the meal.
 - **The questionnaire's own working day sets it off**: 09:00–12:30 is three and
   a half hours. That is the rule as given, with the default the user named.
 - Off in the tutorial's practice setup.
+- **Back-to-back hint** (issue #41): `backToBackPairs` names two task blocks that
+  meet with no time between them and no break after the first — the planner's own
+  containers decide, so a journey into the next task counts as the time between.
+  It rides on `BreakFindings.backToBack`, so the `breakChecker` switch silences it
+  too. Shown as `PlannerWarning.BACK_TO_BACK` in the same bar as the other two,
+  waved away per day. Pinned in `BackToBackTest`.
 
 **Verified by the compiler, the suite (626, 24 in `NightsAndBreaksTest`),
 `assembleRelease`, `lint` and the migration against `29.json`.** Nobody has seen

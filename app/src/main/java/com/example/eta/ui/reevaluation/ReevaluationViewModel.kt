@@ -31,6 +31,7 @@ import kotlinx.coroutines.launch
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.todayIn
+import com.example.eta.ui.format.formatLong
 
 /** The self-reflection questions, in the order `Tägliche Reevaluation.md` asks them. */
 object JournalQuestions {
@@ -40,6 +41,9 @@ object JournalQuestions {
     const val STRESS = "War der Tag stressig?"
     const val STRESS_FROM_PLAN = "War der Tag stressig wegen deines Plans?"
     const val PLAN_CHANGE = "Was könntest du am Plan anpassen?"
+
+    /** Not a question: the note that marks an evening closed on a later day. */
+    const val CAUGHT_UP = "Nachgeholt"
 }
 
 enum class StressLevel(val label: String) {
@@ -93,6 +97,14 @@ data class ReevaluationUiState(
      */
     val rewards: RewardOutlook? = null,
     val settled: DailySettlement? = null,
+    /** Booked by an earlier evening already: nothing is left to settle on this screen. */
+    val alreadySettled: Boolean = false,
+    /**
+     * An earlier evening being caught up. Its contracts are not asked and not paid:
+     * a promise is checked on its evening or not at all, and a late "kept" must not
+     * credit it or move its last check back to an older day.
+     */
+    val catchUp: Boolean = false,
     val loading: Boolean = true,
 ) {
     /**
@@ -120,23 +132,27 @@ data class ReevaluationUiState(
  * booked as each answer comes in.
  */
 class ReevaluationViewModel(
+    /** The day being closed: today on the evening, an earlier one when it is caught up. */
+    val date: LocalDate,
     private val reevaluationService: ReevaluationService,
     private val planRepository: PlanRepository,
     private val itemRepository: ItemRepository,
     private val dayClosingService: DayClosingService,
     private val subtaskRepository: SubtaskRepository,
     private val clock: Clock = Clock.System,
-    timeZone: TimeZone = TimeZone.currentSystemDefault(),
+    private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) : ViewModel() {
 
-    /** The day being closed is today; the planner then plans tomorrow. */
-    val date: LocalDate = clock.todayIn(timeZone)
+    private val catchUp: Boolean = date < clock.todayIn(timeZone)
 
-    private val _state = MutableStateFlow(ReevaluationUiState(date = date))
+    private val _state = MutableStateFlow(ReevaluationUiState(date = date, catchUp = catchUp))
     val uiState: StateFlow<ReevaluationUiState> = _state.asStateFlow()
 
     private val _journal = MutableStateFlow<Map<String, String>>(emptyMap())
     val journal: StateFlow<Map<String, String>> = _journal.asStateFlow()
+
+    /** Set once settling has started; the screen is leaving from then on. */
+    private var settling = false
 
     init {
         refresh()
@@ -145,7 +161,7 @@ class ReevaluationViewModel(
     private fun refresh() {
         viewModelScope.launch {
             val blocks = reevaluationService.blocksOf(date)
-            val contracts = reevaluationService.contractsAwaitingCheck(date)
+            val contracts = if (catchUp) emptyList() else reevaluationService.contractsAwaitingCheck(date)
             val steps = subtaskRepository.stepsByItem()
             val ticks = subtaskRepository.checkedByBlock(date)
             // A block that has been answered — done or dropped — with steps still
@@ -165,11 +181,13 @@ class ReevaluationViewModel(
                     },
                 )
             }
+            val settledOnRecord = planRepository.findDayPlan(date)?.isSettled == true
             _state.update {
                 it.copy(
                     blocks = blocks,
                     contracts = contracts,
                     remainders = remainders,
+                    alreadySettled = !settling && settledOnRecord,
                     // Unanswered contracts count as kept until said otherwise: the
                     // question is "did you keep it", and a breach is the exception.
                     // Answers already given survive — this runs again after every
@@ -311,7 +329,9 @@ class ReevaluationViewModel(
                 entry = offer.entry,
                 open = offer.open,
                 total = offer.total,
-                today = date,
+                // The real today, not the evening being closed: a rest stamped with a
+                // caught-up day would count as a goal of the last cycle and lock the week.
+                today = clock.todayIn(timeZone),
             )
             refresh()
         }
@@ -362,10 +382,20 @@ class ReevaluationViewModel(
 
     /** The one step that writes: verdicts, ledger rows and journal, in one go. */
     fun settle(onDone: () -> Unit) {
+        // Set before the coroutine starts, so a second tap in the same frame, or a
+        // screen reopened on a day that is already booked, cannot book it twice.
+        if (settling || _state.value.settled != null || _state.value.alreadySettled) return
+        settling = true
         viewModelScope.launch {
             val state = _state.value
-            if (state.settled != null) return@launch
-            val settlement = reevaluationService.settle(date, state.toVerdicts(), _journal.value)
+            // A caught-up day says so in its journal, as the phrase route does: a
+            // made-up evening is never indistinguishable from a lived one.
+            val journal = if (catchUp) {
+                _journal.value + (JournalQuestions.CAUGHT_UP to "Am ${clock.todayIn(timeZone).formatLong()} nachgeholt.")
+            } else {
+                _journal.value
+            }
+            val settlement = reevaluationService.settle(date, state.toVerdicts(), journal)
             _state.update { it.copy(settled = settlement) }
             onDone()
         }

@@ -16,6 +16,7 @@ import kotlin.time.Duration
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
+import kotlinx.datetime.isoDayNumber
 
 /**
  * The time a standing task claims on each of its days, as a planner would see it.
@@ -126,11 +127,17 @@ sealed interface Rhythm {
     data class Biweekly(val parity: WeekParity) : Rhythm
     data class Monthly(val weekOfMonth: Int) : Rhythm
 
+    /** Every [weeks] weeks, counted from [anchor]; see [RecurrenceRule.EveryWeeks]. */
+    data class EveryWeeks(val weeks: Int, val anchor: LocalDate) : Rhythm
+
     /** The rules this rhythm asks for on [weekdays], in week order. */
     fun rulesFor(weekdays: Set<DayOfWeek>): List<RecurrenceRule> = when (this) {
         Weekly -> rulesForWeekdays(weekdays)
         is Biweekly -> WEEK.filter { it in weekdays }.map { RecurrenceRule.Biweekly(it, parity) }
         is Monthly -> WEEK.filter { it in weekdays }.map { RecurrenceRule.Monthly(it, weekOfMonth) }
+        is EveryWeeks -> WEEK.filter { it in weekdays }.map { day ->
+            RecurrenceRule.EveryWeeks(day, weeks, firstEveryWeeksDate(anchor, weeks, day))
+        }
     }
 
     companion object {
@@ -138,6 +145,7 @@ sealed interface Rhythm {
             RecurrenceRule.Daily, is RecurrenceRule.Weekly -> Weekly
             is RecurrenceRule.Biweekly -> Biweekly(rule.parity)
             is RecurrenceRule.Monthly -> Monthly(rule.weekOfMonth)
+            is RecurrenceRule.EveryWeeks -> EveryWeeks(rule.weeks, rule.anchor)
         }
     }
 }
@@ -204,9 +212,30 @@ private data class GroupKey(
     val returnAfter: Duration?,
     val breakAfter: Duration?,
     val endSound: Boolean,
-    val rhythm: Rhythm,
+    /** The rhythm as [groupingKey] reads it: weekdays of one series land together. */
+    val rhythm: Any,
     val repeatUntil: LocalDate?,
 )
+
+/**
+ * What makes two definitions the same rhythm for grouping.
+ *
+ * An every-N-weeks series anchors each weekday on its own first date, so the
+ * Monday and the Wednesday of one series carry different anchors. They belong
+ * together when they run in the same weeks: same N, and the same week of the
+ * cycle, counted in whole weeks from 1970-01-05, the first Monday of the epoch.
+ */
+private fun Rhythm.groupingKey(): Any = when (this) {
+    is Rhythm.EveryWeeks -> {
+        val mondayEpochDay = anchor.toEpochDays().toLong() - (anchor.dayOfWeek.isoDayNumber - 1)
+        val week = Math.floorDiv(mondayEpochDay - FIRST_EPOCH_MONDAY, 7L)
+        Pair(weeks, Math.floorMod(week, weeks.toLong()))
+    }
+    else -> this
+}
+
+/** 1970-01-05, the first Monday after the epoch, in epoch days. */
+private const val FIRST_EPOCH_MONDAY = 4L
 
 /**
  * The standing schedule, gathered into [RecurringGroup]s and ordered the way a
@@ -231,7 +260,7 @@ fun groupRecurring(definitions: List<Item>): List<RecurringGroup> =
                 returnAfter = item.returnAfter,
                 breakAfter = item.breakAfter,
                 endSound = item.endSound,
-                rhythm = Rhythm.of(item.recurrenceRule!!),
+                rhythm = Rhythm.of(item.recurrenceRule!!).groupingKey(),
                 repeatUntil = item.repeatUntil,
             )
         }
@@ -282,4 +311,55 @@ fun reassignRows(
         assigned[index] ?: (unused.removeFirstOrNull()?.id ?: newId()) to rule
     }
     return result to unused
+}
+
+/**
+ * One weekday of one variant of a standing task: the hour and the length that
+ * weekday really has. Never a merge of several variants.
+ */
+data class RecurringWeekdayRow(
+    val weekday: DayOfWeek,
+    val startTime: LocalTime,
+    val duration: Duration?,
+    val group: RecurringGroup,
+)
+
+/** Every variant of one standing task (one name), as the list shows it. */
+data class RecurringTask(
+    val name: String,
+    /** Week order first, then the hour: Mo 14:00, Mo 17:00, Mi 13:00, … */
+    val rows: List<RecurringWeekdayRow>,
+)
+
+/**
+ * The standing schedule as the Listen tab shows it: one [RecurringTask] per name,
+ * with one row per weekday and variant.
+ *
+ * Why rows per weekday rather than one line per variant with aligned lists
+ * ("Mo, Mi, Fr · 14:00, 17:00, 13:00 · 1:00, 0:30, 0:15"): an aligned list only
+ * reads correctly while three columns keep their order, and it does not say which
+ * hour belongs to which day once a weekday is added or dropped. A row carries its
+ * own day, hour and length, so nothing has to be matched up by position.
+ *
+ * Order: tasks by their earliest hour, then name. Rows: Monday to Sunday, and
+ * within one day by hour. Variants with different hours or lengths are never
+ * folded into one value.
+ */
+fun recurringTasks(groups: List<RecurringGroup>): List<RecurringTask> {
+    val tasks = groups
+        .groupBy { it.representative.name }
+        .map { (name, variants) ->
+            val rows = variants
+                .flatMap { group ->
+                    val item = group.representative
+                    val start = item.startTime ?: return@flatMap emptyList()
+                    group.weekdays.map { day ->
+                        RecurringWeekdayRow(day, start, item.estimatedDuration, group)
+                    }
+                }
+                .sortedWith(compareBy({ WEEK.indexOf(it.weekday) }, { it.startTime }))
+            RecurringTask(name, rows)
+        }
+        .filter { it.rows.isNotEmpty() }
+    return tasks.sortedWith(compareBy({ task -> task.rows.minOf { it.startTime } }, { it.name }))
 }

@@ -29,6 +29,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.input.pointer.pointerInput
 import androidx.compose.ui.platform.LocalDensity
@@ -37,16 +38,24 @@ import androidx.compose.ui.semantics.onClick
 import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
+import com.example.eta.domain.model.CalendarEvent
+import com.example.eta.domain.model.normalizeName
+import com.example.eta.domain.planning.MINUTES_PER_DAY
+import com.example.eta.domain.setup.CalendarClash
 import com.example.eta.domain.setup.RoutinePlacement
 import com.example.eta.domain.setup.RoutineSetup
+import com.example.eta.domain.setup.SetupConflict
 import com.example.eta.domain.setup.SetupRoutine
-import com.example.eta.domain.setup.NightTimes
-import com.example.eta.domain.setup.SleepNight
+import com.example.eta.domain.setup.SetupSpan
 import com.example.eta.domain.setup.WEEK
+import com.example.eta.domain.setup.calendarClashes
 import com.example.eta.domain.setup.longestAwakeMinutes
 import com.example.eta.domain.setup.nightEndingOn
 import com.example.eta.domain.setup.patternNightEndingOn
+import com.example.eta.domain.setup.setupSpans
 import com.example.eta.domain.setup.spans
+import com.example.eta.domain.setup.NightTimes
+import com.example.eta.domain.setup.SleepNight
 import com.example.eta.ui.components.EtaButton
 import com.example.eta.ui.components.EtaButtonStyle
 import com.example.eta.ui.components.EtaChoice
@@ -60,6 +69,7 @@ import com.example.eta.ui.format.formatClock
 import com.example.eta.ui.format.formatLong
 import com.example.eta.ui.format.formatShort
 import com.example.eta.ui.theme.EtaTheme
+import com.example.eta.ui.theme.assignRoutineColors
 import com.example.eta.ui.theme.colorOf
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
@@ -68,8 +78,13 @@ import kotlinx.datetime.LocalTime
 
 private val DAY_COLUMN_WIDTH = 88.dp
 private val HOUR_HEIGHT = 56.dp
-private const val MINUTES_PER_DAY = 24 * 60
 private val CALENDAR_HEIGHT = HOUR_HEIGHT * 24
+
+/** How much of its colour an appointment in the background shows. */
+private const val APPOINTMENT_FILL = 0.3f
+
+/** How many warnings are named before the rest are only counted. */
+private const val WARNINGS_SHOWN = 3
 
 /** Interactive weekly appointment calendar used on the second setup page. */
 @Composable
@@ -78,13 +93,21 @@ internal fun SetupWeekStep(
     onSavePlacement: (RoutinePlacement) -> Unit,
     onDeletePlacement: (String) -> Unit,
     onNightChange: (DayOfWeek, LocalTime, LocalTime) -> Unit,
+    /** The coming week's undecided appointments; drawn behind everything, read-only. */
+    calendarEvents: List<CalendarEvent>,
+    /** Appointments hidden for this setup only. */
+    hiddenEvents: Set<String>,
+    onHideEvent: (String) -> Unit,
+    onShowAllEvents: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     var editing by remember { mutableStateOf<PlacementEdit?>(null) }
     var pendingNew by remember { mutableStateOf<RoutinePlacement?>(null) }
     var editingNight by remember { mutableStateOf<DayOfWeek?>(null) }
+    var hiding by remember { mutableStateOf<CalendarEvent?>(null) }
     val horizontal = rememberScrollState()
     val canPlace = draft.placeableRoutines.isNotEmpty()
+    val visible = calendarEvents.filterNot { it.id in hiddenEvents }
     val createPlacement by rememberUpdatedState<(DayOfWeek, LocalTime) -> Unit>(
         fun(day: DayOfWeek, time: LocalTime) {
             // Nothing to place until a routine other than sleep was chosen.
@@ -108,6 +131,15 @@ internal fun SetupWeekStep(
             style = EtaTheme.typography.body,
             color = EtaTheme.colors.textSecondary,
         )
+        if (visible.isNotEmpty()) {
+            EtaText(
+                text = "Die Blöcke im Hintergrund sind deine Termine aus Google Kalender der nächsten " +
+                    "sieben Tage. Sie dienen nur der Orientierung. Tippe auf einen Termin, um ihn für " +
+                    "diese Einrichtung auszublenden.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textMuted,
+            )
+        }
         EtaButton(
             text = "Zeitplatz hinzufügen",
             style = EtaButtonStyle.Secondary,
@@ -159,15 +191,33 @@ internal fun SetupWeekStep(
                         WeekGrid(
                             draft = draft,
                             pending = pendingNew,
+                            events = visible,
                             onCreate = createPlacement,
                             onEdit = { placement ->
                                 pendingNew = null
                                 editing = PlacementEdit(placement, isNew = false)
                             },
                             onEditNight = { editingNight = it },
+                            onHideEvent = { hiding = it },
                         )
                     }
                 }
+            }
+        }
+        if (hiddenEvents.isNotEmpty() && calendarEvents.any { it.id in hiddenEvents }) {
+            val hiddenCount = calendarEvents.count { it.id in hiddenEvents }
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                EtaText(
+                    text = "$hiddenCount ${if (hiddenCount == 1) "Termin" else "Termine"} ausgeblendet",
+                    style = EtaTheme.typography.caption,
+                    color = EtaTheme.colors.textMuted,
+                )
+                Spacer(Modifier.weight(1f))
+                EtaButton(
+                    text = "Alle einblenden",
+                    style = EtaButtonStyle.Secondary,
+                    onClick = onShowAllEvents,
+                )
             }
         }
         EtaText(
@@ -176,16 +226,23 @@ internal fun SetupWeekStep(
             style = EtaTheme.typography.caption,
             color = EtaTheme.colors.textSecondary,
         )
-        val conflicts = pendingNew?.let { draft.withPlacement(it).conflicts() } ?: draft.conflicts()
-        if (conflicts.isNotEmpty()) {
-            val shown = conflicts.take(2).joinToString("\n") { conflict ->
-                "Überschneidung am ${conflict.weekday.formatLong()}: ${conflict.first.label} · ${conflict.second.label}"
-            }
-            val extra = conflicts.size - 2
+        // Only a warning: the routines may overlap each other, sleep or an appointment.
+        val preview = pendingNew?.let { draft.withPlacement(it) } ?: draft
+        val warnings = preview.conflicts().map(::conflictLine) +
+            preview.calendarClashes(visible).map(::clashLine)
+        if (warnings.isNotEmpty()) {
+            val shown = warnings.take(WARNINGS_SHOWN).joinToString("\n")
+            val extra = warnings.size - WARNINGS_SHOWN
             EtaText(
-                text = shown + if (extra > 0) "\nWeitere Überschneidungen: $extra" else "",
+                text = shown +
+                    if (extra > 0) "\nUnd $extra weitere." else "",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.warning,
+            )
+            EtaText(
+                text = "Nur ein Hinweis: Du kannst trotzdem fortfahren.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textMuted,
             )
         }
     }
@@ -222,6 +279,33 @@ internal fun SetupWeekStep(
             },
         )
     }
+
+    hiding?.let { event ->
+        EtaDialog(title = "Termin ausblenden", onDismiss = { hiding = null }) {
+            EtaText(text = event.title, style = EtaTheme.typography.heading)
+            EtaText(
+                text = eventWhen(event),
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textSecondary,
+            )
+            EtaText(
+                text = "Der Termin verschwindet nur aus dieser Einrichtung. In Google und in deiner " +
+                    "Planung bleibt er erhalten.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textMuted,
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
+                EtaButton(text = "Abbrechen", style = EtaButtonStyle.Secondary, onClick = { hiding = null })
+                EtaButton(
+                    text = "Ausblenden",
+                    onClick = {
+                        onHideEvent(event.id)
+                        hiding = null
+                    },
+                )
+            }
+        }
+    }
 }
 
 private data class PlacementEdit(val placement: RoutinePlacement, val isNew: Boolean)
@@ -232,17 +316,26 @@ private data class Segment(
     val from: Int,
     val to: Int,
 )
-private data class LaneSegment(val segment: Segment, val lane: Int, val laneCount: Int)
+
+/** One stretch of an appointment on one weekday; an all-day event is a zero-length stretch at the top. */
+private data class EventPiece(val event: CalendarEvent, val weekday: DayOfWeek, val from: Int, val to: Int)
 
 @Composable
 private fun WeekGrid(
     draft: RoutineSetup,
     pending: RoutinePlacement?,
+    events: List<CalendarEvent>,
     onCreate: (DayOfWeek, LocalTime) -> Unit,
     onEdit: (RoutinePlacement) -> Unit,
     onEditNight: (DayOfWeek) -> Unit,
+    onHideEvent: (CalendarEvent) -> Unit,
 ) {
     val latestCreate by rememberUpdatedState(onCreate)
+    // Routines without a category get the same name-derived colour here as the
+    // standing tasks they become (colorOf(Item)); the draft's own were grey.
+    val routineColors = remember(draft.routines) {
+        assignRoutineColors(draft.routines.filter { it.category == null }.map { normalizeName(it.name) })
+    }
     val allPlacements = draft.placements + listOfNotNull(pending)
     BoxWithConstraints(Modifier.width(DAY_COLUMN_WIDTH * WEEK.size).height(CALENDAR_HEIGHT)) {
         val dayWidth = maxWidth / WEEK.size
@@ -252,11 +345,11 @@ private fun WeekGrid(
             val columnPixels = size.width / WEEK.size
             for (hour in 0..24) {
                 val y = hour * hourPixels
-                drawLine(gridColor, androidx.compose.ui.geometry.Offset(0f, y), androidx.compose.ui.geometry.Offset(size.width, y), 1.dp.toPx())
+                drawLine(gridColor, Offset(0f, y), Offset(size.width, y), 1.dp.toPx())
             }
             WEEK.indices.forEach { index ->
                 val x = index * columnPixels
-                drawLine(gridColor, androidx.compose.ui.geometry.Offset(x, 0f), androidx.compose.ui.geometry.Offset(x, size.height), 1.dp.toPx())
+                drawLine(gridColor, Offset(x, 0f), Offset(x, size.height), 1.dp.toPx())
             }
         }
         WEEK.forEach { day ->
@@ -281,6 +374,23 @@ private fun WeekGrid(
                     },
             )
         }
+        // Behind everything else: the appointments are context, not something to plan.
+        laneLayout(eventPieces(events), { it.weekday }, { it.from }, { it.to }).forEach { layout ->
+            val piece = layout.item
+            CalendarBlock(
+                label = piece.event.title,
+                weekday = piece.weekday,
+                startMinute = piece.from,
+                durationMinutes = piece.to - piece.from,
+                width = dayWidth,
+                lane = layout.lane,
+                laneCount = layout.laneCount,
+                color = EtaTheme.colors.calendar,
+                fill = APPOINTMENT_FILL,
+                description = "Termin ${piece.event.title}, ${eventWhen(piece.event)}, antippen zum Ausblenden",
+                onClick = { onHideEvent(piece.event) },
+            )
+        }
         draft.sleepNights().forEach { sleepNight ->
             sleepNight.spans().forEach { span ->
                 CalendarBlock(
@@ -299,41 +409,65 @@ private fun WeekGrid(
                 )
             }
         }
-        segments(allPlacements, draft.routines).forEach { layout ->
-            val segment = layout.segment
-            CalendarBlock(
-                label = segment.routine.name,
-                weekday = segment.weekday,
-                startMinute = segment.from,
-                durationMinutes = segment.to - segment.from,
-                width = dayWidth,
-                lane = layout.lane,
-                laneCount = layout.laneCount,
-                color = colorOf(segment.routine.category),
-                description = "${segment.routine.name}, ${segment.weekday.formatLong()} ${minuteClock(segment.from)} bis ${minuteClock(segment.to % MINUTES_PER_DAY)}",
-                onClick = { onEdit(segment.placement) },
-            )
-        }
+        laneLayout(segments(allPlacements, draft.routines), { it.weekday }, { it.from }, { it.to })
+            .forEach { layout ->
+                val segment = layout.item
+                CalendarBlock(
+                    label = segment.routine.name,
+                    weekday = segment.weekday,
+                    startMinute = segment.from,
+                    durationMinutes = segment.to - segment.from,
+                    width = dayWidth,
+                    lane = layout.lane,
+                    laneCount = layout.laneCount,
+                    color = segment.routine.category?.let { colorOf(it) }
+                        ?: routineColors[normalizeName(segment.routine.name)]?.let { Color(it) }
+                        ?: colorOf(segment.routine.category),
+                    description = "${segment.routine.name}, ${segment.weekday.formatLong()} ${minuteClock(segment.from)} bis ${minuteClock(segment.to % MINUTES_PER_DAY)}",
+                    onClick = { onEdit(segment.placement) },
+                )
+            }
     }
 }
 
-private fun segments(placements: List<RoutinePlacement>, routines: List<SetupRoutine>): List<LaneSegment> {
-    val byDay = placements.flatMap { placement ->
+/** Placements of the routines, split at midnight. */
+private fun segments(placements: List<RoutinePlacement>, routines: List<SetupRoutine>): List<Segment> =
+    placements.flatMap { placement ->
         val routine = routines.firstOrNull { it.id == placement.routineId } ?: return@flatMap emptyList()
         placement.spans(routine).map { span ->
             Segment(placement, routine, span.weekday, span.fromMinute, span.toMinute)
         }
-    }.groupBy { it.weekday }
-    return byDay.values.flatMap { daySegments ->
-        val laneEnds = mutableListOf<Int>()
-        val assigned = daySegments.sortedWith(compareBy(Segment::from, Segment::to)).map { segment ->
-            val lane = laneEnds.indexOfFirst { it <= segment.from }.let { if (it < 0) laneEnds.size else it }
-            if (lane == laneEnds.size) laneEnds += segment.to else laneEnds[lane] = segment.to
-            segment to lane
-        }
-        val laneCount = laneEnds.size
-        assigned.map { (segment, lane) -> LaneSegment(segment, lane, laneCount) }
     }
+
+private fun eventPieces(events: List<CalendarEvent>): List<EventPiece> = events.flatMap { event ->
+    if (event.allDay) {
+        listOf(EventPiece(event, event.date.dayOfWeek, 0, 0))
+    } else {
+        event.setupSpans().map { EventPiece(event, it.weekday, it.fromMinute, it.toMinute) }
+    }
+}
+
+/** One item placed in its column: the lane it takes and how many lanes its day needs. */
+private class LaneItem<T>(val item: T, val lane: Int, val laneCount: Int)
+
+/**
+ * Puts overlapping items of one weekday side by side: each takes the first lane
+ * whose previous item has ended, so an item's width is its share of the lanes.
+ */
+private fun <T> laneLayout(
+    items: List<T>,
+    weekday: (T) -> DayOfWeek,
+    from: (T) -> Int,
+    to: (T) -> Int,
+): List<LaneItem<T>> = items.groupBy(weekday).values.flatMap { day ->
+    val laneEnds = mutableListOf<Int>()
+    val assigned = day.sortedWith(compareBy(from, to)).map { item ->
+        val lane = laneEnds.indexOfFirst { it <= from(item) }.let { if (it < 0) laneEnds.size else it }
+        if (lane == laneEnds.size) laneEnds += to(item) else laneEnds[lane] = to(item)
+        item to lane
+    }
+    val laneCount = laneEnds.size
+    assigned.map { (item, lane) -> LaneItem(item, lane, laneCount) }
 }
 
 @Composable
@@ -348,6 +482,8 @@ private fun CalendarBlock(
     color: Color,
     description: String,
     onClick: () -> Unit,
+    /** How strongly the block is filled: appointments in the background are lighter. */
+    fill: Float = 0.78f,
 ) {
     val laneWidth = width / laneCount
     val top = HOUR_HEIGHT * (startMinute / 60f)
@@ -359,7 +495,7 @@ private fun CalendarBlock(
             .height(height)
             .padding(horizontal = 2.dp, vertical = 1.dp)
             .clip(EtaTheme.shapes.small)
-            .background(color.copy(alpha = 0.78f))
+            .background(color.copy(alpha = fill))
             .border(1.dp, color, EtaTheme.shapes.small)
             .clickable(onClick = onClick)
             .semantics { contentDescription = description }
@@ -456,7 +592,8 @@ private fun SleepEditor(
             )
 
             overlapping -> EtaText(
-                text = "Diese Nacht überschneidet sich mit einer anderen. Wähle andere Zeiten.",
+                text = "Diese Nacht überschneidet sich mit einer anderen. Wähle andere Zeiten. " +
+                    "Solange bleibt Fertig gesperrt.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.warning,
             )
@@ -488,6 +625,30 @@ private fun SleepEditor(
             EtaButton(text = "Speichern", enabled = !same && !overlapping, onClick = { onSave(sleep, wake) })
         }
     }
+}
+
+/** A conflict between two routines or a routine and sleep, with both blocks named and timed. */
+private fun conflictLine(conflict: SetupConflict): String =
+    "${conflict.weekday.formatLong()}, ${minuteClock(conflict.fromMinute)}–${minuteClock(conflict.toMinute)}: " +
+        "${conflict.first.label} (${spanClock(conflict.first)}) und " +
+        "${conflict.second.label} (${spanClock(conflict.second)})."
+
+/** A routine over an appointment; the appointment is named with its title and time. */
+private fun clashLine(clash: CalendarClash): String =
+    "${clash.weekday.formatLong()}, ${minuteClock(clash.fromMinute)}–${minuteClock(clash.toMinute)}: " +
+        "${clash.routine.label} (${spanClock(clash.routine)}) und " +
+        "Termin »${clash.appointment.label}« (${spanClock(clash.appointment)})."
+
+private fun spanClock(span: SetupSpan): String =
+    "${minuteClock(span.fromMinute)}–${minuteClock(span.toMinute % MINUTES_PER_DAY)}"
+
+/** When an appointment is, for the sentence that names it: its day and hours, or that it lasts all day. */
+private fun eventWhen(event: CalendarEvent): String {
+    val day = event.date.dayOfWeek.formatLong()
+    if (event.allDay) return "$day, ganztägig"
+    val startMinute = event.start.toSecondOfDay() / 60
+    val endMinute = startMinute + event.duration.inWholeMinutes.toInt()
+    return "$day, ${minuteClock(startMinute)}–${minuteClock(endMinute % MINUTES_PER_DAY)}"
 }
 
 private fun minuteClock(minute: Int): String =

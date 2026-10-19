@@ -48,6 +48,11 @@ class CalendarSettingsViewModel(
     private val syncService: CalendarSyncService,
     private val clock: Clock = Clock.System,
     private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
+    /**
+     * Re-arms (or cancels) the hourly background read once the connection may have
+     * changed, so connecting starts it and disconnecting stops it at once.
+     */
+    private val onConnectionChanged: suspend () -> Unit = {},
 ) : ViewModel() {
 
     private val busy = MutableStateFlow(false)
@@ -116,6 +121,7 @@ class CalendarSettingsViewModel(
     fun disconnect() {
         viewModelScope.launch {
             syncService.disconnect()
+            onConnectionChanged()
             status.value = "Verbindung getrennt. Bereits übernommene Termine bleiben bestehen."
             error.value = null
         }
@@ -139,7 +145,10 @@ class CalendarSettingsViewModel(
         error.value = null
         status.value = null
         when (val outcome = block()) {
-            is SyncOutcome.Ok -> status.value = describe(outcome)
+            is SyncOutcome.Ok -> {
+                status.value = describe(outcome)
+                onConnectionChanged()
+            }
             is SyncOutcome.NeedsConsent -> _consent.value = outcome.pendingIntent
             is SyncOutcome.NotConnected -> error.value = "Kein Konto verbunden."
             is SyncOutcome.Failed -> error.value = outcome.reason

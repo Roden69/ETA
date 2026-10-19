@@ -99,3 +99,31 @@ fun PlannedBlock.startedAfter(fixed: PlannedBlock): PlannedBlock? {
 
     return copy(start = minuteToLocalTime(newStart))
 }
+
+/**
+ * The two pieces an activity falls into when a fixed appointment runs through its
+ * middle: [front] is what stays in front of it (the same block, cut short), and
+ * [back] is how long the stretch behind it is.
+ */
+data class SplitAround(val front: PlannedBlock, val back: Duration)
+
+/**
+ * Splits an activity around [fixed] — for an appointment that starts *after* the
+ * activity begins and ends *before* it does.
+ *
+ * The front part is [shortenedBefore]. The back part cannot stay on the same
+ * block: a block answers for one occurrence on one day, and the second half of an
+ * activity that is not on the day anymore has to live somewhere else. So [back]
+ * is only a length here; the caller turns it into a catch-up card for the week
+ * list, which is the same machinery the evening uses for a dropped occurrence.
+ *
+ * Null when either part would be under [MIN_BLOCK_DURATION] — then the split
+ * would only be a destroyed activity under two names, and the whole-activity
+ * answers are the honest ones.
+ */
+fun PlannedBlock.splitAround(fixed: PlannedBlock): SplitAround? {
+    val front = shortenedBefore(fixed) ?: return null
+    val back = endMinute() - fixed.containerEndMinute()
+    if (back < MIN_BLOCK_DURATION.inWholeMinutes) return null
+    return SplitAround(front = front, back = back.minutes)
+}
