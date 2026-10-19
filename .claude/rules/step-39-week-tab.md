@@ -240,7 +240,8 @@ Nobody has seen it.
   booked is the grey, a task its own colour, the form in edit the accent, a
   collision the danger colour. `WeekSchemeChart` draws a `WeekLegend` under itself
   naming the colours it uses; the week tab shows one above the timeline
-  (`weekLegendEntries`: own colour or category, calendar, night, free). Stretches
+  (`weekLegendEntries`: own colour — routines coloured by name are listed by name —
+  or category, calendar, night, free). Stretches
   that overlap on a day sit side by side in lanes (`overlapLanes`).
 - Pinned: `WeekLanesTest`, `BackToBackTest`. Nothing else in this section has a test.
 

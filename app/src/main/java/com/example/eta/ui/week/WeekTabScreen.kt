@@ -73,6 +73,7 @@ import com.example.eta.ui.planner.HOUR_HEIGHT
 import com.example.eta.ui.subtasks.foldCandidatesExcept
 import com.example.eta.ui.theme.EtaTheme
 import com.example.eta.ui.theme.colorOf
+import com.example.eta.ui.theme.isNameColoured
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DayOfWeek
@@ -867,10 +868,11 @@ private sealed interface NightTarget {
 
 /**
  * The colours the week shows, each with what it means — the colours the timeline
- * draws: a task's own colour, else its category's; the calendar's ochre for an
- * imported appointment or blocker; an undecided appointment's outline, in the
- * danger colour where it lands on planned time; the night's shade; free time as
- * the plain ground.
+ * draws: a task's own colour (a standing task without category gets one from its
+ * name, so it is named here like the rest), else its category's; the calendar's
+ * ochre for an imported appointment or blocker; an undecided appointment's
+ * outline, in the danger colour where it lands on planned time; the night's
+ * shade; free time as the plain ground.
  */
 @Composable
 private fun weekLegendEntries(
@@ -879,12 +881,13 @@ private fun weekLegendEntries(
     pending: List<OccupiedSpan>,
 ): List<LegendEntry> {
     val entries = mutableListOf<LegendEntry>()
-    blocks.filter { it.item.color != null && !it.block.origin.isCalendarEvent }
-        .groupBy { it.item.color!! }
-        .forEach { (argb, same) ->
-            entries += LegendEntry(Color(argb), same.map { it.item.name }.distinct().joinToString(", "))
+    val plain = blocks.filter { !it.block.origin.isCalendarEvent }
+    val ownColour = plain.filter { it.item.color != null || it.item.isNameColoured() }
+    ownColour.groupBy { colorOf(it.item) }
+        .forEach { (colour, same) ->
+            entries += LegendEntry(colour, same.map { it.item.name }.distinct().joinToString(", "))
         }
-    blocks.filter { it.item.color == null && !it.block.origin.isCalendarEvent }
+    plain.filter { it.item.color == null && !it.item.isNameColoured() }
         .map { it.item.category }
         .distinct()
         .forEach { category ->
