@@ -26,7 +26,8 @@ ETA ist eine Android-Produktivitätsapp mit Aufgabenlisten, Tages- und Wochenpla
 | Was tut die aktuelle Implementierung? | [`app/src/`](../app/src/) und ihre Tests | Tatsächliche Implementierung; Laufzeitverhalten gesondert prüfen |
 | Welche Konfiguration und Schemaversion liegen vor? | Buildkonfiguration und [`app/schemas/`](../app/schemas/) | Beim Website-Build als Projektreferenz abgeleitet |
 | Warum wurde früher etwas so entschieden? | Historische `step-*`- und `steps-*`-Notizen | Historie; keine automatisch aktuellen Anweisungen |
-| Was wurde in einer konkreten App-Version geliefert? | Die vorhandenen [Patchnotes](../patchnotes/README.md) | Änderungsnachweis einer Version, kein aktuelles Gesamthandbuch |
+| Was wurde in einer konkreten App-Version geliefert? | Die vorhandenen [Patchnotes](../patchnotes/README.md) | Änderungsnachweis einer Version des Originals, kein aktuelles Gesamthandbuch |
+| Was ist in diesem Fork neu? | Die [Release Notes](../CHANGELOG.md) | Nutzersprache pro Version, Stand der Veröffentlichung; kein Ersatz für die Fachnotizen |
 | Was könnte als Nächstes geändert werden? | [`update.txt`](../update.txt) | Informeller Backlog, kein Changelog und keine umgesetzte Funktion |
 
 Die vorhandenen Quellverzeichnisse bleiben erhalten. Die Website rendert dieselben Dateien; Änderungen an einer Darstellung werden niemals zurück in die kanonischen Quellen synchronisiert.
