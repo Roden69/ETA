@@ -189,37 +189,3 @@ Build Tools 36.0.0. Java-11-Bytecode-Einstellungen und App-Abhängigkeiten bleib
 unverändert. Actions sind auf Commit-SHAs fixiert; bei Aktualisierungen SHA und
 Versionskommentar gemeinsam ändern. Gradle-Caching und Wrapper-Prüfung kommen
 von `gradle/actions/setup-gradle`, ohne zusätzlichen Gradle-Cache oder Build-Scan.
-
-## Issue-Bot: Vorprüfung und Fix-Freigabe
-
-Zwei getrennte Workflows. Issue-Text gilt überall als Daten, nie als Befehl: Er wird nicht in Shell-Befehle eingesetzt, und der Fix-Lauf weist das Modell ausdrücklich an, ihn nur als Problembeschreibung zu lesen.
-
-**`issue-triage.yml`** läuft bei neuen, bearbeiteten und wieder geöffneten Issues. Ohne Modell und ohne Checkout:
-
-- sucht über die Such-API ähnliche Issues, offen oder geschlossen. Treffer brauchen zwei gemeinsame Wörter aus dem Titel, sonst gelten sie nicht als Dublette;
-- prüft bei Issues mit Label `bug` die Felder „App-Version, Android-Version und Gerät“ und „Schritte zum Fehler“;
-- hält genau einen Kommentar des Bots aktuell (erkennbar am Marker und am Bot-Konto) und setzt bei Bedarf die Labels `possible-duplicate` bzw. `needs-repro`. Beide Labels legt der Workflow an, falls sie fehlen.
-
-**`issue-fix.yml`** startet nur, wenn jemand das Label `fix-freigegeben` setzt. So läuft es:
-
-1. Der Akteur muss Schreib-, Maintainer- oder Admin-Rechte haben. Andernfalls bricht der Lauf ab.
-2. Fehlt das Secret `ANTHROPIC_API_KEY`, kommentiert der Lauf die Einrichtung und endet.
-3. Sonst startet [`anthropics/claude-code-action`](https://github.com/anthropics/claude-code-action), gepinnt auf den Commit des Release `v1.0.252`. Er arbeitet auf dem Branch `fix/issue-<N>`, folgt [`AGENTS.md`](../AGENTS.md), führt `testDebugUnitTest lint assembleDebug` und `scripts/documentation.py check` aus und öffnet einen Pull Request gegen `main` mit `Closes #<N>`.
-4. Ergebnis ist immer ein Pull Request. Ob ein Fehler wirklich vorliegt, entscheidet das Modell nur im Rahmen der Regeln; findet es keinen Defekt oder braucht es eine Produktentscheidung, ändert es nichts und kommentiert.
-
-**Einrichtung (einmalig, durch Maintainer):**
-
-- Actions-Secret `ANTHROPIC_API_KEY` setzen (API-Schlüssel der Anthropic Console; nie in Dateien oder Issues).
-- Labels anlegen: `fix-freigegeben` manuell (nur Maintainer setzen), `possible-duplicate` und `needs-repro` legt der Triage-Workflow selbst an.
-- Unter **Settings → Actions → General** „Allow GitHub Actions to create and approve pull requests“ aktivieren, damit `gh pr create` mit dem `GITHUB_TOKEN` funktioniert.
-- Branch-Ruleset für `main`: Pull Request und Review verpflichtend, keine Bypass-Rechte für Bots. Der Schutz vor Pushes auf `main` liegt in dieser Regel; der Prompt ist nur eine zusätzliche Bremse.
-
-**Grenzen:**
-
-- Pull Requests, die mit dem `GITHUB_TOKEN` entstehen, starten keine `pull_request`-Workflows. Der Android-Lauf für den Fix-PR startet also nicht von allein: Er wird über **Actions → Android CI/CD → Run workflow** auf dem Branch `fix/issue-<N>` gestartet.
-- Die Duplikatsuche ist eine Heuristik mit Titelwörtern. Sie findet nicht jede Dublette und meldet gelegentlich eine falsche.
-- Ein Fix ist nicht geprüft, bevor ein Mensch ihn gelesen und auf einem Gerät geprüft hat. Gerätetests für Alarme, Ton und Kalender bleiben Pflicht ([Entwicklung](development.md)).
-- Jeder Fix-Lauf kostet API-Nutzung; Begrenzung über `--max-turns 60` und 90 Minuten Laufzeit.
-- Das Secret ist für den Lauf sichtbar, damit das Modell es nutzen kann. Deshalb darf nur, wer Schreibrechte hat, das Label setzen.
-- Das Modell bekommt nur Titel und Text des Issues so, wie sie beim Setzen des Labels standen (aus dem Event, nicht über eine Shell). Kommentare und spätere Änderungen gehören nicht zur Freigabe und werden nicht gelesen. Vor dem Freigeben deshalb den Text selbst lesen: Er kann versuchen, dem Modell Anweisungen unterzuschieben.
-- Erlaubt sind nur genau benannte Befehle: Push ausschließlich auf `fix/issue-<N>`, Gradle nur als CI-Gate. Weil das Modell Dateien ändern und den Build starten kann, bleibt das Ruleset auf `main` der eigentliche Schutz.
