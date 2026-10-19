@@ -40,6 +40,11 @@ Design card uses, now shared).
   name has the same colour on every weekday and screen) instead of the grey of
   "unsorted" that made the whole week one grey (#51). Free time and a note not
   yet given its form keep the muted grey. `RoutineColorTest` pins this.
+  The setup's week preview (`SetupWeekStep.WeekGrid`) draws `SetupRoutine`s, not
+  `Item`s, so it spreads the same palette over the routines without a category
+  itself (`assignRoutineColors`). It only knows the routines picked so far, so a
+  routine's preview colour can differ from its colour in the week afterwards,
+  where every standing task takes part in the spreading.
 - **The Wochenschema over the Wiederkehrend list** draws each task as a bar in
   that colour (`weekTaskSpans`, `WeekSchemeChart(tasks = …)`), which is the
   colour of the dot in front of its row. Free time is no longer green there —

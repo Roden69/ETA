@@ -39,6 +39,7 @@ import androidx.compose.ui.semantics.semantics
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import com.example.eta.domain.model.CalendarEvent
+import com.example.eta.domain.model.normalizeName
 import com.example.eta.domain.planning.MINUTES_PER_DAY
 import com.example.eta.domain.setup.CalendarClash
 import com.example.eta.domain.setup.RoutinePlacement
@@ -68,6 +69,7 @@ import com.example.eta.ui.format.formatClock
 import com.example.eta.ui.format.formatLong
 import com.example.eta.ui.format.formatShort
 import com.example.eta.ui.theme.EtaTheme
+import com.example.eta.ui.theme.assignRoutineColors
 import com.example.eta.ui.theme.colorOf
 import kotlin.time.Duration.Companion.hours
 import kotlin.time.Duration.Companion.minutes
@@ -329,6 +331,11 @@ private fun WeekGrid(
     onHideEvent: (CalendarEvent) -> Unit,
 ) {
     val latestCreate by rememberUpdatedState(onCreate)
+    // Routines without a category get the same name-derived colour here as the
+    // standing tasks they become (colorOf(Item)); the draft's own were grey.
+    val routineColors = remember(draft.routines) {
+        assignRoutineColors(draft.routines.filter { it.category == null }.map { normalizeName(it.name) })
+    }
     val allPlacements = draft.placements + listOfNotNull(pending)
     BoxWithConstraints(Modifier.width(DAY_COLUMN_WIDTH * WEEK.size).height(CALENDAR_HEIGHT)) {
         val dayWidth = maxWidth / WEEK.size
@@ -413,7 +420,9 @@ private fun WeekGrid(
                     width = dayWidth,
                     lane = layout.lane,
                     laneCount = layout.laneCount,
-                    color = colorOf(segment.routine.category),
+                    color = segment.routine.category?.let { colorOf(it) }
+                        ?: routineColors[normalizeName(segment.routine.name)]?.let { Color(it) }
+                        ?: colorOf(segment.routine.category),
                     description = "${segment.routine.name}, ${segment.weekday.formatLong()} ${minuteClock(segment.from)} bis ${minuteClock(segment.to % MINUTES_PER_DAY)}",
                     onClick = { onEdit(segment.placement) },
                 )
