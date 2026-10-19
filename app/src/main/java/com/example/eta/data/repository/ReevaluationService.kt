@@ -22,6 +22,8 @@ import com.example.eta.domain.setup.DEFAULT_CANCELLATION_PENALTY
 import com.example.eta.domain.setup.UserSetup
 import com.example.eta.domain.planning.sleepStretches
 import kotlin.time.Clock
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.minus
 import kotlinx.datetime.LocalDate
@@ -50,6 +52,8 @@ class ReevaluationService(
     /** What was said about getting up and going to bed; null books no bonus. */
     private val sleepLogRepository: SleepLogRepository? = null,
 ) {
+    private val settlementMutex = Mutex()
+
 
     /** Contracts that still owe an answer for [date]. */
     suspend fun contractsAwaitingCheck(date: LocalDate): List<Contract> =
@@ -126,7 +130,12 @@ class ReevaluationService(
         date: LocalDate,
         verdicts: List<ContractVerdict>,
         journal: Map<String, String>,
-    ): DailySettlement {
+    ): DailySettlement = settlementMutex.withLock {
+        // Different screens can close the same date. Check the persisted marker
+        // inside the service lock before any ledger, contract or growth writes.
+        if (planRepository.findDayPlan(date)?.isSettled == true) {
+            return@withLock preview(date, emptyList())
+        }
         verdicts.forEach {
             contractRepository.recordVerdict(it.contract, it.kept, date, it.keepServing)
         }
@@ -206,7 +215,7 @@ class ReevaluationService(
         // planned-ahead tomorrow as "phase done" and never ask again.
         planRepository.markSettled(date)
 
-        return settlement
+        settlement
     }
 
     /**

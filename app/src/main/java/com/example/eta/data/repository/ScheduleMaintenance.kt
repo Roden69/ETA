@@ -1,8 +1,11 @@
 package com.example.eta.data.repository
 
+import com.example.eta.data.local.CalendarDao
 import com.example.eta.data.local.ItemDao
 import com.example.eta.domain.growth.placeDynamicGrowth
+import com.example.eta.domain.model.BlockOrigin
 import com.example.eta.domain.planning.minuteToLocalTime
+import com.example.eta.domain.recurrence.matches
 import kotlin.time.Clock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
@@ -29,6 +32,7 @@ class ScheduleMaintenance(
     private val itemDao: ItemDao,
     private val planRepository: PlanRepository,
     private val vacationRepository: VacationRepository,
+    private val calendarDao: CalendarDao,
     private val clock: Clock = Clock.System,
     private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) {
@@ -44,11 +48,26 @@ class ScheduleMaintenance(
         // down. Retiring it here takes it off the lists that describe the week
         // as it still is; expansion would pass over it either way.
         itemDao.retireEndedRecurring(today, clock.now())
+        val definitions = itemDao.findRecurringDefinitions()
+        val retainedImports = calendarDao.findRetainedIndividualSeriesImports()
+        val definitionIds = definitions.associateBy { it.id }
+        val suppressed = retainedImports.mapNotNull { retained ->
+            val definition = definitionIds[retained.itemId] ?: return@mapNotNull null
+            val rule = definition.recurrenceRule ?: return@mapNotNull null
+            if (rule.matches(retained.date)) retained.itemId to retained.date else null
+        }.toSet()
+        if (suppressed.isNotEmpty()) {
+            planRepository.findRange(today, horizon)
+                .filter { it.block.origin == BlockOrigin.RECURRING }
+                .filter { it.block.isOpen && (it.item.id to it.block.date) in suppressed }
+                .forEach { planRepository.removeBlock(it.block) }
+        }
         val added = planRepository.materializeRecurring(
-            definitions = itemDao.findRecurringDefinitions(),
+            definitions = definitions,
             from = today,
             to = horizon,
             vacations = vacationRepository.plansFrom(today),
+            suppressed = suppressed,
         )
         // A dynamic growth task's hour is not a property of the task but of the
         // day it lands in, so a freshly materialized occurrence has no hour worth

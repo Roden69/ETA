@@ -4,6 +4,10 @@ import com.example.eta.domain.model.Item
 import com.example.eta.domain.model.Stage
 import kotlin.time.Instant
 
+/** A waiting child retargeted to a new predecessor remains waiting with its clock stopped. */
+fun Item.waitingFor(predecessorId: String, now: Instant): Item =
+    copy(followUpOfId = predecessorId, enteredCollectionAt = null, updatedAt = now)
+
 /**
  * A follow-up that still waits for its predecessor: it has no [Item.enteredCollectionAt],
  * so it is not plannable and its one-month clock has not started.

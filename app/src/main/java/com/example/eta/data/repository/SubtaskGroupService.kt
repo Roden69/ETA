@@ -6,6 +6,8 @@ import com.example.eta.domain.model.Priority
 import com.example.eta.domain.model.Stage
 import com.example.eta.domain.planning.minuteToLocalTime
 import com.example.eta.domain.subtask.SubtaskDraft
+import com.example.eta.domain.chain.isWaitingFollowUp
+import com.example.eta.domain.chain.waitingFor
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Instant
@@ -48,6 +50,21 @@ class SubtaskGroupService(
     private val clock: Clock = Clock.System,
 ) {
 
+    /** Prevent joining a node to itself or creating a predecessor cycle. */
+    private suspend fun linkedInChain(startId: String, targetId: String): Boolean {
+        var pending = listOf(startId)
+        val seen = mutableSetOf<String>()
+        while (pending.isNotEmpty()) {
+            val id = pending.first()
+            pending = pending.drop(1)
+            if (!seen.add(id)) continue
+            if (id == targetId) return true
+            val predecessor = itemDao.findById(id)?.followUpOfId
+            pending = pending + listOfNotNull(predecessor) + itemDao.findFollowUpsOf(id).map { it.id }
+        }
+        return false
+    }
+
     /**
      * Makes [survivorBlockId]'s task the group and takes [dissolvedBlockId]'s off
      * the day, starting the group at [startMinute].
@@ -79,6 +96,9 @@ class SubtaskGroupService(
         val dissolved = itemDao.findById(dissolvedBlock.itemId) ?: return false
 
         val now = clock.now()
+        if (survivor.id == dissolved.id || linkedInChain(survivor.id, dissolved.id) ||
+            linkedInChain(dissolved.id, survivor.id)
+        ) return false
         val renamed = if (answers.name.isNotBlank() && answers.name != survivor.name) {
             survivor.renamed(answers.name, now)
         } else {
@@ -113,9 +133,9 @@ class SubtaskGroupService(
         planRepository.removeBlock(dissolvedBlock)
         subtaskRepository.save(dissolved.id, emptyList())
         itemDao.upsert(dissolved.copy(stage = Stage.DONE, completedAt = now, updatedAt = now))
-        // Swallowed into the survivor, it is nobody's predecessor any more: release
-        // what waited on it rather than leave it waiting for good.
-        itemDao.applyFollowUpTransition(dissolved.id, finished = true, now = now)
+        val waiting = itemDao.findFollowUpsOf(dissolved.id).filter { it.isWaitingFollowUp() }
+            .map { it.waitingFor(survivor.id, now) }
+        if (waiting.isNotEmpty()) itemDao.upsertAll(waiting)
         return true
     }
 }

@@ -35,6 +35,11 @@ contracts and pays none, exactly like the phrase route: a contract is checked on
 evening, and a late answer must not pay it or move `lastCheckedOn` back. Its journal
 gets the note "Nachgeholt", and each missed day opens on its own first page.
 
+`ReevaluationService.settle` serializes settlement calls and checks the persisted
+`DayPlan.isSettled` marker before writing points, contract verdicts, rewards or
+growth. Reopening a completed date or closing it from two screens does not book
+it twice; the ViewModel's click guard is only the first line of protection.
+
 Older days, up to 30, stay behind the phrase `TECHNISCHE SCHWIERIGKEITEN` in the
 settings tab. `CatchUpService.catchUp` pays the day's harvest but **never contract
 points** — a contract is attested to on the day, and saying a week later that it was

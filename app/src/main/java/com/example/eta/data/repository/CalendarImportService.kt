@@ -94,6 +94,7 @@ class CalendarImportService(
     private val recurringTaskService: RecurringTaskService,
     private val dayClosingService: DayClosingService,
     private val weekPlanningService: WeekPlanningService,
+    private val scheduleMaintenance: ScheduleMaintenance,
     private val clock: Clock = Clock.System,
 ) {
 
@@ -227,6 +228,7 @@ class CalendarImportService(
         )
         calendarRepository.adoptSeries(event.calendarId, seriesId, ids)
         replaceSingleImports(event.calendarId, seriesId, ids)
+        scheduleMaintenance.topUp()
         return ids
     }
 
@@ -250,7 +252,7 @@ class CalendarImportService(
                     ?: return@forEach
                 if (!single.block.isOpen) return@forEach
                 planRepository.removeBlock(single.block)
-                itemRepository.update(single.item.copy(stage = Stage.DONE, completedAt = now, updatedAt = now))
+                itemRepository.delete(single.item)
                 calendarRepository.relink(occurrence, ids.first())
             }
     }

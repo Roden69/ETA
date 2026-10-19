@@ -82,6 +82,7 @@ class RootViewModel(
             planningAlarmCoordinator.rescheduleAll()
             taskStartCoordinator.reschedule()
             reminderCoordinator.reschedule()
+            calendarRefreshCoordinator.reschedule()
         }
     }
 }

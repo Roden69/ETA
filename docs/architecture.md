@@ -23,6 +23,11 @@ ViewModels kombinieren meist DAO-/Repository-`Flow`s mit fachlichen Berechnungen
 
 Diese Unterscheidung ist eine wichtige Änderungsgrenze: Änderungen an der Definition können künftige Vorkommen beeinflussen; Tageskorrekturen betreffen den Block. Zum Beispiel liegt eine wiederkehrende Standarddauer am Item, während die tatsächlich geplante oder erfasste Dauer am Block liegt. Das Datenmodell sichert höchstens ein Vorkommen pro Item und Datum über einen eindeutigen Index ab. Wiederkehrende Definitionen werden nach Regeln expandiert und fehlende Vorkommen materialisiert; siehe [`RecurringSchedule.kt`](../app/src/main/java/com/example/eta/domain/recurrence/RecurringSchedule.kt), [`RecurrenceExpansion.kt`](../app/src/main/java/com/example/eta/domain/recurrence/RecurrenceExpansion.kt) und [`ScheduleMaintenance`](../app/src/main/java/com/example/eta/data/repository/ScheduleMaintenance.kt).
 
+Folgeaufgaben bleiben getrennte ToDos mit einer Vorgängerbeziehung. Solange der
+Vorgänger offen ist, sind sie nicht einplanbar und ihre Sammellistenfrist läuft
+noch nicht. Die aktuellen Übergangsregeln stehen in der
+[Listen-Notiz](../.claude/rules/lists.md#follow-up-todos-folgeaufgaben).
+
 Weitere Grenzen sind ähnlich bewusst: Schritte gehören zur Definition, ihre Erledigungsmarkierungen zum Block; die Einzelheiten stehen in [Schritte](../.claude/rules/step-23-subtasks.md). Notizen und Kalenderereignisse sind in [Dashboard](../.claude/rules/dashboard.md) beziehungsweise [Google Calendar](../.claude/rules/google-calendar.md) beschrieben.
 
 ## Fachlogik, Speicherung und Zustand
@@ -35,8 +40,19 @@ Punkte sind ein fachlicher Ledger-/Ertragsfluss, nicht bloß ein UI-Zähler. Ber
 
 Die Navigation und Bildschirmverzweigungen sind in [`EtaApp.kt`](../app/src/main/java/com/example/eta/ui/root/EtaApp.kt) zentral zusammengesetzt. Die Tabs und Phasen sind Compose-Zustand und gespeicherte Anwendungsdaten, kein eigenständiger Navigation-Graph. Der tägliche Ablauf führt durch Reevaluation, Konkretisierung, gegebenenfalls Kalenderabgleich und Tagesplanung; die Wochenansicht verwaltet Wochenplanung. Die Produktorientierung steht in [Planungsphase](../Eta_doc/Planungsphase.md), die aktuelle Ausgestaltung in [Tagesplaner-Notiz](../.claude/rules/day-planner.md) und [Kalender-Notiz](../.claude/rules/google-calendar.md).
 
+Verpasste Tagesabschlüsse der letzten sieben Tage werden im Dashboard angeboten:
+älteste zuerst, mit getrenntem Bildschirmzustand je Datum; anschließend folgt die
+heute noch offene Tagesplanung. Historische Vertragsbewertungen werden dabei
+nicht nachgebucht. Die [Reevaluationsnotiz](../.claude/rules/streak-reevaluation.md)
+beschreibt diesen Ablauf und den Schutz vor mehrfacher Verbuchung.
+
 ## Kalender, Identität und Datenmigration
 
 Google-Kalender wird schreibgeschützt importiert. Importierte Ereignisse werden als eigene Definition/Zuordnung und konkrete Kalenderblöcke repräsentiert; die Kalenderidentität verhindert Duplikate beim erneuten Synchronisieren. Nutzungsentscheidungen zu Ereignissen bleiben beim Nutzer. Konfliktbehandlung und Synchronisationsinvarianten sind in [Google Calendar](../.claude/rules/google-calendar.md) dokumentiert; Implementierungen liegen in `data/calendar/`, `data/repository/Calendar*` und `ui/calendar/`.
 
 Persistenzidentität ist ebenfalls fachlich relevant: Die Android-`applicationId` bleibt aus Kompatibilitätsgründen beim früheren Paketnamen, damit Updates dieselbe installierte App und deren Daten erreichen; siehe [`app/build.gradle.kts`](../app/build.gradle.kts). Room-Schemaänderungen müssen mit expliziten Migrationen und exportierten Schemas zusammenpassen. [`EtaDatabase.kt`](../app/src/main/java/com/example/eta/data/local/EtaDatabase.kt) definiert Datenbank und Migrationen, `AppContainer` registriert sie; [Datenbanknotiz](../.claude/rules/database.md) erläutert den Prozess. Keine Migration durch Löschen oder Neuerstellen einer Nutzerdatenbank umgehen. Die Referenz-/Inventarseite der Dokumentationssite ist über den [Dokumentationseinstieg](README.md) erreichbar.
+
+Die optionale Testvariante `fork` verwendet dagegen bewusst die zusätzliche
+Paket-ID `com.example.erik_iteration_2.fork` und den App-Namen **Eta Fork**.
+Sie ersetzt keine bestehende Installation und hat eigene Daten sowie eine eigene
+Google-OAuth-Registrierung; siehe [Entwicklung](development.md#fork-build-neben-dem-original).

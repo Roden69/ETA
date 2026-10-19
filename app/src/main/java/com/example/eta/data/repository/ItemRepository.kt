@@ -1,6 +1,7 @@
 package com.example.eta.data.repository
 
 import com.example.eta.data.local.ItemDao
+import com.example.eta.domain.chain.isFinishedForChain
 import com.example.eta.domain.chain.isWaitingFollowUp
 import com.example.eta.domain.model.Category
 import com.example.eta.domain.growth.GrowthSetting
@@ -31,10 +32,10 @@ import kotlinx.datetime.LocalTime
 import kotlinx.datetime.TimeZone
 import java.util.UUID
 
-/** Outcome of trying to create a ToDo, which the Sperrliste can veto. */
+/** Outcome of creating a ToDo and its optional follow-up chain. */
 sealed interface AddItemResult {
     data class Added(val item: Item) : AddItemResult
-    data class BlockedByLock(val lockedUntil: Instant) : AddItemResult
+    data class BlockedByLock(val lockedUntil: Instant, val lockedName: String? = null) : AddItemResult
 }
 
 class ItemRepository(
@@ -74,8 +75,9 @@ class ItemRepository(
     /** ToDos a group can absorb as steps — the week's goals and the backlog. */
     fun observeFoldCandidates(): Flow<List<Item>> = itemDao.observeFoldCandidates()
 
-    /** Retires the tasks a group swallowed — see [retireFolded]. */
-    suspend fun retireFolded(ids: Collection<String>) = itemDao.retireFolded(ids, clock.now())
+    /** Retires swallowed tasks while making their successors wait on the survivor. */
+    suspend fun retireFolded(ids: Collection<String>, survivorId: String) =
+        itemDao.retireFolded(ids, clock.now(), survivorId)
 
     suspend fun findById(id: String): Item? = itemDao.findById(id)
 
@@ -119,13 +121,13 @@ class ItemRepository(
     ): AddItemResult {
         val now = clock.now()
         itemDao.findActiveLock(item.normalizedName, now)?.let { locked ->
-            return AddItemResult.BlockedByLock(locked.lockedUntil ?: now)
+            return AddItemResult.BlockedByLock(locked.lockedUntil ?: now, item.name)
         }
+        // Before any write: a refused step must not leave the card or half a chain behind.
+        lockedFollowUp(followUps)?.let { return it }
         itemDao.upsert(item)
         if (subtasks.isNotEmpty()) subtaskRepository.save(item.id, subtasks)
-        itemDao.retireFolded(folded, now)
-        // Follow-ups skip the Sperrliste check: they follow from a card already
-        // committed to, like a "Nachholen von …" does, not from a fresh idea.
+        itemDao.retireFolded(folded, now, item.id)
         itemDao.writeFollowUps(item, followUps, now)
         return AddItemResult.Added(item)
     }
@@ -149,22 +151,27 @@ class ItemRepository(
     }
 
     /**
-     * Removes a card. A card that was itself still waiting hands its follow-ups to
-     * its own predecessor, so A→B→C with B deleted becomes A→C and C still waits for
-     * A. Otherwise its follow-ups are released: a predecessor that is gone cannot
-     * hold its successor back any longer.
+     * Removes a card. A waiting step's successors inherit its predecessor; otherwise
+     * successors are released because their predecessor is gone.
      */
     suspend fun delete(item: Item) {
         val now = clock.now()
-        val inheritor = item.followUpOfId?.takeIf { item.isWaitingFollowUp() }
+        val current = itemDao.findById(item.id) ?: return
+        val inheritor = current.followUpOfId?.takeIf { current.isWaitingFollowUp() }
         if (inheritor != null) {
-            val moved = itemDao.findFollowUpsOf(item.id)
-                .map { it.copy(followUpOfId = inheritor, updatedAt = now) }
+            val predecessor = itemDao.findById(inheritor)
+            val moved = itemDao.findFollowUpsOf(current.id).map { child ->
+                child.copy(
+                    followUpOfId = inheritor,
+                    enteredCollectionAt = if (predecessor?.isFinishedForChain() == true) now else null,
+                    updatedAt = now,
+                )
+            }
             if (moved.isNotEmpty()) itemDao.upsertAll(moved)
         } else {
-            itemDao.applyFollowUpTransition(item.id, finished = true, now = now)
+            itemDao.applyFollowUpTransition(current.id, finished = true, now = now)
         }
-        itemDao.delete(item)
+        itemDao.delete(current)
     }
 
     /** Names of predecessors that a follow-up waits for, by id — for "danach: …". */
@@ -177,11 +184,28 @@ class ItemRepository(
      * Read fresh by id: the caller has usually just saved the predecessor's new
      * attributes, and the steps inherit those, not the screen's older copy.
      */
-    suspend fun appendFollowUps(predecessorId: String, names: List<String>) {
-        val predecessor = itemDao.findById(predecessorId) ?: return
+    suspend fun appendFollowUps(predecessorId: String, names: List<String>): AddItemResult? {
+        val predecessor = itemDao.findById(predecessorId) ?: return null
+        lockedFollowUp(names)?.let { return it }
         var tail = predecessor
         while (true) tail = itemDao.findFollowUpsOf(tail.id).firstOrNull() ?: break
         itemDao.writeFollowUps(tail, names, clock.now())
+        return AddItemResult.Added(predecessor)
+    }
+
+    /**
+     * The first of [names] the Sperrliste still bans, or null. Every name a user
+     * typed is checked, not only the card's own: a step is a ToDo like any other,
+     * and the ban exists so an idea cannot be retyped under the same name.
+     * Read-only, so a screen can ask before it saves anything.
+     */
+    suspend fun lockedFollowUp(names: List<String>): AddItemResult.BlockedByLock? {
+        val now = clock.now()
+        for (name in names.map(String::trim).filter(String::isNotEmpty)) {
+            val locked = itemDao.findActiveLock(normalizeName(name), now) ?: continue
+            return AddItemResult.BlockedByLock(locked.lockedUntil ?: now, name)
+        }
+        return null
     }
 
     /**
@@ -206,7 +230,7 @@ class ItemRepository(
         folded: Collection<String> = emptyList(),
     ) {
         subtasks?.let { subtaskRepository.save(item.id, it) }
-        itemDao.retireFolded(folded, clock.now())
+        itemDao.retireFolded(folded, clock.now(), item.id)
         update(
             item.concretized(
                 category = category,
@@ -288,7 +312,7 @@ class ItemRepository(
         // task by its attributes, so two rows with different lists would start
         // showing up as two tasks.
         subtasks?.let { drafts -> written.forEach { subtaskRepository.save(it.id, drafts) } }
-        itemDao.retireFolded(folded, now)
+        itemDao.retireFolded(folded, now, written.first().id)
     }
 
     /** Weekly goals of an earlier cycle that are still in flight. */

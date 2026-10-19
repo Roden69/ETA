@@ -164,7 +164,7 @@ class RecurringTaskService(
 
         itemDao.upsertAll(written + retired)
         edit.subtasks?.let { drafts -> written.forEach { subtaskRepository.save(it.id, drafts) } }
-        itemDao.retireFolded(edit.folded, now)
+        written.firstOrNull()?.let { itemDao.retireFolded(edit.folded, now, it.id) }
         relayOccurrences((written + retired).map { it.id })
     }
 
@@ -240,7 +240,7 @@ class RecurringTaskService(
         }
         itemDao.upsertAll(rows)
         edit.subtasks?.let { drafts -> rows.forEach { subtaskRepository.save(it.id, drafts) } }
-        itemDao.retireFolded(edit.folded, now)
+        rows.firstOrNull()?.let { itemDao.retireFolded(edit.folded, now, it.id) }
         // Laid down at once: a task that exists without a single occurrence while
         // the user is looking at the screen that just created it reads as broken.
         scheduleMaintenance.topUp()

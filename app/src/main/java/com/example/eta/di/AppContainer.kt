@@ -129,6 +129,7 @@ class AppContainer(
         itemDao = database.itemDao(),
         planRepository = planRepository,
         vacationRepository = vacationRepository,
+        calendarDao = database.calendarDao(),
         clock = clock,
     )
 
@@ -250,6 +251,7 @@ class AppContainer(
         recurringTaskService = recurringTaskService,
         dayClosingService = dayClosingService,
         weekPlanningService = weekPlanningService,
+        scheduleMaintenance = scheduleMaintenance,
         clock = clock,
     )
 

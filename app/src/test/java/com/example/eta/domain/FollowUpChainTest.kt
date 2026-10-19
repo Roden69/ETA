@@ -3,6 +3,7 @@ package com.example.eta.domain
 import com.example.eta.domain.chain.followUpEnteredAt
 import com.example.eta.domain.chain.followUpsAfter
 import com.example.eta.domain.chain.isOfferedFollowUp
+import com.example.eta.domain.chain.waitingFor
 import com.example.eta.domain.chain.isWaitingFollowUp
 import com.example.eta.domain.model.Category
 import com.example.eta.domain.model.Item
@@ -123,5 +124,20 @@ class FollowUpChainTest {
         // Checking off the drying releases the folding in turn.
         val afterDrying = followUpsAfter(drying.id, true, listOf(dryingReleased, folding), now = checkedOff)
         assertEquals(listOf(folding.id), afterDrying.map { it.id })
+    }
+
+    @Test
+    fun `reparenting a waiting middle step preserves its waiting state and ordering`() {
+        val middle = waiting("Aufhängen", washing)
+        val last = waiting("Zusammenlegen", middle)
+
+        val reparented = last.waitingFor(washing.id, checkedOff)
+        assertEquals(washing.id, reparented.followUpOfId)
+        assertNull(reparented.enteredCollectionAt)
+        assertTrue(reparented.isWaitingFollowUp())
+
+        // Finishing the original predecessor now releases the reparented successor.
+        val released = followUpsAfter(washing.id, true, listOf(reparented), checkedOff)
+        assertEquals(checkedOff, released.single().enteredCollectionAt)
     }
 }

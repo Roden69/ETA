@@ -775,7 +775,7 @@ class DayPlannerViewModel(
                     block.copy(plannedDuration = block.plannedDuration + added, updatedAt = now),
                 )
             }
-            itemRepository.retireFolded(setting.folded.map { it.itemId })
+            itemRepository.retireFolded(setting.folded.map { it.itemId }, item.id)
             setting.released.forEach { draft ->
                 itemRepository.addWithoutLockCheck(
                     Item.releasedSubtask(
