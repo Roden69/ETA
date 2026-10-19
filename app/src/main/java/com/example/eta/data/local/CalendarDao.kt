@@ -10,6 +10,19 @@ import kotlinx.coroutines.flow.Flow
 import kotlin.time.Instant
 import kotlinx.datetime.LocalDate
 
+data class LiveCalendarSeries(
+    val itemId: String,
+    val calendarId: String,
+    val seriesId: String,
+    val recurrenceRule: String,
+    val repeatUntil: LocalDate?,
+)
+data class CalendarSeriesImportDate(
+    val itemId: String,
+    val date: LocalDate,
+)
+
+
 @Dao
 interface CalendarDao {
 
@@ -135,10 +148,28 @@ interface CalendarDao {
      */
     @Query(
         """
-        SELECT calendar_series.* FROM calendar_series
+        SELECT calendar_series.itemId, calendar_series.calendarId, calendar_series.seriesId,
+               items.recurrenceRule, items.repeatUntil
+        FROM calendar_series
         INNER JOIN items ON items.id = calendar_series.itemId
         WHERE items.completedAt IS NULL
+          AND items.recurrenceRule IS NOT NULL
         """,
     )
-    suspend fun findLiveSeries(): List<CalendarSeries>
+    suspend fun findLiveSeries(): List<LiveCalendarSeries>
+
+    /** Individually imported events whose history must remain instead of being replaced. */
+    @Query(
+        """
+        SELECT calendar_series.itemId AS itemId, calendar_events.date AS date
+        FROM calendar_events
+        INNER JOIN calendar_series
+          ON calendar_series.calendarId = calendar_events.calendarId
+         AND calendar_series.seriesId = calendar_events.seriesId
+        WHERE calendar_events.decision = 'IMPORTED'
+          AND calendar_events.itemId IS NOT NULL
+          AND calendar_events.itemId NOT IN (SELECT itemId FROM calendar_series)
+        """,
+    )
+    suspend fun findRetainedIndividualSeriesImports(): List<CalendarSeriesImportDate>
 }

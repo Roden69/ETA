@@ -37,6 +37,7 @@ import com.example.eta.domain.planning.PullBlock
 import com.example.eta.domain.planning.costOf
 import com.example.eta.ui.calendar.CalendarEventsSection
 import com.example.eta.ui.calendar.CalendarEventsViewModel
+import com.example.eta.ui.components.ConfirmDialog
 import com.example.eta.ui.components.EtaButton
 import com.example.eta.ui.components.LocalPointsVisible
 import com.example.eta.ui.components.ReportToTutorial
@@ -106,6 +107,7 @@ fun WeekPlannerScreen(
     val state by viewModel.uiState.collectAsStateWithLifecycle()
     val inflation by viewModel.inflation.collectAsStateWithLifecycle()
     val evaluation by viewModel.evaluation.collectAsStateWithLifecycle()
+    val notice by viewModel.notice.collectAsStateWithLifecycle()
     val banned by viewModel.banned.collectAsStateWithLifecycle()
     val steps = stepsFor(viewModel.isMidWeek, LocalPointsVisible.current, calendarViewModel != null)
     val pagerState = rememberPagerState { steps.size }
@@ -239,6 +241,18 @@ fun WeekPlannerScreen(
             }
         }
     }
+    notice?.let { message ->
+        // The goal was refused, so its form stays open behind this: nothing typed is lost.
+        ConfirmDialog(
+            title = "Nicht gespeichert",
+            message = message,
+            confirm = "Verstanden",
+            dismiss = "Schließen",
+            onDismiss = viewModel::dismissNotice,
+            onConfirm = viewModel::dismissNotice,
+        )
+    }
+
 
     if (adding) {
         AddGoalDialog(

@@ -391,8 +391,7 @@ fun SmartListsScreen(
                 foldCandidates = state.foldable.foldCandidatesExcept(),
                 onDismiss = { creating = null },
                 onCreate = { name, note, attributes ->
-                    viewModel.createTodo(name, note, attributes, intoWeek)
-                    creating = null
+                    viewModel.createTodo(name, note, attributes, intoWeek) { creating = null }
                 },
             )
         }
@@ -543,8 +542,7 @@ fun SmartListsScreen(
             foldCandidates = state.foldable.foldCandidatesExcept(item.id),
             onDismiss = { editing = null },
             onSaveTodo = { name, note, attributes ->
-                viewModel.saveTodo(item, name, note, attributes)
-                editing = null
+                viewModel.saveTodo(item, name, note, attributes) { editing = null }
             },
             onSaveRecurring = { name, note, attributes ->
                 viewModel.saveRecurring(item, name, note, attributes)

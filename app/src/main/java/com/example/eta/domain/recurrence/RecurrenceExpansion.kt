@@ -131,6 +131,7 @@ fun expandRecurring(
     existing: Set<Pair<String, LocalDate>>,
     now: Instant,
     vacations: List<VacationPlan> = emptyList(),
+    suppressed: Set<Pair<String, LocalDate>> = emptySet(),
 ): List<PlannedBlock> = definitions.flatMap { item ->
     val rule = item.recurrenceRule ?: return@flatMap emptyList()
     val start = item.startTime ?: return@flatMap emptyList()
@@ -140,6 +141,7 @@ fun expandRecurring(
 
     rule.occurrencesBetween(from, last)
         .filterNot { date -> (item.id to date) in existing }
+        .filterNot { date -> (item.id to date) in suppressed }
         // A suspended task produces no block at all, which is also why a holiday
         // never triggers a "Nachholen von …": there is nothing to drop.
         .filterNot { date -> vacations.suspends(item.id, date) }

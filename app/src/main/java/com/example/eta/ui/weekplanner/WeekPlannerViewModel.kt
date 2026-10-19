@@ -8,6 +8,7 @@ import com.example.eta.data.repository.PlanRepository
 import com.example.eta.data.repository.ScheduleMaintenance
 import com.example.eta.data.repository.SetupRepository
 import com.example.eta.data.repository.WeekPlanningService
+import com.example.eta.data.repository.AddItemResult
 import com.example.eta.data.repository.WeekScope
 import com.example.eta.domain.calendar.DateWindow
 import com.example.eta.domain.chain.isWaitingFollowUp
@@ -88,7 +89,8 @@ class WeekPlannerViewModel(
      * The stretch being planned, and so the stretch the free hours are counted
      * over. The scheduled phase lays out the week starting tomorrow; a mid-week
      * top-up covers the seven days from today, since that is what the user is
-     * adding to.
+     * adding to. The budget is a seven-day measure (`weekBudget`); the calendar
+     * step reads its own window ([calendarWindow]) up to the next planning day.
      */
     val weekStart: LocalDate = when (scope) {
         WeekScope.SCHEDULED -> weekPlanningService.weekStart()
@@ -123,6 +125,13 @@ class WeekPlannerViewModel(
     val evaluation: StateFlow<String> = _evaluation.asStateFlow()
 
     private val _banned = MutableStateFlow<Int?>(null)
+    private val _notice = MutableStateFlow<String?>(null)
+    val notice: StateFlow<String?> = _notice.asStateFlow()
+
+    fun dismissNotice() {
+        _notice.value = null
+    }
+
     val banned: StateFlow<Int?> = _banned.asStateFlow()
 
     val uiState: StateFlow<WeekPlannerUiState> = combine(
@@ -213,7 +222,7 @@ class WeekPlannerViewModel(
     fun addToCollection(name: String, attributes: TodoAttributes, onDone: () -> Unit) {
         viewModelScope.launch {
             val now = clock.now()
-            itemRepository.add(
+            val result = itemRepository.add(
                 Item.newTodo(
                     name = name,
                     category = attributes.category,
@@ -231,7 +240,14 @@ class WeekPlannerViewModel(
                 folded = attributes.foldedItemIds,
                 followUps = attributes.followUps,
             )
-            onDone()
+            when (result) {
+                is AddItemResult.Added -> onDone()
+                is AddItemResult.BlockedByLock -> {
+                    val blockedName = result.lockedName ?: name
+                    _notice.value = "»$blockedName« steht auf der Sperrliste. " +
+                        "Die Aufgabe und ihre Folgeaufgaben wurden nicht gespeichert."
+                }
+            }
         }
     }
 

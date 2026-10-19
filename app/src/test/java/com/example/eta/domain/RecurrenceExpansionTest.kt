@@ -133,6 +133,26 @@ class RecurrenceExpansionTest {
     }
 
     @Test
+    fun `an occurrence kept as its own import is not laid down a second time`() {
+        // The Monday the user took one by one before adopting the series stays theirs;
+        // the standing card lays down every other Monday.
+        val item = recurring(RecurrenceRule.Weekly(DayOfWeek.MONDAY))
+        val blocks = expandRecurring(
+            definitions = listOf(item),
+            from = LocalDate(2026, 9, 1),
+            to = LocalDate(2026, 9, 30),
+            existing = emptySet(),
+            now = now,
+            suppressed = setOf(item.id to LocalDate(2026, 9, 14)),
+        )
+
+        assertEquals(
+            listOf(LocalDate(2026, 9, 7), LocalDate(2026, 9, 21), LocalDate(2026, 9, 28)),
+            blocks.map { it.date },
+        )
+    }
+
+    @Test
     fun `two time slots of one routine both lay down on the same day`() {
         // A second "weiterer Zeitplatz" is its own definition under the same name,
         // so the per-(item, date) uniqueness never sees the two as one.

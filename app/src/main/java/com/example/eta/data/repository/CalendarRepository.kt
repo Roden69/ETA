@@ -8,6 +8,8 @@ import com.example.eta.domain.model.CalendarEvent
 import com.example.eta.domain.model.CalendarSeries
 import com.example.eta.domain.model.CalendarSource
 import com.example.eta.domain.model.EventDecision
+import com.example.eta.domain.model.RecurrenceRule
+import com.example.eta.domain.recurrence.matches
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
@@ -109,23 +111,28 @@ class CalendarRepository(
 
         val remote = calendars.flatMap { api.events(token, it.id, from, to) }
         val known = dao.findForRange(from, to).associateBy { it.id }
-        val live = dao.findLiveSeries()
-        val adopted = live.associate { seriesKey(it.calendarId, it.seriesId) to it.itemId }
-        // Cards made from a series that have since been deleted or ended: what they
-        // took is offered again instead of pointing at a card that lays nothing down.
-        val deadSeriesItems = dao.findSeries().map { it.itemId }.toSet() - live.map { it.itemId }.toSet()
+        val seriesItems = dao.findSeries().map { it.itemId }.toSet()
+        val liveDefinitions = dao.findLiveSeries()
         val now = clock.now()
+
 
         dao.upsertEvents(
             remote.map { event ->
-                val existing = known[idOf(event)]?.let { row ->
-                    if (row.itemId != null && row.itemId in deadSeriesItems) {
-                        row.copy(decision = EventDecision.PENDING, itemId = null)
-                    } else {
-                        row
-                    }
+                val activeDefinitions = liveDefinitions
+                    .filter { it.calendarId == event.calendarId && it.seriesId == event.seriesId }
+                    .filter { it.repeatUntil == null || event.date <= it.repeatUntil }
+                    .filter { RecurrenceRule.decode(it.recurrenceRule).matches(event.date) }
+                val adoptedItemId = activeDefinitions.firstOrNull()?.itemId
+                val row = known[idOf(event)]
+                val staleAdoption = row?.decision == EventDecision.IMPORTED &&
+                    row.itemId in seriesItems &&
+                    (adoptedItemId == null || activeDefinitions.none { it.itemId == row.itemId })
+                val existing = if (staleAdoption) {
+                    row?.copy(decision = EventDecision.PENDING, itemId = null)
+                } else {
+                    row
                 }
-                merge(event, existing, adopted[seriesKey(event.calendarId, event.seriesId)], now)
+                merge(event, existing, adoptedItemId, now)
             },
         )
         // What the calendar no longer offers and nobody has decided about is gone.

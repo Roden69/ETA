@@ -225,14 +225,23 @@ shows a sentence.
   weekly, or `RecurrenceRule.EveryWeeks` (every N weeks counted from an anchor
   date, stored as `E:<weekday>:<weeks>:<anchor>`) for intervals above one week,
   so a three-weekly series stays three-weekly. Other rules are refused with the
-  reason. `calendar_series` links the cards to the series so its occurrences are
-  not offered again; only links whose card is still a live standing task count
-  (`findLiveSeries`), so deleting or ending the card offers the occurrences again.
+  reason. `calendar_series` links the cards to the series, one row per weekday
+  card. An occurrence counts as taken by the series only while a **live card of the
+  series runs on that very day** (`CalendarRepository.syncEvents`): the card is
+  neither deleted nor ended, its date is not past `repeatUntil`, and its rule
+  matches the date. Delete or end the card, or drop a weekday from it, and the
+  occurrences it no longer covers revert to pending at the next read instead of
+  disappearing from the plan for good. Decisions of single imports and ignored
+  events are kept.
   Occurrences already taken one by one give way from tomorrow on: their open
-  import block is removed, the single card retired and the occurrence pointed at
-  the series card. Later changes to the series in Google are not followed. One-off
-  events are never turned into recurring tasks. Weekdays of one every-N-weeks
-  series are grouped by their phase, so they edit as one task.
+  import block is removed, the single card deleted and the occurrence pointed at the
+  series card. **Today's and ticked-off single imports stay as they are** (history,
+  no retroactive credit), and `ScheduleMaintenance.topUp` does not lay the series'
+  block on those dates (`findRetainedIndividualSeriesImports` → the `suppressed`
+  set of `expandRecurring`), nor keeps an open one, so a day never carries the
+  appointment twice. Later changes to the series in Google are not followed.
+  One-off events are never turned into recurring tasks. Weekdays of one
+  every-N-weeks series are grouped by their phase, so they edit as one task.
 - **Conflict answers while planning:** skip this occurrence, shorten, move after
   the appointment, or **split around it** (`splitAround` in `ConflictRelief.kt`):
   the block keeps the part in front, the part behind becomes a make-up ToDo in

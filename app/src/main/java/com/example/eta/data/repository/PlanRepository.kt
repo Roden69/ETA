@@ -97,11 +97,12 @@ class PlanRepository(
         from: LocalDate,
         to: LocalDate,
         vacations: List<VacationPlan> = emptyList(),
+        suppressed: Set<Pair<String, LocalDate>> = emptySet(),
     ): Int {
         val existing = blockDao.findExistingSlots(from, to)
             .map { it.itemId to it.date }
             .toSet()
-        val blocks = expandRecurring(definitions, from, to, existing, clock.now(), vacations)
+        val blocks = expandRecurring(definitions, from, to, existing, clock.now(), vacations, suppressed)
         if (blocks.isEmpty()) return 0
         // The read above can be stale — two runs overlapping both see "nothing
         // there". The unique index is what actually keeps the day from doubling;

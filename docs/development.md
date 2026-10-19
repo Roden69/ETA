@@ -38,7 +38,7 @@ Die Formulare sind unter `.github/ISSUE_TEMPLATE/` versioniert und werden nach d
 
 Issues halten Arbeitsaufträge und Entscheidungen fest. Dauerhaft gültige Anforderungen und Implementierungsnotizen bleiben in den bestehenden kanonischen Dokumentationsquellen; ihre Pflege beschreibt der [Dokumentationsworkflow](workflow.md).
 
-Ein Issue kann durch den [Issue-Bot](ci-cd.md#issue-bot-vorprüfung-und-fix-freigabe) vorgeprüft werden: Er sucht Dubletten und fehlende Angaben zum Nachstellen. Die automatische Umsetzung startet erst, wenn ein Maintainer das Label `fix-freigegeben` setzt; das Ergebnis ist immer ein Pull Request gegen `main`.
+Ein Issue kann durch den [Issue-Bot](ci-cd.md#issue-bot-vorprufung-und-fix-freigabe) vorgeprüft werden: Er sucht Dubletten und fehlende Angaben zum Nachstellen. Die automatische Umsetzung startet erst, wenn ein Maintainer das Label `fix-freigegeben` setzt; das Ergebnis ist immer ein Pull Request gegen `main`.
 
 
 ## Fork-Build neben dem Original

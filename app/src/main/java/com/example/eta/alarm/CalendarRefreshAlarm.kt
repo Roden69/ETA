@@ -78,6 +78,7 @@ class CalendarRefreshCoordinator(
      * outlast the receiver's time, and a run cut short must not end the chain.
      */
     suspend fun onRing() {
+        if (!enabled) return
         val manager = alarmManager
         if (enabled && manager != null) {
             if (calendarRepository.isConnected()) arm(manager) else cancel(manager)
