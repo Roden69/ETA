@@ -68,7 +68,8 @@ Der getaggte Commit muss den Workflow und die Gradle-Anpassung enthalten.
 Ein Tag-Push baut nach Tests und Lint eine signierte Release-APK, prüft ihre
 Signatur und veröffentlicht `Eta-v1.2.3.apk` unter
 [Releases](https://github.com/Roden69/ETA/releases).
-GitHub generiert die Release Notes automatisch. Normale Branch-Pushes,
+GitHub generiert die Release Notes automatisch; die redaktionelle Fassung pflegt
+[`CHANGELOG.md`](../CHANGELOG.md). Normale Branch-Pushes,
 Pull Requests und manuelle Starts veröffentlichen niemals einen Release.
 Ein bestehender Release wird nicht überschrieben; der Veröffentlichungsjob
 schlägt beim erneuten Erstellen desselben Releases fehl.
