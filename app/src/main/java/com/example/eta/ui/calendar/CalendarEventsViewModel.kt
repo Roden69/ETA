@@ -128,6 +128,7 @@ class CalendarEventsViewModel(
     val seriesNotice: StateFlow<SeriesNotice?> = _seriesNotice.asStateFlow()
 
     private val _proposals = MutableStateFlow<List<SeriesProposal>>(emptyList())
+    private val adopting = mutableSetOf<Pair<String, String?>>()
 
     /**
      * The series the step offers, one per series: an offer to take it on, or the
@@ -290,10 +291,12 @@ class CalendarEventsViewModel(
     /** Re-reads the offers from the undecided appointments as they stand now. */
     private suspend fun reloadProposals() {
         _proposals.value = syncService.proposeSeries(calendarRepository.pendingFor(from, to))
+            .filterNot { (it.event.calendarId to it.event.seriesId) in adopting }
     }
 
     /** "Übernehmen" on an offer: the same form as from an occurrence, for the whole series. */
     fun openSeries(offer: SeriesProposal.Offer) {
+        if ((offer.event.calendarId to offer.event.seriesId) in adopting) return
         _seriesOffer.value = SeriesOffer(offer.event, offer.pattern)
     }
 
@@ -317,8 +320,15 @@ class CalendarEventsViewModel(
     fun adoptSeries(attributes: AppointmentAttributes) {
         val offer = _seriesOffer.value ?: return
         _seriesOffer.value = null
+        val key = offer.event.calendarId to offer.event.seriesId
+        if (!adopting.add(key)) return
+        _proposals.value = _proposals.value.filterNot { (it.event.calendarId to it.event.seriesId) == key }
         viewModelScope.launch {
-            importService.adoptSeries(offer.event, offer.pattern, attributes.toDetails())
+            try {
+                importService.adoptSeries(offer.event, offer.pattern, attributes.toDetails())
+            } finally {
+                adopting.remove(key)
+            }
             reloadProposals()
         }
     }

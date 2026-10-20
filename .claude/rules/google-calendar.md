@@ -239,16 +239,18 @@ shows a sentence.
   weekdays and other rule parts are refused with the reason. Weekdays of one every-N-weeks
   series are still grouped by their phase, so they edit as one task.
 - **Holidays** (`EXDATE`, a cancelled or moved occurrence): Google leaves these out of its
-  expanded events, so the app reads them from what is missing. A sync always reads at
-  least from today to the schedule horizon (`SCHEDULE_HORIZON_DAYS`, 21 days), and
-  `ScheduleMaintenance.topUp` lays no block of an adopted card on a day inside that
-  covered window where a switched-on calendar shows no occurrence of the series
-  (`seriesHolidays`). An open block on such a day is removed; a completed or ticked-off
-  one stays. Derived from the stored occurrences on every run, so nothing extra is
-  stored. A series with no occurrence at all in the window is no evidence and keeps its
-  blocks. Days beyond the horizon are not yet known and are handled once they come within
-  it. A series that starts after the horizon lays blocks until its first occurrence is
-  read, and corrects itself within the horizon.
+  expanded events. A complete successful fetch stores its actual window and snapshot token
+  per calendar, atomically with occurrence rows (`CalendarDao.commitSnapshot`). Only rows
+  seen in that snapshot count as remote presence; an ignored decision may survive remote
+  cancellation but cannot keep a cancelled lecture alive. No absence is inferred outside
+  the stored window, including after offline app starts. A successfully fetched empty
+  window is authoritative too. Inside coverage, ordinary future open series blocks without
+  a remote occurrence are removed. Started/timer-used, manually moved/resized/flexible,
+  completed and discarded blocks stay. Schema 36 stores the coverage in backups.
+- **Series adoption is idempotent:** duplicate or concurrent confirmations return the same
+  existing cards. Offers disappear as soon as adoption starts. Sandbox declines are held
+  only in memory and neither hide nor clear the real user's preferences. UTC `UNTIL` is
+  evaluated against the series master's time, never an exception occurrence's moved hour.
 - **Sync window:** undecided occurrences outside the planning stretch are stored but not
   shown until their day is in it; an occurrence of an adopted series that Google no longer
   shows is deleted. The background refresh tops the schedule up after a successful read,

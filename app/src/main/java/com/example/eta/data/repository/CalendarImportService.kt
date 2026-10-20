@@ -23,6 +23,8 @@ import com.example.eta.domain.planning.startedAfter
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlinx.datetime.LocalTime
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** What an event is turned into. No priority: the date already outranks one. */
 data class AppointmentDetails(
@@ -97,6 +99,7 @@ class CalendarImportService(
     private val scheduleMaintenance: ScheduleMaintenance,
     private val clock: Clock = Clock.System,
 ) {
+    private val adoptionMutex = Mutex()
 
     /**
      * Makes the card and puts it on its day.
@@ -210,8 +213,10 @@ class CalendarImportService(
         event: CalendarEvent,
         pattern: SeriesPattern,
         details: AppointmentDetails,
-    ): List<String> {
+    ): List<String> = adoptionMutex.withLock {
         val seriesId = requireNotNull(event.seriesId) { "Only an occurrence of a series can be adopted" }
+        val existing = calendarRepository.seriesItemIds(event.calendarId, seriesId)
+        if (existing.isNotEmpty()) return@withLock existing
         val ids = recurringTaskService.createGroup(
             edit = RecurringEdit(
                 name = event.title,
@@ -231,7 +236,7 @@ class CalendarImportService(
         calendarRepository.adoptSeries(event.calendarId, seriesId, ids)
         replaceSingleImports(event.calendarId, seriesId, ids)
         scheduleMaintenance.topUp()
-        return ids
+        ids
     }
 
     /**

@@ -13,8 +13,8 @@ import kotlinx.datetime.LocalDate
  * are the days Google does show the series on within [from]..[to], and the card's
  * own [repeatUntil] ends it.
  *
- * No occurrences at all is no evidence, not a holiday: nothing was read for the
- * series, so the card keeps laying its blocks as it did.
+ * The caller must provide a successfully fetched window. Inside that window an
+ * empty result is authoritative too: all expected occurrences were cancelled.
  */
 fun seriesHolidays(
     rule: RecurrenceRule,
@@ -23,7 +23,6 @@ fun seriesHolidays(
     to: LocalDate,
     occurrences: Set<LocalDate>,
 ): Set<LocalDate> {
-    if (occurrences.isEmpty()) return emptySet()
     val last = repeatUntil?.let { minOf(it, to) } ?: to
     return rule.occurrencesBetween(from, last)
         .filterNot { it in occurrences }

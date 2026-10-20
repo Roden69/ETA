@@ -12,23 +12,28 @@ import androidx.core.content.edit
  * about this install, not part of the user's data. Keyed by calendar and series,
  * which is the remote identity of a series.
  */
-class DeclinedSeriesStore(context: Context) {
+class DeclinedSeriesStore(context: Context, sandbox: Boolean = false) {
 
-    private val prefs = context.getSharedPreferences("calendar_series", Context.MODE_PRIVATE)
+    private val prefs = if (sandbox) null else context.getSharedPreferences("calendar_series", Context.MODE_PRIVATE)
+    private val localDeclined = mutableSetOf<String>()
 
     fun isDeclined(calendarId: String, seriesId: String): Boolean =
         key(calendarId, seriesId) in declined()
 
     fun decline(calendarId: String, seriesId: String) {
-        prefs.edit { putStringSet(KEY_DECLINED, declined() + key(calendarId, seriesId)) }
+        val value = key(calendarId, seriesId)
+        if (prefs == null) localDeclined += value
+        else prefs.edit { putStringSet(KEY_DECLINED, declined() + value) }
     }
 
     /** A copy: the set `SharedPreferences` returns must not be written to. */
-    private fun declined(): Set<String> = prefs.getStringSet(KEY_DECLINED, emptySet()).orEmpty().toSet()
+    private fun declined(): Set<String> =
+        prefs?.getStringSet(KEY_DECLINED, emptySet())?.toSet() ?: localDeclined.toSet()
 
     /** Back to a first start: no series has been kept single, so each is offered again. */
     fun reset() {
-        prefs.edit { clear() }
+        localDeclined.clear()
+        prefs?.edit { clear() }
     }
 
     private fun key(calendarId: String, seriesId: String) = "$calendarId|$seriesId"

@@ -28,10 +28,11 @@ class SeriesHolidaysTest {
     }
 
     @Test
-    fun `nothing is a holiday while Google reports no occurrence at all`() {
-        // No evidence means nothing was synced for this series; blocks stay as they are.
-        val holidays = seriesHolidays(monday, null, from, to, occurrences = emptySet())
-        assertTrue(holidays.isEmpty())
+    fun `a successfully fetched empty window cancels all its expected lectures`() {
+        assertEquals(
+            setOf(LocalDate(2026, 10, 26), LocalDate(2026, 11, 2), LocalDate(2026, 11, 9)),
+            seriesHolidays(monday, null, from, to, occurrences = emptySet()),
+        )
     }
 
     @Test

@@ -11,6 +11,9 @@ import com.example.eta.domain.planning.minuteToLocalTime
 import com.example.eta.domain.recurrence.isLaidAfterEdit
 import com.example.eta.domain.recurrence.isRelayableToday
 import com.example.eta.domain.recurrence.matches
+import com.example.eta.domain.recurrence.isPlacedByHand
+import com.example.eta.domain.recurrence.startsAt
+import com.example.eta.domain.planning.timerWasUsed
 import kotlin.time.Clock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
@@ -70,6 +73,8 @@ class ScheduleMaintenance(
             planRepository.findRange(today, horizon)
                 .filter { it.block.origin == BlockOrigin.RECURRING }
                 .filter { it.block.isOpen && (it.item.id to it.block.date) in suppressed }
+                .filter { !it.block.isPlacedByHand() && !it.block.timerWasUsed }
+                .filter { it.block.startsAt() > clock.now().toLocalDateTime(timeZone) }
                 .forEach { planRepository.removeBlock(it.block) }
         }
         val added = planRepository.materializeRecurring(
@@ -99,16 +104,23 @@ class ScheduleMaintenance(
     private suspend fun holidaysOfAdoptedSeries(today: LocalDate, horizon: LocalDate): Set<Pair<String, LocalDate>> {
         val cards = calendarDao.findLiveSeries()
         if (cards.isEmpty()) return emptySet()
-        val covered = minOf(horizon, today.plus(DatePeriod(days = SCHEDULE_HORIZON_DAYS)))
-        val occurrences = calendarDao.findSeriesDatesBetween(today, covered)
+        val sources = calendarDao.findEnabledSources().associateBy { it.id }
+        val occurrences = calendarDao.findSeriesDatesBetween(today, horizon)
             .groupBy({ it.calendarId to it.seriesId }, { it.date })
             .mapValues { (_, days) -> days.toSet() }
         return cards.flatMap { card ->
+            val source = sources[card.calendarId] ?: return@flatMap emptyList()
+            val syncedFrom = source.syncedFrom ?: return@flatMap emptyList()
+            val syncedThrough = source.syncedThrough ?: return@flatMap emptyList()
+            if (source.syncToken == null) return@flatMap emptyList()
+            val from = maxOf(today, syncedFrom)
+            val through = minOf(horizon, syncedThrough)
+            if (through < from) return@flatMap emptyList()
             seriesHolidays(
                 rule = RecurrenceRule.decode(card.recurrenceRule),
                 repeatUntil = card.repeatUntil,
-                from = today,
-                to = covered,
+                from = from,
+                to = through,
                 occurrences = occurrences[card.calendarId to card.seriesId].orEmpty(),
             ).map { card.itemId to it }
         }.toSet()

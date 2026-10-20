@@ -69,6 +69,7 @@ sealed interface SeriesProposal {
 class CalendarSyncService(
     private val auth: CalendarAuth,
     private val repository: CalendarRepository,
+    private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) {
 
     /**
@@ -182,8 +183,8 @@ class CalendarSyncService(
         return readSeriesRule(
             recurrence = master.recurrence,
             start = start,
-            timeZone = TimeZone.currentSystemDefault(),
-            occurrenceTime = if (event.allDay) null else event.start,
+            timeZone = timeZone,
+            occurrenceTime = master.startTime,
         )
     }
 

@@ -84,7 +84,7 @@ class AppContainer(
      * fixed calendar in their place, so the sync can run without a network.
      */
     calendarAuth: CalendarAuth = GoogleAuth(context),
-    calendarApi: CalendarApi = GoogleCalendarApi(),
+    calendarApi: CalendarApi = GoogleCalendarApi(timeZone),
 ) {
     private val appContext = context.applicationContext
 
@@ -259,18 +259,20 @@ class AppContainer(
      * OAuth client in the Cloud project, so there is nothing here to leak.
      */
     /** Series kept single or acknowledged; a fact about this install, cleared by "Alles zurücksetzen". */
-    val declinedSeriesStore: DeclinedSeriesStore = DeclinedSeriesStore(appContext)
+    val declinedSeriesStore: DeclinedSeriesStore = DeclinedSeriesStore(appContext, sandbox = sandbox)
 
     val calendarRepository: CalendarRepository = CalendarRepository(
         dao = database.calendarDao(),
         api = calendarApi,
         declinedSeries = declinedSeriesStore,
         clock = clock,
+        timeZone = timeZone,
     )
 
     val calendarSyncService: CalendarSyncService = CalendarSyncService(
         auth = calendarAuth,
         repository = calendarRepository,
+        timeZone = timeZone,
     )
 
     val calendarImportService: CalendarImportService = CalendarImportService(

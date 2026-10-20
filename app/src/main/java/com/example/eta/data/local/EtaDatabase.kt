@@ -54,7 +54,7 @@ import com.example.eta.domain.setup.UserSetup
         SleepLog::class,
         Note::class,
     ],
-    version = 35,
+    version = 36,
     exportSchema = true,
 )
 @ColumnTypeConverters(Converters::class)
@@ -1070,6 +1070,15 @@ val MIGRATION_34_35 = object : Migration(34, 35) {
     }
 }
 
+val MIGRATION_35_36 = object : Migration(35, 36) {
+    override suspend fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `calendar_sources` ADD COLUMN `syncedFrom` TEXT")
+        connection.execSQL("ALTER TABLE `calendar_sources` ADD COLUMN `syncedThrough` TEXT")
+        connection.execSQL("ALTER TABLE `calendar_sources` ADD COLUMN `syncToken` TEXT")
+        connection.execSQL("ALTER TABLE `calendar_events` ADD COLUMN `seenInSync` TEXT")
+    }
+}
+
 /**
  * Reconciles both shipped version-28 schemas without rewriting their history.
  *
@@ -1137,5 +1146,6 @@ internal val ETA_DATABASE_MIGRATIONS = arrayOf(
     MIGRATION_32_33,
     MIGRATION_33_34,
     MIGRATION_34_35,
+    MIGRATION_35_36,
     MIGRATION_28_33,
 )
