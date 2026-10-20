@@ -141,12 +141,12 @@ class WeekPlannerDriver internal constructor(
 
     /** The week's budget as the screen shows it, once the planning has loaded. */
     suspend fun budget(): WeekBudget = scenario.awaitState(vm.uiState, "the week budget loaded") { state ->
-        state.weekStart != null
+        state.weekList.size >= 8
     }.budget
 
     /** The open goals of an earlier cycle the screen shows at the top of the Sammelliste column. */
     suspend fun openGoals(): List<Item> = scenario.awaitState(vm.uiState, "the week planner loaded") { state ->
-        state.weekEnd != state.weekStart
+        state.collection.isNotEmpty() || state.weekList.isNotEmpty()
     }.unfinished
 }
 

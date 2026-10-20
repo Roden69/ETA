@@ -4,6 +4,7 @@ import com.example.eta.data.local.BlockWithItem
 import com.example.eta.domain.model.Item
 import com.example.eta.domain.model.Stage
 import com.example.eta.domain.planning.PullBlock
+import com.example.eta.domain.streak.Streak
 import com.example.eta.ui.dashboard.DashboardViewModel
 import com.example.eta.ui.planner.DayPlannerViewModel
 import com.example.eta.ui.planner.PlannerDay
@@ -23,6 +24,14 @@ import kotlinx.coroutines.flow.first
  * Drivers the simulation needs beyond the basic ones in [Drivers.kt]. Each one is a
  * thin wrapper over the ViewModel or service a screen calls.
  */
+
+/** The dashboard's live streak, read through the real ViewModel. */
+suspend fun Scenario.streak(): Streak {
+    val vm = viewModel<DashboardViewModel>(dashboardViewModelFactory(container))
+    return subscribed(vm.uiState) {
+        awaitState(vm.uiState, "the dashboard loaded for ${clock.today}") { it.today == clock.today }.streak
+    }
+}
 
 /** Ticks the block of [item] off the dashboard again ("Gerade" checkbox). */
 suspend fun Scenario.untick(item: Item) {
