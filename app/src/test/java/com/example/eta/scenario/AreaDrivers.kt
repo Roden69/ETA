@@ -78,19 +78,6 @@ fun Scenario.concretizeVm(): ConcretizeViewModel =
 fun Scenario.dashboardVm(): DashboardViewModel =
     viewModel(dashboardViewModelFactory(container), key = "dashboard")
 
-/** Unticks [item]'s block of today: the checkbox again, on a block already ticked. */
-suspend fun Scenario.untick(item: Item) {
-    val vm = dashboardVm()
-    subscribed(vm.uiState) {
-        val entry = awaitState(vm.uiState, "\"${item.name}\" ticked off today") { state ->
-            state.todayBlocks.any { it.item.id == item.id && it.block.isCompleted }
-        }.todayBlocks.first { it.item.id == item.id }
-        vm.toggleCompleted(entry)
-        awaitState(vm.uiState, "\"${item.name}\" open again") { state ->
-            state.todayBlocks.any { it.item.id == item.id && it.block.isOpen }
-        }
-    }
-}
 
 /** The Listen tab's ViewModel: the Erfolgsliste and the other lists. */
 fun Scenario.smartListsVm(): SmartListsViewModel =

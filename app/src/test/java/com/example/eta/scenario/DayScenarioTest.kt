@@ -26,7 +26,7 @@ class DayScenarioTest {
         scenario(start = "2026-10-18T18:00") {
             step("Einrichtung, Sammelliste, drei Prioritäten in der Woche") {
                 completeSetup(SampleData.lenaSetup(clock.now()))
-                seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone))
+                seedCollection(SampleData.lenaCollection(clock.now(), zone))
                 weekPlanner {
                     pull(itemNamed("Zahnarzt anrufen"))
                     pull(itemNamed("Steuerunterlagen sortieren"))
@@ -78,7 +78,7 @@ class DayScenarioTest {
         scenario(start = "2026-10-18T18:00") {
             step("Einrichtung und Zahnarzt in der Woche") {
                 completeSetup(SampleData.lenaSetup(clock.now()))
-                seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone))
+                seedCollection(SampleData.lenaCollection(clock.now(), zone))
                 weekPlanner { pull(itemNamed("Zahnarzt anrufen")) }
             }
             at(LocalTime(20, 0))
@@ -117,7 +117,7 @@ class DayScenarioTest {
     ) {
         step("Einrichtung und Zahnarzt in der Woche") {
             completeSetup(SampleData.lenaSetup(clock.now()))
-            seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone))
+            seedCollection(SampleData.lenaCollection(clock.now(), zone))
             weekPlanner { pull(itemNamed("Zahnarzt anrufen")) }
         }
         at(LocalTime(20, 0))
@@ -153,7 +153,7 @@ class DayScenarioTest {
     ) {
         step("Einrichtung und Zahnarzt in der Woche") {
             completeSetup(SampleData.lenaSetup(clock.now()))
-            seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone))
+            seedCollection(SampleData.lenaCollection(clock.now(), zone))
             weekPlanner { pull(itemNamed("Zahnarzt anrufen")) }
         }
         val dentist = itemNamed("Zahnarzt anrufen")
@@ -190,7 +190,7 @@ class DayScenarioTest {
     ) {
         step("Einrichtung und Zahnarzt in der Woche") {
             completeSetup(SampleData.lenaSetup(clock.now()))
-            seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone))
+            seedCollection(SampleData.lenaCollection(clock.now(), zone))
             weekPlanner { pull(itemNamed("Zahnarzt anrufen")) }
             container.planRepository.confirmDayPlan(clock.today)
             assertTrue(container.planRepository.findDayPlan(clock.today)?.isConfirmed == true)
@@ -217,7 +217,7 @@ class DayScenarioTest {
         scenario(start = "2026-10-18T18:00") {
             step("Einrichtung und zwei Karten in der Woche") {
                 completeSetup(SampleData.lenaSetup(clock.now()))
-                seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone))
+                seedCollection(SampleData.lenaCollection(clock.now(), zone))
                 weekPlanner {
                     pull(itemNamed("Präsentation für Montag"))
                     pull(itemNamed("Steuerunterlagen sortieren"))
@@ -259,7 +259,7 @@ class DayScenarioTest {
     ) {
         step("Einrichtung und Zahnarzt in der Woche") {
             completeSetup(SampleData.lenaSetup(clock.now()))
-            seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone))
+            seedCollection(SampleData.lenaCollection(clock.now(), zone))
             weekPlanner { pull(itemNamed("Zahnarzt anrufen")) }
         }
         val dentist = itemNamed("Zahnarzt anrufen")

@@ -29,7 +29,7 @@ class WeekScenarioTest {
     ) {
         step("Einrichtung und Sammelliste") {
             completeSetup(SampleData.lenaSetup(clock.now()))
-            seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone))
+            seedCollection(SampleData.lenaCollection(clock.now(), zone))
         }
         val card = itemNamed("Zahnarzt anrufen")
 
@@ -46,7 +46,7 @@ class WeekScenarioTest {
     ) {
         step("Einrichtung und Sammelliste") {
             completeSetup(SampleData.lenaSetup(clock.now()))
-            seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone))
+            seedCollection(SampleData.lenaCollection(clock.now(), zone))
         }
         val card = itemNamed("Zahnarzt anrufen")
         step("Wochenplanung am Sonntag: nur Vorbereitung") { weekPlanner { } }
@@ -65,7 +65,7 @@ class WeekScenarioTest {
     ) {
         step("Einrichtung und Sammelliste") {
             completeSetup(SampleData.lenaSetup(clock.now()))
-            seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone))
+            seedCollection(SampleData.lenaCollection(clock.now(), zone))
         }
         val goal = itemNamed("Zahnarzt anrufen")
         step("Sonntag: das Ziel in die Woche") { weekPlanner { pull(goal) } }
@@ -103,7 +103,7 @@ class WeekScenarioTest {
     ) {
         step("Einrichtung und Sammelliste") {
             completeSetup(SampleData.lenaSetup(clock.now()))
-            seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone))
+            seedCollection(SampleData.lenaCollection(clock.now(), zone))
         }
         val goal = itemNamed("Zahnarzt anrufen")
         step("Sonntag: das Ziel in die Woche") { weekPlanner { pull(goal) } }
@@ -128,7 +128,7 @@ class WeekScenarioTest {
     ) {
         step("Einrichtung und Sammelliste") {
             completeSetup(SampleData.lenaSetup(clock.now()))
-            seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone))
+            seedCollection(SampleData.lenaCollection(clock.now(), zone))
         }
         val later = itemNamed("Urlaubsplanung")
         val vm = weekPlannerVm()
@@ -151,7 +151,7 @@ class WeekScenarioTest {
     ) {
         step("Einrichtung und Sammelliste") {
             completeSetup(SampleData.lenaSetup(clock.now()))
-            seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone))
+            seedCollection(SampleData.lenaCollection(clock.now(), zone))
         }
         val card = itemNamed("Zahnarzt anrufen")
         step("Sonntag: in die Woche") { weekPlanner { pull(card) } }
@@ -181,7 +181,7 @@ class WeekScenarioTest {
     ) {
         step("Einrichtung und Sammelliste") {
             completeSetup(SampleData.lenaSetup(clock.now()))
-            seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone))
+            seedCollection(SampleData.lenaCollection(clock.now(), zone))
         }
         val short = itemNamed("Balkon aufräumen")  // 45 minutes: earns no break
         val hour = itemNamed("Linsensuppe ausprobieren") // 60 minutes: earns 15

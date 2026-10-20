@@ -171,7 +171,7 @@ class CalendarScenarioTest {
     }
 
     @Test
-    fun `a clash can be split: the front stays and the back becomes a catch-up card`() {
+    fun `a clash can be split so the front stays and the back becomes a catch-up card`() {
         val calendar = FakeCalendar()
         calendar.event("Zahnarzt", tuesday, LocalTime(17, 30), 30.minutes)
         scenario(start = "2026-10-20T08:00", calendar = calendar) {

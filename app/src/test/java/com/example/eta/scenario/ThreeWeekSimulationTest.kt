@@ -256,7 +256,7 @@ class ThreeWeekSimulationTest {
         }
         at(LocalTime(20, 0))
         step("Fr 20:00 Timer mit Überlauf: 75 statt 60 min, dann abrechnen") {
-            evening { overflow(entryOf(card("Linsensuppe ausprobieren")), 75.minutes) }
+            evening { overflow(card("Linsensuppe ausprobieren"), 75.minutes) }
             eveningChain { settle() }
         }
         assertEquals(75.minutes, blockOf(card("Linsensuppe ausprobieren"), LocalDate(2026, 10, 23)).actualDuration)
@@ -271,7 +271,7 @@ class ThreeWeekSimulationTest {
         step("Sa 20:00 Wäsche verpasst: Nachholen angeboten und angelegt") {
             evening {
                 val offer = makeUpOffers().single { it.entry.item.name == "Wäsche" }
-                makeUp(offer)
+                makeUp(offer.entry.item)
             }
         }
         assertTrue(items(Stage.WEEK).any { it.name == "Nachholen von Wäsche" })

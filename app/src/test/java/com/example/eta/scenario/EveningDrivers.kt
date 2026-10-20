@@ -10,6 +10,7 @@ import com.example.eta.ui.reevaluation.MakeUpOffer
 import com.example.eta.ui.reevaluation.ReevaluationViewModel
 import com.example.eta.ui.root.reevaluationViewModelFactory
 import kotlinx.datetime.LocalDate
+import kotlin.time.Duration
 
 /**
  * The evening's screen for one day, as the screens drive it: discarding a block,
@@ -77,6 +78,15 @@ class EveningDesk internal constructor(
         return scenario.awaitState(vm.uiState, "the settlement of ${vm.date}") {
             it.settled != null || it.alreadySettled
         }.settled
+    }
+
+    /** Records the worked length of an overflowing task through the evening form. */
+    suspend fun overflow(item: Item, actual: Duration) {
+        val entry = blockOf(item)
+        vm.setActualDuration(entry, actual)
+        scenario.awaitState(scenario.container.planRepository.observeDay(vm.date), "actual duration saved") { blocks ->
+            blocks.any { it.block.id == entry.block.id && it.block.actualDuration == actual }
+        }
     }
 }
 

@@ -127,7 +127,7 @@ class SettingsScenarioTest {
     ) {
         step("Einrichtung und Karten in der Woche") {
             completeSetup(SampleData.lenaSetup(clock.now()))
-            seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone))
+            seedCollection(SampleData.lenaCollection(clock.now(), zone))
             weekPlanner {
                 pull(itemNamed("Balkon aufräumen"))
                 pull(itemNamed("Linsensuppe ausprobieren"))

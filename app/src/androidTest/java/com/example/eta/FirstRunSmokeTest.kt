@@ -45,14 +45,14 @@ class FirstRunSmokeTest {
     val rules: TestRule = RuleChain.outerRule(FreshEmulatorState()).around(composeRule)
 
     @Test
-    fun `first launch shows the welcome page before the questionnaire`() {
+    fun firstLaunchShowsWelcomeBeforeQuestionnaire() {
         composeRule.waitUntil(LAUNCH_TIMEOUT_MILLIS) { welcomeShown() }
         composeRule.onNodeWithText(WELCOME_TITLE).assertIsDisplayed()
         composeRule.onNodeWithText(WELCOME_ACTION).assertIsDisplayed()
     }
 
     @Test
-    fun `answered setup opens the dashboard after a relaunch and arms both planning alarms`() {
+    fun answeredSetupOpensDashboardAndArmsPlanningAlarms() {
         composeRule.waitUntil(LAUNCH_TIMEOUT_MILLIS) { welcomeShown() }
         val context = targetContext()
         val container = (context.applicationContext as EtaApplication).container

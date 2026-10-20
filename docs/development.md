@@ -105,7 +105,7 @@ adb -s emulator-5554 wait-for-device
 ANDROID_SERIAL=emulator-5554 bash ./gradlew --console=plain connectedDebugAndroidTest
 ```
 
-`connectedDebugAndroidTest` ohne `ANDROID_SERIAL` installiert auf jedes angeschlossene Gerät; den Serial deshalb immer setzen, damit ein Telefon nie als Ziel dient. Meldet der Emulator `Unable to connect character device modem`, startet man ihn mit `-feature -ModemSimulator`. Die nächtliche CI-Variante beschreibt [CI/CD](ci-cd.md#testläufe).
+`connectedDebugAndroidTest` ohne `ANDROID_SERIAL` installiert auf jedes angeschlossene Gerät; den Serial deshalb immer setzen, damit ein Telefon nie als Ziel dient. Meldet der Emulator `Unable to connect character device modem`, startet man ihn mit `-feature -ModemSimulator`. Die nächtliche CI-Variante beschreibt [CI/CD](ci-cd.md).
 
 ## Daten- und Signiersicherheit
 

@@ -80,7 +80,7 @@ class CaptureScenarioTest {
         scenario(start = "2026-10-18T09:00") {
             step("Einrichtung") { completeSetup(SampleData.lenaSetup(clock.now())) }
             step("Sammelliste: eine Idee liegt seit 60 Tagen da") {
-                seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone))
+                seedCollection(SampleData.lenaCollection(clock.now(), zone))
             }
 
             val banned = step("Wochenplanung öffnen: der Sweep sperrt die alte Idee") {
@@ -140,7 +140,7 @@ class CaptureScenarioTest {
         start = "2026-10-18T09:00",
     ) {
         step("Einrichtung") { completeSetup(SampleData.lenaSetup(clock.now())) }
-        step("Sammelliste mit Folgeaufgaben") { seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone)) }
+        step("Sammelliste mit Folgeaufgaben") { seedCollection(SampleData.lenaCollection(clock.now(), zone)) }
         val first = itemNamed("Wohnung ausmisten")
         val second = itemNamed("Keller sortieren")
         val third = itemNamed("Dachboden leeren")
@@ -189,7 +189,7 @@ class CaptureScenarioTest {
     @Test
     fun `the steps of a card travel with it into the day`() = scenario(start = "2026-10-18T09:00") {
         step("Einrichtung") { completeSetup(SampleData.lenaSetup(clock.now())) }
-        step("Sammelliste") { seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone)) }
+        step("Sammelliste") { seedCollection(SampleData.lenaCollection(clock.now(), zone)) }
         val shopping = itemNamed("Einkaufsliste fürs Wochenende")
 
         step("Ziehen und auf den Tag setzen") {
@@ -216,7 +216,7 @@ class CaptureScenarioTest {
         start = "2026-10-18T09:00",
     ) {
         step("Einrichtung") { completeSetup(SampleData.lenaSetup(clock.now())) }
-        step("Sammelliste") { seedCollection(SampleData.lenaCollection(clock.now(), clock.today, zone)) }
+        step("Sammelliste") { seedCollection(SampleData.lenaCollection(clock.now(), zone)) }
         val dentist = itemNamed("Zahnarzt anrufen")
 
         step("Die Karte planen und abhaken") {

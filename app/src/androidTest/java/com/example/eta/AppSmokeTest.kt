@@ -20,12 +20,12 @@ class AppSmokeTest {
     private val context: Context = InstrumentationRegistry.getInstrumentation().targetContext
 
     @Test
-    fun `installed app keeps the package id of the original install`() {
+    fun installedAppKeepsOriginalPackageIdentity() {
         assertEquals("com.example.erik_iteration_2", context.packageName)
     }
 
     @Test
-    fun `startup creates every notification channel the alarms post to`() {
+    fun startupCreatesAlarmNotificationChannels() {
         val manager = checkNotNull(context.getSystemService<NotificationManager>())
         listOf(
             "planning_v3",
