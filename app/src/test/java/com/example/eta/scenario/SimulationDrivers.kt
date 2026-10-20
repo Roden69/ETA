@@ -46,6 +46,7 @@ suspend fun Scenario.untick(item: Item) {
             state.todayBlocks.any { it.item.id == item.id && !it.block.isCompleted }
         }
     }
+    awaitFollowUps(item, finished = false)
 }
 
 /**

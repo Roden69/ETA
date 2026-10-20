@@ -3,6 +3,7 @@ package com.example.eta.scenario
 import com.example.eta.data.local.BlockWithItem
 import com.example.eta.data.repository.CatchUpResult
 import com.example.eta.data.repository.WeekScope
+import com.example.eta.domain.chain.followUpsAfter
 import com.example.eta.domain.model.Category
 import com.example.eta.domain.model.Item
 import com.example.eta.domain.model.PlannedBlock
@@ -30,7 +31,9 @@ import com.example.eta.ui.root.reevaluationViewModelFactory
 import com.example.eta.ui.root.smartListsViewModelFactory
 import com.example.eta.ui.root.weekPlannerViewModelFactory
 import kotlin.time.Duration
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.LocalTime
 
@@ -260,6 +263,22 @@ suspend fun Scenario.tick(item: Item) {
             state.todayBlocks.any { it.item.id == item.id && it.block.isCompleted }
         }
     }
+    awaitFollowUps(item, finished = true)
+}
+
+/**
+ * Waits until the follow-ups of [item] reflect a tick ([finished]) or its undoing.
+ * The tick writes the block first and its follow-ups after it; the dashboard shows
+ * the block, so without this a scenario could read the chain halfway.
+ */
+internal suspend fun Scenario.awaitFollowUps(item: Item, finished: Boolean) {
+    val pending = flow {
+        while (true) {
+            emit(followUpsAfter(item.id, finished, container.database.itemDao().findFollowUpsOf(item.id), clock.now()))
+            delay(20)
+        }
+    }
+    awaitState(pending, "the follow-ups of \"${item.name}\" caught up") { it.isEmpty() }
 }
 
 /** The evening's review of one day. */

@@ -176,13 +176,11 @@ class SettingsViewModel(
     val phrase: StateFlow<String> = _phrase.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            stored.value = setupRepository.find()
-            _draft.value = stored.value
-        }
         // The answers can change behind this tab's back — a night changed on
         // the week timetable is written straight to the setup. An untouched
-        // draft follows; one with unsaved answers keeps them.
+        // draft follows; one with unsaved answers keeps them. The first row is
+        // the initial load: a separate one-shot read used to finish after it
+        // and overwrite an answer typed in between.
         viewModelScope.launch {
             setupRepository.observe().collect { row ->
                 if (row == null) return@collect

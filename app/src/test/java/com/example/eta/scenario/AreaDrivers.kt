@@ -26,6 +26,8 @@ import com.example.eta.ui.root.weekPlannerViewModelFactory
 import com.example.eta.ui.settings.SettingsMessage
 import com.example.eta.ui.settings.SettingsViewModel
 import com.example.eta.ui.weekplanner.WeekPlannerViewModel
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
 
@@ -95,9 +97,13 @@ suspend fun Scenario.changeSettings(transform: (UserSetup) -> UserSetup) {
     val vm = settingsVm()
     subscribed(vm.draft, vm.message) {
         awaitState(vm.draft, "the settings draft loaded") { it != null }
-        vm.dismissMessage()
-        vm.update(transform)
-        vm.save()
+        // On the main thread, as a tap is: the ViewModel's own coroutines
+        // write the draft there too, and an edit must not interleave with them.
+        withContext(Dispatchers.Main) {
+            vm.dismissMessage()
+            vm.update(transform)
+            vm.save()
+        }
         awaitState(vm.message, "the settings saved") { it is SettingsMessage.Saved }
     }
 }

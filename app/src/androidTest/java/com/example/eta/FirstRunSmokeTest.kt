@@ -2,25 +2,20 @@ package com.example.eta
 
 import android.Manifest
 import android.app.AlarmManager
-import android.app.PendingIntent
 import android.content.Context
-import android.content.Intent
 import android.os.Build
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.junit4.createAndroidComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithText
+import androidx.compose.ui.test.performScrollTo
 import androidx.core.content.getSystemService
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
-import com.example.eta.alarm.PlanningAlarmContract
-import com.example.eta.alarm.PlanningAlarmReceiver
-import com.example.eta.domain.planning.PlanningPhase
 import com.example.eta.domain.setup.UserSetup
 import kotlin.time.Clock
 import kotlinx.coroutines.runBlocking
-import org.junit.Assert.assertNotNull
 import org.junit.Assume.assumeTrue
 import org.junit.Rule
 import org.junit.Test
@@ -48,7 +43,8 @@ class FirstRunSmokeTest {
     fun firstLaunchShowsWelcomeBeforeQuestionnaire() {
         composeRule.waitUntil(LAUNCH_TIMEOUT_MILLIS) { welcomeShown() }
         composeRule.onNodeWithText(WELCOME_TITLE).assertIsDisplayed()
-        composeRule.onNodeWithText(WELCOME_ACTION).assertIsDisplayed()
+        // The page scrolls; on a small emulator screen the button sits below the fold.
+        composeRule.onNodeWithText(WELCOME_ACTION).performScrollTo().assertIsDisplayed()
     }
 
     @Test
@@ -66,11 +62,14 @@ class FirstRunSmokeTest {
             composeRule.waitUntil(LAUNCH_TIMEOUT_MILLIS) {
                 composeRule.onAllNodesWithText(DASHBOARD_TAB).fetchSemanticsNodes().isNotEmpty()
             }
-            composeRule.waitUntil(LAUNCH_TIMEOUT_MILLIS) {
-                PlanningPhase.entries.all { planningAlarmArmed(context, it) }
-            }
+            // Proof that a planning alarm is armed: the system's next alarm clock is
+            // Eta's. Only `setAlarmClock` produces one, and with the draft's wake
+            // alarm off the planning scheduler is the only caller. The ring
+            // PendingIntents exist either way, since cancelling creates them.
             val manager = checkNotNull(context.getSystemService<AlarmManager>())
-            assertNotNull("No alarm clock is shown in the system", manager.nextAlarmClock)
+            composeRule.waitUntil(LAUNCH_TIMEOUT_MILLIS) {
+                manager.nextAlarmClock?.showIntent?.creatorPackage == context.packageName
+            }
         }
     }
 
@@ -86,20 +85,6 @@ class FirstRunSmokeTest {
 }
 
 private fun targetContext(): Context = InstrumentationRegistry.getInstrumentation().targetContext
-
-/** Whether the system still holds the ring intent the planning scheduler armed for [phase]. */
-private fun planningAlarmArmed(context: Context, phase: PlanningPhase): Boolean {
-    val ring = Intent(context, PlanningAlarmReceiver::class.java).apply {
-        action = PlanningAlarmContract.ACTION_RING
-        putExtra(PlanningAlarmContract.EXTRA_PHASE, phase.name)
-    }
-    return PendingIntent.getBroadcast(
-        context,
-        PlanningAlarmContract.requestCode(phase),
-        ring,
-        PendingIntent.FLAG_NO_CREATE or PendingIntent.FLAG_IMMUTABLE,
-    ) != null
-}
 
 /**
  * Resets the app to a first start before the activity launches: empty database,

@@ -5,6 +5,8 @@ import com.example.eta.ui.root.settingsViewModelFactory
 import com.example.eta.ui.settings.SettingsMessage
 import com.example.eta.ui.settings.SettingsViewModel
 import com.example.eta.domain.subtask.SubtaskDraft
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.withContext
 
 /**
  * The settings page, for the duration of [body]: the same ViewModel the page uses,
@@ -26,9 +28,12 @@ class SettingsDriver internal constructor(
 ) {
     /** Edits the draft with [transform] and presses "Einstellungen speichern". */
     suspend fun change(transform: (UserSetup) -> UserSetup) {
-        vm.dismissMessage()
-        vm.update(transform)
-        vm.save()
+        // On the main thread, as a tap is; see [changeSettings].
+        withContext(Dispatchers.Main) {
+            vm.dismissMessage()
+            vm.update(transform)
+            vm.save()
+        }
         scenario.awaitState(vm.message, "the settings saved") { it is SettingsMessage.Saved }
         vm.dismissMessage()
     }
