@@ -76,6 +76,7 @@ import com.example.eta.ui.components.LocalEtaClock
 import com.example.eta.ui.components.LocalPointsVisible
 import com.example.eta.ui.components.tutorialSpot
 import com.example.eta.ui.components.LocalFeatures
+import com.example.eta.ui.components.LocalDefaultBreakAfter
 import com.example.eta.ui.components.EtaDatePickerDialog
 import com.example.eta.ui.format.formatWithYear
 import com.example.eta.domain.recurrence.rulesWithTimes
@@ -462,6 +463,7 @@ fun TodoAttributeFields(
         onReturnAfter = { onChange(value.copy(returnAfter = it)) },
         breakAfter = value.breakAfter,
         onBreakAfter = { onChange(value.copy(breakAfter = it)) },
+        defaultBreak = LocalDefaultBreakAfter.current,
         extras = value.extras,
         onExtras = { onChange(value.copy(extras = it)) },
         today = today,
@@ -964,6 +966,8 @@ fun ExtrasBox(
     onReturnAfter: (Duration?) -> Unit,
     breakAfter: Duration?,
     onBreakAfter: (Duration?) -> Unit,
+    /** What an empty "Pause danach" stands for on a ToDo; null where it stands for nothing. */
+    defaultBreak: Duration? = null,
     extras: ItemExtras,
     onExtras: (ItemExtras) -> Unit,
     /**
@@ -1063,6 +1067,7 @@ fun ExtrasBox(
                 hint = "Liegt ganz am Ende. Passt sie an keiner Stelle des Tages, wird beim " +
                     "Einplanen gefragt — die Wege selbst nie.",
                 value = breakAfter,
+                fallback = defaultBreak,
                 onValueChange = onBreakAfter,
             )
         }
@@ -1746,20 +1751,30 @@ fun GrowthFitWarning(issues: List<GrowthFitIssue>) {
     }
 }
 
-/** One margin: off, or a length. Ticking it starts at a quarter of an hour. */
+/**
+ * One margin: off, or a length. Ticking it starts at a quarter of an hour.
+ *
+ * [fallback] is what an empty margin means in practice, when something other
+ * than the card stands in for it — the default break of a ToDo. Said in the hint,
+ * so the empty box does not read as "no break at all".
+ */
 @Composable
 private fun MarginRow(
     label: String,
     hint: String,
     value: Duration?,
     onValueChange: (Duration?) -> Unit,
+    fallback: Duration? = null,
 ) {
+    val fallbackHint = fallback?.takeIf { value == null && it > Duration.ZERO }
+        ?.let { " Ohne eigene Angabe gilt die Standardpause von ${it.formatShort()}." }
+        .orEmpty()
     Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
         CheckRow(
             checked = value != null,
             onCheckedChange = { onValueChange(if (it) DEFAULT_MARGIN else null) },
             label = label,
-            hint = hint,
+            hint = hint + fallbackHint,
         )
         if (value != null) {
             EtaDurationPicker(

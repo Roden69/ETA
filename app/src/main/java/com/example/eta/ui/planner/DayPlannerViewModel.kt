@@ -29,6 +29,7 @@ import com.example.eta.domain.model.Subtask
 import com.example.eta.domain.model.stampedWith
 import com.example.eta.domain.model.withExtras
 import com.example.eta.domain.planning.BreakFindings
+import com.example.eta.domain.planning.effectiveBreakAfter
 import com.example.eta.domain.planning.PlacementSpan
 import com.example.eta.domain.planning.PlanRelief
 import com.example.eta.domain.planning.collisions
@@ -457,7 +458,14 @@ class DayPlannerViewModel(
         val duration = item.estimatedDuration ?: return
         request(
             PendingPlacement.FromRevolver(item),
-            spanAt(atMinute, duration, item.travelBefore, item.returnAfter, item.breakAfter),
+            spanAt(
+                atMinute,
+                duration,
+                item.travelBefore,
+                item.returnAfter,
+                // A ToDo without its own break takes the default from the settings.
+                effectiveBreakAfter(item, uiState.value.setup),
+            ),
         )
     }
 
@@ -1045,7 +1053,7 @@ class DayPlannerViewModel(
                 attributes.duration,
                 attributes.travelBefore,
                 attributes.returnAfter,
-                attributes.breakAfter,
+                effectiveBreakAfter(attributes.breakAfter, ItemType.TODO, uiState.value.setup),
             ),
         )
     }
