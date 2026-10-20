@@ -133,6 +133,24 @@ class SettingsRelayTest {
         }
     }
 
+    @Test
+    fun `a block moved by hand today keeps its place when the standing task is edited`() = runBlocking {
+        val container = AppContainer(RuntimeEnvironment.getApplication(), sandbox = true, clock = clock)
+        try {
+            val ids = container.recurringTaskService.createGroup(edit(LocalTime(15, 0)))
+            val id = ids.single()
+            val block = container.planRepository.findDay(today).single { it.block.itemId == id }.block
+            container.planRepository.addBlock(block.copy(start = LocalTime(17, 0), updatedAt = now))
+
+            container.recurringTaskService.saveGroup(ids, edit(LocalTime(16, 0)))
+
+            val todays = container.planRepository.findDay(today).filter { it.block.itemId == id }.map { it.block }
+            assertEquals(listOf(LocalTime(17, 0)), todays.map { it.start })
+        } finally {
+            container.close()
+        }
+    }
+
     private fun edit(start: LocalTime) = RecurringEdit(
         name = "Lesen",
         note = null,

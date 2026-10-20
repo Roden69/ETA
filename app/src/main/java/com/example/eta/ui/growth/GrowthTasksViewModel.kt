@@ -2,6 +2,7 @@ package com.example.eta.ui.growth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.eta.alarm.TaskStartCoordinator
 import com.example.eta.data.repository.GrowthService
 import com.example.eta.data.repository.ItemRepository
 import com.example.eta.data.repository.RecurringTaskService
@@ -55,6 +56,7 @@ data class GrowthTasksUiState(
 class GrowthTasksViewModel(
     private val growthService: GrowthService,
     private val recurringTaskService: RecurringTaskService,
+    private val taskStartCoordinator: TaskStartCoordinator,
     subtaskRepository: SubtaskRepository,
     private val itemRepository: ItemRepository,
 ) : ViewModel() {
@@ -104,6 +106,7 @@ class GrowthTasksViewModel(
                 edit = attributes.toEdit(name, note),
                 growthOrder = growthService.nextOrder(),
             )
+            taskStartCoordinator.reschedule()
         }
     }
 
@@ -121,11 +124,15 @@ class GrowthTasksViewModel(
                 ids = group.ids,
                 edit = attributes.toEdit(name, note),
             )
+            taskStartCoordinator.reschedule()
         }
     }
 
     /** Ends a growth task; what it already did stays in the Erfolgsliste. */
     fun end(group: RecurringGroup) {
-        viewModelScope.launch { recurringTaskService.endGroup(group.ids) }
+        viewModelScope.launch {
+            recurringTaskService.endGroup(group.ids)
+            taskStartCoordinator.reschedule()
+        }
     }
 }
