@@ -305,8 +305,8 @@ class SmartListsViewModel(
                         } else {
                             _notice.value = "»$name« liegt in der Sammelliste. In der Wochenliste " +
                                 (if (owed.size == 1) "wartet noch ein Ziel" else "warten noch ${owed.size} Ziele") +
-                                " aus der letzten Woche — erst wenn sie abgearbeitet oder " +
-                                "zurückgegeben sind, nimmt die Woche Neues auf."
+                                " aus der letzten Woche. Die Wochenplanung zeigt sie oben in der " +
+                                "Sammelliste: übernehmen oder zurückgeben, dann nimmt die Woche Neues auf."
                         }
                     }
                 }
@@ -321,6 +321,12 @@ class SmartListsViewModel(
      */
     fun takeOfferedIntoWeek(item: Item) {
         viewModelScope.launch {
+            // A step that was never filled in cannot be a week goal; the editor answers it.
+            if (!item.isConcretized) {
+                _notice.value = "»${item.name}« ist noch unvollständig. Bitte zuerst über Bearbeiten " +
+                    "Kategorie, Priorität und Dauer eintragen — dann kann es in die Woche."
+                return@launch
+            }
             val cycleStart = weekPlanningService.cycleStart()
             val owed = itemRepository.observeUnfinishedWeekGoals(cycleStart).first()
             if (owed.isEmpty()) {
@@ -328,7 +334,8 @@ class SmartListsViewModel(
             } else {
                 _notice.value = "»${item.name}« ist jetzt dran, bleibt aber in der Sammelliste. " +
                     (if (owed.size == 1) "Erst das offene Ziel" else "Erst die ${owed.size} offenen Ziele") +
-                    " aus der letzten Woche verplanen oder zurückgeben."
+                    " aus der letzten Woche verplanen oder zurückgeben — sie stehen oben in der " +
+                    "Sammelliste der Wochenplanung."
             }
         }
     }

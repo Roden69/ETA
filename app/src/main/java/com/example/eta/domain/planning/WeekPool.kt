@@ -3,6 +3,7 @@ package com.example.eta.domain.planning
 import com.example.eta.domain.chain.isWaitingFollowUp
 import com.example.eta.domain.model.Item
 import com.example.eta.domain.model.ItemType
+import com.example.eta.domain.model.Stage
 import kotlinx.datetime.LocalDate
 
 /** Why a Sammelliste ToDo cannot be taken into the week right now. */
@@ -53,3 +54,12 @@ fun weekPool(collection: List<Item>, weekEnd: LocalDate, openGoals: Int): WeekPo
     }
     return WeekPool(pullable, held)
 }
+
+/**
+ * The stage a card lands in when it is taken into the week.
+ *
+ * Every ToDo in `Stage.WEEK` is concretized: the revolver offers only finished cards,
+ * so a bare one in the week could never be planned. An unfinished card therefore
+ * stays in the Sammelliste until its answers are given, and only then goes on.
+ */
+fun weekStageOf(item: Item): Stage = if (item.isConcretized) Stage.WEEK else Stage.COLLECTION

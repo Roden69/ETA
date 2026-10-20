@@ -64,7 +64,7 @@ provider recolours the widget for the Eta design — see *Step 30*.
 `ui/attributes/ItemAttributes.kt` holds `TodoAttributes` and `RecurringAttributes` —
 the answers themselves — plus the two composables that ask for them, and every
 screen that creates, concretizes or edits a card mounts one: both concretize cards,
-`ItemEditDialog` on the Listen tab, `AddGoalDialog` in the weekly planning,
+`ItemEditDialog` on the Listen tab, `GoalDialog` in the weekly planning,
 `NewTodoDialog` in the planner, `RecurringGroupEditDialog`, the Growth-Tasks dialog,
 and `BlockEditDialog` for the block-level fields. Before that, five screens each had
 their own idea of which fields exist. `showTargetDate` is what lets

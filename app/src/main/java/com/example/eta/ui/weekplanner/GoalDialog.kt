@@ -29,24 +29,30 @@ import com.example.eta.ui.theme.EtaTheme
 import kotlinx.datetime.LocalDate
 
 /**
- * Adding something to the Sammelliste without leaving the weekly planning.
+ * The ToDo form of the weekly planning, for a goal made here and for a card that is
+ * still missing its answers.
  *
- * Created **already concretized**, unlike the dashboard's Quick-Add. A bare note
- * pulled into the week would sit there unplannable — the revolver only offers
- * finished cards — so a goal invented here answers the same questions the
- * concretizing step would have asked anyway. Literally the same questions:
- * `TodoAttributeFields` is that step's own form.
+ * Both finish a card the same way: `TodoAttributeFields` is the concretizing step's
+ * own form, so the questions are literally the same ones. A goal made here is created
+ * **already concretized** — a bare note pulled into the week could never be planned.
  */
 @Composable
-fun AddGoalDialog(
+fun GoalDialog(
     today: LocalDate,
-    /** ToDos the new goal can swallow as steps. */
-    foldCandidates: List<FoldCandidate> = emptyList(),
+    title: String,
+    hint: String,
+    confirmLabel: String,
     onDismiss: () -> Unit,
-    onCreate: (name: String, attributes: TodoAttributes) -> Unit,
+    onConfirm: (name: String, attributes: TodoAttributes) -> Unit,
+    initialName: String = "",
+    initialAttributes: TodoAttributes = TodoAttributes(),
+    /** Whether the form offers Folgeaufgaben; a card that already exists has its own chain. */
+    offerFollowUps: Boolean = false,
+    /** ToDos the card can swallow as steps. */
+    foldCandidates: List<FoldCandidate> = emptyList(),
 ) {
-    var name by remember { mutableStateOf("") }
-    var attributes by remember { mutableStateOf(TodoAttributes()) }
+    var name by remember { mutableStateOf(initialName) }
+    var attributes by remember { mutableStateOf(initialAttributes) }
 
     Dialog(onDismissRequest = onDismiss) {
         EtaSurface(
@@ -59,9 +65,9 @@ fun AddGoalDialog(
                     .verticalScroll(rememberScrollState()),
                 verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.lg),
             ) {
-                EtaText(text = "Neues ToDo", style = EtaTheme.typography.title)
+                EtaText(text = title, style = EtaTheme.typography.title)
                 EtaText(
-                    text = "Landet in der Sammelliste und kann gleich in die Woche.",
+                    text = hint,
                     style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.textMuted,
                 )
@@ -78,7 +84,7 @@ fun AddGoalDialog(
                     value = attributes,
                     onChange = { attributes = it },
                     today = today,
-                    offerFollowUps = true,
+                    offerFollowUps = offerFollowUps,
                     groupName = name,
                     onGroupName = { name = it },
                     foldCandidates = foldCandidates,
@@ -92,9 +98,9 @@ fun AddGoalDialog(
                     )
                     Spacer(Modifier.weight(1f))
                     EtaButton(
-                        text = "Anlegen",
+                        text = confirmLabel,
                         enabled = name.isNotBlank(),
-                        onClick = { onCreate(name.trim(), attributes) },
+                        onClick = { onConfirm(name.trim(), attributes) },
                     )
                 }
             }
