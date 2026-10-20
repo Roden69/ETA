@@ -14,6 +14,7 @@ ETA ist eine Android-Produktivitätsapp mit Aufgabenlisten, Tages- und Wochenpla
 
 - [Architektur](architecture.md): Zuständigkeiten, Datenfluss und zentrale Invarianten.
 - [Entwicklung und Prüfung](development.md): Build, Tests, Gerätekontrolle und sicherer Umgang mit App-Daten.
+- [Gerätecheckliste](device-checklist.md): manuelle Prüfungen auf dem Zielgerät vor einer Veröffentlichung.
 - [Dokumentation pflegen](workflow.md): Quellenrangfolge, Status, Änderungsreview und nachvollziehbare Prüfung.
 - [Tests und Szenarien](testing.md): Testebenen, Szenario-Harness für mehrtägige Abläufe, Invarianten und Katalog geplanter Szenarien.
 - [Dokumentationsentscheidung](decisions/0001-docs-as-code.md): gewählter Aufbau und Alternativen.

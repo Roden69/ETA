@@ -14,7 +14,7 @@ dort müssen Signing-Secrets separat eingerichtet werden.
 
 ## Debug-APK
 
-Jeder Push auf `main` und jeder Pull Request auf `main` startet Unit-Tests,
+Jeder Push auf `main` oder `dev/**` und jeder Pull Request auf `main` oder `dev/**` startet Unit-Tests,
 Android Lint und `assembleDebug`. Unter **Actions → Android CI/CD → Run workflow**
 kann ein Debug-Build manuell gestartet werden, sobald der Workflow auf dem
 Default-Branch vorhanden ist. Auch ein manueller Start auf einem Tag erzeugt
@@ -38,6 +38,14 @@ wer das Secret kennt, kann APKs signieren, die diese Debug-Installationen ersetz
 ```bash
 base64 -w0 ~/.android/debug.keystore | gh secret set ANDROID_DEBUG_KEYSTORE_BASE64 --repo Roden69/ETA
 ```
+
+## Testläufe
+
+- **Unit-Tests und Lint** (Workflow `android.yml`, Job *Debug validation*): laufen auf Pull Requests und Pushes nach `main` und `dev/**`. Nach dem Gradle-Lauf schreibt der Schritt *Summarize unit test results* eine Übersicht je Testsuite mit den fehlgeschlagenen Tests und ihren Meldungen in die Zusammenfassung des Laufs (`scripts/test_summary.py`). Der Schritt läuft auch nach einem Fehlschlag.
+- **Instrumentierte Tests auf dem Emulator** (Workflow `android-emulator.yml`): laufen jede Nacht um 02:30 UTC auf dem Standard-Branch und manuell über **Run workflow**. Der Lauf startet einen Android-35-Emulator (`google_apis`, x86_64) mit KVM und führt `connectedDebugAndroidTest` aus. Die Übersicht steht in der Zusammenfassung, die Rohberichte im Artefakt `eta-androidtest-reports`.
+- Auf dem Emulator löscht der Test für den Erststart die Datenbank der App im Emulator. Der Test bricht ab, sobald der Build-Fingerprint keinen Emulator nennt; ein angeschlossenes Telefon wird nicht angefasst.
+
+Die Emulator-Action ist auf den Commit des Tags `v2.38.0` fixiert, wie alle anderen Actions.
 
 ## Für Tester: APK herunterladen
 
