@@ -1,6 +1,7 @@
 package com.example.eta.ui.components
 
 import androidx.compose.runtime.staticCompositionLocalOf
+import kotlin.time.Duration
 
 /**
  * Whether the points system is on show — `UserSetup.pointsSystem`, handed down
@@ -33,3 +34,12 @@ data class Features(
 )
 
 val LocalFeatures = staticCompositionLocalOf { Features() }
+
+/**
+ * The default break a ToDo takes when its own "Pause danach" is empty —
+ * `UserSetup.defaultBreakAfter`, handed down from the root like the flags above.
+ *
+ * Only the card editor reads it, to say what an empty field means. The placement
+ * itself is decided in the domain (`effectiveBreakAfter`).
+ */
+val LocalDefaultBreakAfter = staticCompositionLocalOf<Duration?> { null }

@@ -479,6 +479,13 @@ data class UserSetup(
     val breakChecker: Boolean = true,
     val breakPerTwoHours: Duration = DEFAULT_BREAK_PER_TWO_HOURS,
     val breakMaxStretch: Duration = DEFAULT_BREAK_MAX_STRETCH,
+    /**
+     * "Pause nach Aufgaben": the break a ToDo card brings to the day when its own
+     * "Pause danach" is empty. Null is no default, which every setup from before
+     * this existed says. Read by [effectiveBreakAfter] at placement only; blocks
+     * already on the day keep the break they were placed with.
+     */
+    val defaultBreakAfter: Duration? = null,
     val completedAt: Instant,
     val updatedAt: Instant,
 ) {

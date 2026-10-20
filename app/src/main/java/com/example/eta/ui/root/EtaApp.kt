@@ -78,6 +78,7 @@ import com.example.eta.ui.rewards.RewardsViewModel
 import com.example.eta.ui.components.LocalPointsVisible
 import com.example.eta.ui.components.Features
 import com.example.eta.ui.components.LocalFeatures
+import com.example.eta.ui.components.LocalDefaultBreakAfter
 import androidx.compose.runtime.CompositionLocalProvider
 import com.example.eta.ui.settings.CalendarSettingsViewModel
 import com.example.eta.ui.settings.SettingsScreen
@@ -194,6 +195,7 @@ fun EtaApp(
                         statistics = stored.statistics,
                         notes = stored.notes,
                     ),
+                    LocalDefaultBreakAfter provides stored.defaultBreakAfter,
                 ) {
                     MainScaffold(
                         container = container,

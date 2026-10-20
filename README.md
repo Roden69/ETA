@@ -67,7 +67,7 @@ Der Fork [Roden69/ETA](https://github.com/Roden69/ETA) ergänzt die Originalapp 
 - **Respekt vor dem Handy:** Stumm- und Vibrationsmodus, „Nicht stören“ und Schlummerdauer folgen klaren Regeln.
 - **Parallel testbar:** Die Variante **Eta Fork** (`com.example.erik_iteration_2.fork`) läuft neben der Originalinstallation, mit eigenen Daten.
 - **Fertige APKs aus der CI:** Jeder Lauf auf `main` stellt Debug- und Fork-APK bereit, Versions-Tags veröffentlichen eine signierte Release-APK.
-- **Prüfbare Migrationen:** Jeder Schemaschritt der Room-Datenbank (aktuell Version 34) wird gegen die exportierten Schemas getestet, dazu rund 880 Unit-Tests.
+- **Prüfbare Migrationen:** Jeder Schemaschritt der Room-Datenbank (aktuell Version 35) wird gegen die exportierten Schemas getestet, dazu rund 880 Unit-Tests.
 - **Dokumentation als Code:** Anforderungen, Fachnotizen und Architektur sind versioniert, geprüft und als durchsuchbare Website baubar.
 
 Änderungen laufen als Pull Requests über Themenzweige und `dev/*`-Zweige; `main` ist der geprüfte Stand.

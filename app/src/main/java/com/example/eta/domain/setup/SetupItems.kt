@@ -20,16 +20,18 @@ const val SETUP_ITEM_ID_PREFIX = "setup:"
 private fun setupId(key: String) = SETUP_ITEM_ID_PREFIX + key
 
 /**
- * The two tasks the settings tab still owns: winding down and the morning.
+ * The three tasks the settings tab still owns: winding down, the morning and the
+ * daily free time.
  *
  * Everything else the questionnaire lays down is created once and from then on is
- * an ordinary standing task, edited on the Listen tab. These two stay with the
- * settings because they hang off the night — bed preparation ends at the sleep
- * time and the morning starts at the wake time — and the night is configuration,
- * not a task. Saving the settings regenerates exactly these, and nothing else —
- * see [isOwnedBySettings].
+ * an ordinary standing task, edited on the Listen tab. These three stay with the
+ * settings: bed preparation ends at the sleep time and the morning starts at the
+ * wake time, so the night is configuration, not a task; and free time is a fixed
+ * daily answer that the settings change, including to and from zero minutes, where
+ * the item has to be created or retired. Saving the settings regenerates exactly
+ * these, and nothing else — see [isOwnedBySettings].
  */
-private val SETTINGS_OWNED_KEYS = listOf("bedprep", "morning")
+private val SETTINGS_OWNED_KEYS = listOf("bedprep", "morning", "freetime")
 
 /**
  * Whether [id] is one of them. With every night alike each is one daily

@@ -94,8 +94,8 @@ class SetupRepository(
     /**
      * Stores the standing configuration from the settings tab.
      *
-     * Of the recurring definitions, only the two the settings still own are
-     * regenerated — bed preparation and the morning, see [isOwnedBySettings].
+     * Of the recurring definitions, only the three the settings still own are
+     * regenerated — bed preparation, the morning and free time, see [isOwnedBySettings].
      * Everything else lives on the Listen tab now; regenerating it here would undo
      * whatever was changed there.
      *
