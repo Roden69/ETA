@@ -65,8 +65,10 @@ under a vacation's start override counts as moved and is kept. Later days are un
 their open blocks are still re-laid completely.
 
 **Alarms follow.** Saves on the Listen tab (`SmartListsViewModel`: create, save, end;
-`GrowthTasksViewModel`: create, save, end) call `TaskStartCoordinator.reschedule()` after
-the relay, so the task-start alarm aims at the block as it now stands.
+`GrowthTasksViewModel`: create, save, end) and in the week tab's edit window
+(`WeekTabViewModel`: drag/resize, `saveGroup`, `saveWeekday`, create) call
+`TaskStartCoordinator.reschedule()` after the relay, so the task-start alarm aims at the
+block as it now stands.
 
 **The frame of the day can keep paying nothing**: `RecurringAttributes.category` is
 nullable and the editor offers "Keine", or correcting the time of Pause would have
