@@ -142,3 +142,7 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
     debugImplementation(libs.androidx.compose.ui.tooling)
 }
+
+tasks.withType<Test>().configureEach {
+    timeout.set(java.time.Duration.ofMinutes(25))
+}
