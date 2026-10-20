@@ -123,6 +123,9 @@ class SettingsRelayTest {
                 .filter { it.block.itemId == id }
                 .map { it.block }
             assertTrue(todays.isEmpty())
+            container.scheduleMaintenance.topUp()
+            container.scheduleMaintenance.topUpUntil(dayAfter)
+            assertTrue(container.planRepository.findDay(today).none { it.block.itemId == id })
             // The task is weekly on Tuesday: the next occurrence after today is the 27th.
             val later = container.planRepository.findRange(tomorrow, LocalDate(2026, 10, 27))
                 .filter { it.block.itemId == id }

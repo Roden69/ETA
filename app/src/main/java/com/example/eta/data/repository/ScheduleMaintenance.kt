@@ -17,6 +17,7 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.atTime
 import kotlinx.datetime.todayIn
 
 /** How far ahead the standing schedule is kept materialized. */
@@ -54,6 +55,8 @@ class ScheduleMaintenance(
     suspend fun topUpUntil(until: LocalDate, keep: (PlannedBlock) -> Boolean = { true }): Int {
         val today = clock.todayIn(timeZone)
         val horizon = maxOf(until, today.plus(DatePeriod(days = SCHEDULE_HORIZON_DAYS)))
+        val tomorrow = today.plus(DatePeriod(days = 1))
+        val tomorrowConfirmed = planRepository.findDayPlan(tomorrow)?.isConfirmed == true
         // A standing task past its "Wiederholen bis" has nothing left to lay
         // down. Retiring it here takes it off the lists that describe the week
         // as it still is; expansion would pass over it either way.
@@ -78,7 +81,13 @@ class ScheduleMaintenance(
             to = horizon,
             vacations = vacationRepository.plansFrom(today),
             suppressed = suppressed,
-            keep = keep,
+            keep = { block ->
+                val editedAt = definitionIds[block.itemId]?.updatedAt?.toLocalDateTime(timeZone)
+                keep(block) &&
+                    !(tomorrowConfirmed && block.date == tomorrow) &&
+                    (block.date != today || editedAt == null ||
+                        editedAt.date != today || block.date.atTime(block.start) >= editedAt)
+            },
         )
         // A dynamic growth task's hour is not a property of the task but of the
         // day it lands in, so a freshly materialized occurrence has no hour worth

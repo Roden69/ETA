@@ -251,6 +251,7 @@ internal fun settingsViewModelFactory(container: AppContainer): ViewModelProvide
                 phaseService = container.planningPhaseService,
                 wakeAlarmCoordinator = container.wakeAlarmCoordinator,
                 taskStartCoordinator = container.taskStartCoordinator,
+                planningAlarmCoordinator = container.planningAlarmCoordinator,
                 planRepository = container.planRepository,
                 reminderRepository = container.reminderRepository,
                 eveningStore = container.eveningStore,
