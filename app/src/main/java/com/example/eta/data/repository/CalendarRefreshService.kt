@@ -18,13 +18,16 @@ import kotlinx.datetime.todayIn
  * status either.
  *
  * The window is [planningWindow]: today through the day before the next weekly
- * planning day, the same stretch the planning steps read.
+ * planning day, the same stretch the planning steps read. After a successful read
+ * the schedule is topped up as well, so a day an adopted series no longer has in
+ * Google stops carrying its block.
  */
 class CalendarRefreshService(
     private val syncService: CalendarSyncService,
     private val calendarRepository: CalendarRepository,
     private val planRepository: PlanRepository,
     private val setupRepository: SetupRepository,
+    private val scheduleMaintenance: ScheduleMaintenance,
     private val clock: Clock = Clock.System,
     private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) {
@@ -41,6 +44,7 @@ class CalendarRefreshService(
 
         val outcome = syncService.refresh(window.from, window.to)
         if (outcome !is SyncOutcome.Ok) return emptyList()
+        scheduleMaintenance.topUp()
 
         val pending = calendarRepository.pendingFor(window.from, window.to)
         val clashing = pendingClashes(pending, planRepository.findRange(window.from, window.to)).keys

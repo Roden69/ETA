@@ -36,6 +36,20 @@ sealed interface AuthOutcome {
 }
 
 /**
+ * Where the calendar sync gets its access tokens.
+ *
+ * [GoogleAuth] is the one implementation the app ships. The seam exists so the
+ * sync can be exercised over a fixed token, without Play Services.
+ */
+interface CalendarAuth {
+    /** A fresh token, or the screen that has to be shown before there can be one. */
+    suspend fun token(): AuthOutcome
+
+    /** The answer the consent screen came back with. */
+    fun tokenFrom(data: Intent?): AuthOutcome
+}
+
+/**
  * Getting an OAuth access token for the Calendar API.
  *
  * Play Services' `AuthorizationClient` rather than an OAuth library of our own:
@@ -49,7 +63,7 @@ sealed interface AuthOutcome {
  * for as long as the grant stands, which is what makes an automatic evening sync
  * possible without ever interrupting the user.
  */
-class GoogleAuth(private val context: Context) {
+class GoogleAuth(private val context: Context) : CalendarAuth {
 
     private fun request(): AuthorizationRequest = AuthorizationRequest.builder()
         .setRequestedScopes(listOf(Scope(CALENDAR_SCOPE)))
@@ -62,7 +76,7 @@ class GoogleAuth(private val context: Context) {
      * be able to name, and an exception crossing a sync would only turn three
      * different causes into one stack trace.
      */
-    suspend fun token(): AuthOutcome = suspendCancellableCoroutine { continuation ->
+    override suspend fun token(): AuthOutcome = suspendCancellableCoroutine { continuation ->
         Identity.getAuthorizationClient(context)
             .authorize(request())
             .addOnSuccessListener { result ->
@@ -86,7 +100,7 @@ class GoogleAuth(private val context: Context) {
     }
 
     /** The answer the consent screen came back with. */
-    fun tokenFrom(data: Intent?): AuthOutcome = runCatching {
+    override fun tokenFrom(data: Intent?): AuthOutcome = runCatching {
         val result = Identity.getAuthorizationClient(context)
             .getAuthorizationResultFromIntent(data)
         result.accessToken

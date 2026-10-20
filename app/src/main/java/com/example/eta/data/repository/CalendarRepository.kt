@@ -1,6 +1,7 @@
 package com.example.eta.data.repository
 
-import com.example.eta.data.calendar.GoogleCalendarApi
+import com.example.eta.data.calendar.CalendarApi
+import com.example.eta.data.calendar.DeclinedSeriesStore
 import com.example.eta.data.calendar.RemoteEvent
 import com.example.eta.data.calendar.RemoteSeries
 import com.example.eta.data.local.CalendarDao
@@ -13,7 +14,11 @@ import com.example.eta.domain.recurrence.matches
 import kotlin.time.Clock
 import kotlin.time.Instant
 import kotlinx.coroutines.flow.Flow
+import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.plus
+import kotlinx.datetime.todayIn
 
 /** What one round of syncing produced. */
 data class CalendarSyncSummary(
@@ -33,7 +38,8 @@ data class CalendarSyncSummary(
  */
 class CalendarRepository(
     private val dao: CalendarDao,
-    private val api: GoogleCalendarApi,
+    private val api: CalendarApi,
+    private val declinedSeries: DeclinedSeriesStore,
     private val clock: Clock = Clock.System,
 ) {
 
@@ -104,17 +110,26 @@ class CalendarRepository(
      * already carries a decision keeps it — only the *facts* are refreshed, so an
      * appointment moved in Google shows its new time without being offered for
      * import a second time.
+     *
+     * The window read is never shorter than the schedule's horizon from today. An
+     * adopted series' holidays are the days inside the window where Google shows
+     * no occurrence, so the schedule can only tell them apart where a sync has read
+     * the calendar — and the planning steps alone read only about a week ahead.
      */
     suspend fun syncEvents(token: String, from: LocalDate, to: LocalDate): Int {
         val calendars = dao.findEnabledSources()
         if (calendars.isEmpty()) return 0
 
-        val remote = calendars.flatMap { api.events(token, it.id, from, to) }
-        val known = dao.findForRange(from, to).associateBy { it.id }
+        val today = clock.todayIn(TimeZone.currentSystemDefault())
+        val windowFrom = minOf(from, today)
+        val windowTo = maxOf(to, today.plus(DatePeriod(days = SCHEDULE_HORIZON_DAYS)))
+
+        val remote = calendars.flatMap { api.events(token, it.id, windowFrom, windowTo) }
+        val remoteIds = remote.map { idOf(it) }.toSet()
+        val known = dao.findForRange(windowFrom, windowTo).associateBy { it.id }
         val seriesItems = dao.findSeries().map { it.itemId }.toSet()
         val liveDefinitions = dao.findLiveSeries()
         val now = clock.now()
-
 
         dao.upsertEvents(
             remote.map { event ->
@@ -136,7 +151,14 @@ class CalendarRepository(
             },
         )
         // What the calendar no longer offers and nobody has decided about is gone.
-        dao.deletePendingNotIn(from, to, remote.map { idOf(it) })
+        // Room binds an empty list as NULL, which would match nothing; no event id is
+        // blank, so a blank stand-in keeps "nothing offered" meaning "delete all".
+        dao.deletePendingNotIn(windowFrom, windowTo, remoteIds.ifEmpty { setOf("") }.toList())
+        // An adopted series' occurrence Google no longer shows is gone too: its card
+        // was the decision, and a holiday must not keep counting as an occurrence.
+        dao.deleteEvents(
+            dao.findAdoptedSeriesOccurrences(windowFrom, windowTo).filter { it.id !in remoteIds },
+        )
         return remote.size
     }
 
@@ -205,6 +227,14 @@ class CalendarRepository(
     /** The series master as Google keeps it: its rule and first date. */
     suspend fun readSeries(token: String, calendarId: String, seriesId: String): RemoteSeries =
         api.seriesMaster(token, calendarId, seriesId)
+
+    /** Keeps a series single: its occurrences stay appointments, and it is not offered again. */
+    fun declineSeries(calendarId: String, seriesId: String) =
+        declinedSeries.decline(calendarId, seriesId)
+
+    /** Whether the user has chosen to keep this series single. */
+    fun isSeriesDeclined(calendarId: String, seriesId: String): Boolean =
+        declinedSeries.isDeclined(calendarId, seriesId)
 
     /** Remembers that the user was told about this clash, so it is announced once. */
     suspend fun markConflictNotified(event: CalendarEvent) {

@@ -2,8 +2,10 @@ package com.example.eta.data.repository
 
 import com.example.eta.data.local.CalendarDao
 import com.example.eta.data.local.ItemDao
+import com.example.eta.domain.calendar.seriesHolidays
 import com.example.eta.domain.growth.placeDynamicGrowth
 import com.example.eta.domain.model.BlockOrigin
+import com.example.eta.domain.model.RecurrenceRule
 import com.example.eta.domain.planning.minuteToLocalTime
 import com.example.eta.domain.recurrence.matches
 import kotlin.time.Clock
@@ -55,7 +57,7 @@ class ScheduleMaintenance(
             val definition = definitionIds[retained.itemId] ?: return@mapNotNull null
             val rule = definition.recurrenceRule ?: return@mapNotNull null
             if (rule.matches(retained.date)) retained.itemId to retained.date else null
-        }.toSet()
+        }.toSet() + holidaysOfAdoptedSeries(today, horizon)
         if (suppressed.isNotEmpty()) {
             planRepository.findRange(today, horizon)
                 .filter { it.block.origin == BlockOrigin.RECURRING }
@@ -74,6 +76,33 @@ class ScheduleMaintenance(
         // keeping until this has run over it.
         relayDynamicGrowth(horizon)
         return added
+    }
+
+    /**
+     * The days an adopted series' card must not lay a block on: Google shows no
+     * occurrence of the series that day, though the calendar was read over it.
+     *
+     * Only the days the sync has covered count — from today to the schedule
+     * horizon — because days beyond that were never read and are not holidays
+     * yet. Derived from the stored occurrences on every run, so nothing extra
+     * needs remembering.
+     */
+    private suspend fun holidaysOfAdoptedSeries(today: LocalDate, horizon: LocalDate): Set<Pair<String, LocalDate>> {
+        val cards = calendarDao.findLiveSeries()
+        if (cards.isEmpty()) return emptySet()
+        val covered = minOf(horizon, today.plus(DatePeriod(days = SCHEDULE_HORIZON_DAYS)))
+        val occurrences = calendarDao.findSeriesDatesBetween(today, covered)
+            .groupBy({ it.calendarId to it.seriesId }, { it.date })
+            .mapValues { (_, days) -> days.toSet() }
+        return cards.flatMap { card ->
+            seriesHolidays(
+                rule = RecurrenceRule.decode(card.recurrenceRule),
+                repeatUntil = card.repeatUntil,
+                from = today,
+                to = covered,
+                occurrences = occurrences[card.calendarId to card.seriesId].orEmpty(),
+            ).map { card.itemId to it }
+        }.toSet()
     }
 
     /**
