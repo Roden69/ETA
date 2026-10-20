@@ -4,11 +4,13 @@ on:
   push:
     branches:
       - main
+      - 'dev/**'
     tags:
       - 'v*.*.*'
   pull_request:
     branches:
       - main
+      - 'dev/**'
   workflow_dispatch:
 
 permissions:
@@ -21,7 +23,7 @@ concurrency:
 jobs:
   debug:
     name: Debug validation
-    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && github.ref == 'refs/heads/main')
+    if: github.event_name == 'pull_request' || github.event_name == 'workflow_dispatch' || (github.event_name == 'push' && (github.ref == 'refs/heads/main' || startsWith(github.ref, 'refs/heads/dev/')))
     runs-on: ubuntu-24.04
     timeout-minutes: 30
     permissions:
@@ -67,6 +69,9 @@ jobs:
           echo "ETA_DEBUG_KEYSTORE=$KEYSTORE_DIR/debug.keystore" >> "$GITHUB_ENV"
       - name: Run debug validation
         run: bash ./gradlew --console=plain --stacktrace testDebugUnitTest lint assembleDebug assembleFork
+      - name: Summarize unit test results
+        if: always()
+        run: python3 scripts/test_summary.py app/build/test-results/testDebugUnitTest --title "Unit tests (debug)" >> "$GITHUB_STEP_SUMMARY"
       - name: Verify debug APK signer
         run: |
           set -euo pipefail

@@ -362,10 +362,12 @@ Never "repair" a migration by deleting or recreating a user database.
   `ETA_DATABASE_MIGRATIONS`, validates every step against the exported JSON and
   carries one version-1 `items` row to the latest version. Schemas are staged in a
   temporary test-only APK, never shipped.
-- **Instrumented:** `app/src/androidTest` holds only the template
-  `ExampleInstrumentedTest`; `connectedDebugAndroidTest` needs a device, not in CI.
+- **Instrumented:** `app/src/androidTest` holds `AppSmokeTest` (read-only, any device)
+  and `FirstRunSmokeTest` (wipes app data, emulator only). Run
+  `connectedDebugAndroidTest` with `ANDROID_SERIAL` set; nightly in
+  `.github/workflows/android-emulator.yml` ([`docs/ci-cd.md`](docs/ci-cd.md)).
 - **CI:** `.github/workflows/android.yml` runs `testDebugUnitTest lint
-  assembleDebug` on PRs and pushes to `main` (uploads debug APK and reports);
+  assembleDebug` on PRs and pushes to `main` and `dev/**` (uploads debug APK and reports);
   `v*.*.*` tags build a signed `assembleRelease` and publish a GitHub release.
   `.github/workflows/documentation.yml` runs `check`, the unittest suite,
   `check --base` on PRs, and `build`.
