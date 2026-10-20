@@ -359,17 +359,26 @@ class ItemRepository(
     }
 
     /**
-     * Stages an item forward. Re-entering the Sammelliste restarts the timeout
-     * clock, which is what makes a deliberately deferred ToDo safe from the ban.
+     * Stages an item forward. Re-entering the Sammelliste on purpose restarts the
+     * timeout clock, which is what makes a deliberately deferred ToDo safe from the ban.
+     *
+     * An unfinished card asked for the week lands in the Sammelliste instead (see
+     * [weekStageOf]), and that fallback must not restart the clock: a card that returns
+     * to the Sammelliste keeps its `enteredCollectionAt`, so the Sperrliste cannot be dodged.
      */
     suspend fun moveTo(item: Item, stage: Stage) {
         val now = clock.now()
         // Asking for the week with a card that is not finished lands it in the Sammelliste.
         val target = if (stage == Stage.WEEK) weekStageOf(item) else stage
+        val fallback = stage == Stage.WEEK && target == Stage.COLLECTION
         itemDao.upsert(
             item.copy(
                 stage = target,
-                enteredCollectionAt = if (target == Stage.COLLECTION) now else item.enteredCollectionAt,
+                enteredCollectionAt = when {
+                    fallback -> item.enteredCollectionAt ?: now
+                    target == Stage.COLLECTION -> now
+                    else -> item.enteredCollectionAt
+                },
                 // Handing it back gives up the commitment, so it stops counting
                 // against the next cycle's gate.
                 weekStartedOn = if (target == Stage.COLLECTION) null else item.weekStartedOn,
