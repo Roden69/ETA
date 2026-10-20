@@ -41,9 +41,53 @@ tomorrow if tomorrow is confirmed; `relayOccurrences` clears the still-open bloc
 would have made every edit show up three weeks late, which is not what "only future
 ones change" meant. Completed and called-off blocks are never touched. That line lives
 on `PlanRepository` because three services draw it and three copies would be three
-chances for one to drift. **The frame of the day can keep paying nothing**:
-`RecurringAttributes.category` is nullable and the editor offers "Keine", or correcting
-the time of Pause would have made Pause pay Fokus points.
+chances for one to drift. The growth increment and the dynamic placement pass still
+use `lastKeptDay`/`firstOpenDay` unchanged.
+
+**Today is re-laid too, but only what has not started.** Before, an edit left today
+alone, so a changed bedtime or wake time showed up tomorrow while today's old block
+stayed. Now `relayOccurrences` takes off today's blocks of the edited definitions that
+are open, have no timer ever started, were not placed by hand, and start strictly after
+now (`isRelayableToday`, `domain/recurrence/EditRelay.kt`), and `topUp` lays them down
+again. Started, running, paused-with-timer, completed and called-off blocks stay. A block
+starting exactly now has begun and stays. A re-laid occurrence that would start before now
+is **not** laid today (`isLaidAfterEdit`): an open block whose time has passed would later
+count as missed. Confirmed tomorrow and every earlier day keep their rows as before. The
+same path serves the settings' bed-preparation and morning rows (`saveSettings`) and every
+edit on the Listen tab (`saveGroup`, `saveWeekday`, `reschedule`, `endGroup`).
+
+The suppression survives later app starts: ordinary materialization compares today's
+new occurrence with the definition's persisted `updatedAt` and never creates a block
+before that edit. A confirmed tomorrow also receives no newly introduced definitions;
+keeping its existing rows alone would otherwise let a renamed weekday definition
+silently add a second occurrence beside them.
+
+**One run at a time.** `topUpUntil`, `relayDynamicGrowth` and `relayOccurrences` share
+one `Mutex` in `ScheduleMaintenance`. The planner starts a top-up as it opens; when it had
+read the old definitions and wrote after an edit's removal, its `IGNORE` insert won and
+the edit's new block was dropped (seen as today's bed preparation staying at the old
+hour). Inside the lock the private `topUpLocked`/`relayDynamicGrowthLocked` are called,
+because the mutex is not reentrant.
+
+**Hand placement wins for today.** A block the user moved, resized or made flexible is kept
+as it stands, so a hand move never snaps back on an edit. `isPlacedByHand` decides it: the
+block is `isMovable` (dragged, or flexible), or its start differs from `originalStart` or
+its length from `originalDuration`, both stamped at materialization and never written
+again. A block without a recorded original counts as unmoved. Known edge: a block laid
+under a vacation's start override counts as moved and is kept. Later days are unaffected:
+their open blocks are still re-laid completely.
+
+**Alarms follow.** Saves on the Listen tab (`SmartListsViewModel`: create, save, end;
+`GrowthTasksViewModel`: create, save, end) and in the week tab's edit window
+(`WeekTabViewModel`: drag/resize, `saveGroup`, `saveWeekday`, create) call
+`TaskStartCoordinator.reschedule()` after the relay, so the task-start alarm aims at the
+block as it now stands.
+Settings saves also re-arm both planning phases, so changing their times updates the
+actual system alarms before the screen reports success.
+
+**The frame of the day can keep paying nothing**: `RecurringAttributes.category` is
+nullable and the editor offers "Keine", or correcting the time of Pause would have
+made Pause pay Fokus points.
 
 #### Overlap warnings
 

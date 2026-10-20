@@ -218,30 +218,47 @@ shows a sentence.
   (`heldItsTime`), so it is not charged as unplanned, and calling it off costs no
   cancellation (`cancellationCharged`). Without a local decision the normal points
   stay. Nothing is ever written to Google.
-- **Series** (`domain/calendar/SeriesPattern.kt`): occurrences carry Google's
-  `recurringEventId` as `calendar_events.seriesId`. "Als wiederkehrende Aufgabe
-  übernehmen" asks Google for the series master on demand and converts
-  `FREQ=WEEKLY` with `INTERVAL` and `BYDAY` into one standing card per weekday:
-  weekly, or `RecurrenceRule.EveryWeeks` (every N weeks counted from an anchor
-  date, stored as `E:<weekday>:<weeks>:<anchor>`) for intervals above one week,
-  so a three-weekly series stays three-weekly. Other rules are refused with the
-  reason. `calendar_series` links the cards to the series, one row per weekday
-  card. An occurrence counts as taken by the series only while a **live card of the
-  series runs on that very day** (`CalendarRepository.syncEvents`): the card is
-  neither deleted nor ended, its date is not past `repeatUntil`, and its rule
-  matches the date. Delete or end the card, or drop a weekday from it, and the
-  occurrences it no longer covers revert to pending at the next read instead of
-  disappearing from the plan for good. Decisions of single imports and ignored
-  events are kept.
-  Occurrences already taken one by one give way from tomorrow on: their open
-  import block is removed, the single card deleted and the occurrence pointed at the
-  series card. **Today's and ticked-off single imports stay as they are** (history,
-  no retroactive credit), and `ScheduleMaintenance.topUp` does not lay the series'
-  block on those dates (`findRetainedIndividualSeriesImports` → the `suppressed`
-  set of `expandRecurring`), nor keeps an open one, so a day never carries the
-  appointment twice. Later changes to the series in Google are not followed.
-  One-off events are never turned into recurring tasks. Weekdays of one
-  every-N-weeks series are grouped by their phase, so they edit as one task.
+- **Series** (`domain/calendar/SeriesPattern.kt`, `SeriesHolidays.kt`): occurrences carry
+  Google's `recurringEventId` as `calendar_events.seriesId`. Eta offers a series **by
+  itself**: the calendar step (evening and week planner) reads the master of each series
+  that has undecided occurrences and is neither adopted nor kept single, and shows **one**
+  offer per series — "„Titel“ wiederholt sich jeden Mo 08:00 bis …, als wiederkehrende
+  Aufgabe übernehmen?" with **Übernehmen** (opens the form for the whole series) and
+  **Einzeln lassen**. `CalendarSyncService.proposeSeries` does the reading; a series Eta
+  refuses shows its reason once, acknowledged with "Verstanden". "Einzeln lassen" and the
+  acknowledgement are remembered per series in `DeclinedSeriesStore` (SharedPreferences,
+  no migration), so the series is not asked again; "Alles zurücksetzen" clears them, so a
+  fresh start offers every series again. The occurrence button "Als
+  wiederkehrende Aufgabe übernehmen" stays as the manual path. One-off events are never
+  turned into recurring tasks.
+- **What converts:** `FREQ=WEEKLY` with `INTERVAL`, `BYDAY`, and an end. `UNTIL` ends the
+  card on its last day (a UTC instant is read in the user's time zone, and the day before
+  is the last one when the instant precedes the occurrence's own time); `COUNT` ends it on
+  the date of the last counted occurrence. Both become the card's `repeatUntil`. `EXDATE`
+  is accepted (see holidays). `RDATE`, `EXRULE`, non-weekly frequencies, positional
+  weekdays and other rule parts are refused with the reason. Weekdays of one every-N-weeks
+  series are still grouped by their phase, so they edit as one task.
+- **Holidays** (`EXDATE`, a cancelled or moved occurrence): Google leaves these out of its
+  expanded events. A complete successful fetch stores its actual window and snapshot token
+  per calendar, atomically with occurrence rows (`CalendarDao.commitSnapshot`). Only rows
+  seen in that snapshot count as remote presence; an ignored decision may survive remote
+  cancellation but cannot keep a cancelled lecture alive. No absence is inferred outside
+  the stored window, including after offline app starts. A successfully fetched empty
+  window is authoritative too. Inside coverage, ordinary future open series blocks without
+  a remote occurrence are removed. Started/timer-used, manually moved/resized/flexible,
+  completed and discarded blocks stay. Schema 36 stores the coverage in backups.
+- **Series adoption is idempotent:** duplicate or concurrent confirmations return the same
+  existing cards. Offers disappear as soon as adoption starts. Sandbox declines are held
+  only in memory and neither hide nor clear the real user's preferences. UTC `UNTIL` is
+  evaluated against the series master's time, never an exception occurrence's moved hour.
+- **Sync window:** undecided occurrences outside the planning stretch are stored but not
+  shown until their day is in it; an occurrence of an adopted series that Google no longer
+  shows is deleted. The background refresh tops the schedule up after a successful read,
+  so a holiday drops off without waiting for the next app start.
+- **Single imports** keep the rule above: today's and ticked-off ones stay as they are, and
+  `ScheduleMaintenance.topUp` does not lay the series' block on their dates. Later changes
+  to the series in Google are not followed; the card keeps the rhythm and end date it was
+  made with.
 - **Conflict answers while planning:** skip this occurrence, shorten, move after
   the appointment, or **split around it** (`splitAround` in `ConflictRelief.kt`):
   the block keeps the part in front, the part behind becomes a make-up ToDo in

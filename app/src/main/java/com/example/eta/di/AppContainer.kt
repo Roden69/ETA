@@ -14,6 +14,9 @@ import com.example.eta.data.calendar.GoogleCalendarApi
 import com.example.eta.data.local.EtaDatabase
 import com.example.eta.data.local.ETA_DATABASE_MIGRATIONS
 import com.example.eta.data.repository.CalendarImportService
+import com.example.eta.data.calendar.CalendarApi
+import com.example.eta.data.calendar.CalendarAuth
+import com.example.eta.data.calendar.DeclinedSeriesStore
 import com.example.eta.data.repository.CalendarRefreshService
 import com.example.eta.data.repository.CalendarRepository
 import com.example.eta.data.repository.CalendarSyncService
@@ -45,6 +48,7 @@ import com.example.eta.ui.theme.DesignStore
 import com.example.eta.ui.tutorial.TutorialStore
 import com.example.eta.ui.setup.FeatureSuggestionStore
 import kotlin.time.Clock
+import kotlinx.datetime.TimeZone
 
 /**
  * Manual dependency wiring.
@@ -65,10 +69,26 @@ class AppContainer(
     val sandbox: Boolean = false,
     /** The tutorial's simulated day runs on a clock of its own. */
     val clock: Clock = Clock.System,
+    /**
+     * The zone every repository and coordinator decides dates in. Production
+     * takes the device's zone; a scenario test pins one.
+     */
+    val timeZone: TimeZone = TimeZone.currentSystemDefault(),
+    /**
+     * Whether the alarm coordinators, the calendar refresh and the reminders arm
+     * anything. Off in the sandbox unless a test asks for it.
+     */
+    val alarms: Boolean = !sandbox,
+    /**
+     * Google's sign-in and calendar reads. The app takes the defaults; tests put a
+     * fixed calendar in their place, so the sync can run without a network.
+     */
+    calendarAuth: CalendarAuth = GoogleAuth(context),
+    calendarApi: CalendarApi = GoogleCalendarApi(timeZone),
 ) {
     private val appContext = context.applicationContext
 
-    private val database: EtaDatabase = if (sandbox) {
+    internal val database: EtaDatabase = if (sandbox) {
         Room.inMemoryDatabaseBuilder(appContext, EtaDatabase::class.java).build()
     } else {
         Room
@@ -93,6 +113,7 @@ class AppContainer(
         database.itemDao(),
         subtaskRepository,
         clock = clock,
+        timeZone = timeZone,
     )
 
     val pointsRepository: PointsRepository = PointsRepository(database.pointsDao(), clock = clock)
@@ -102,6 +123,7 @@ class AppContainer(
         database.dayPlanDao(),
         database.itemDao(),
         clock = clock,
+        timeZone = timeZone,
     )
 
     /** Folding one task into another: every merge comes down to this. */
@@ -123,6 +145,7 @@ class AppContainer(
         database.vacationDao(),
         database.plannedBlockDao(),
         clock = clock,
+        timeZone = timeZone,
     )
 
     val scheduleMaintenance: ScheduleMaintenance = ScheduleMaintenance(
@@ -131,6 +154,7 @@ class AppContainer(
         vacationRepository = vacationRepository,
         calendarDao = database.calendarDao(),
         clock = clock,
+        timeZone = timeZone,
     )
 
     /** Editing the standing schedule from the Listen tab, and the settings' own two rows. */
@@ -165,9 +189,10 @@ class AppContainer(
         recurringTaskService,
         subtaskRepository,
         clock = clock,
+        timeZone = timeZone,
     )
 
-    val contractRepository: ContractRepository = ContractRepository(database.contractDao(), clock = clock)
+    val contractRepository: ContractRepository = ContractRepository(database.contractDao(), clock = clock, timeZone = timeZone)
 
     val weekPlanningService: WeekPlanningService = WeekPlanningService(
         pointsDao = database.pointsDao(),
@@ -175,6 +200,7 @@ class AppContainer(
         itemRepository = itemRepository,
         setupRepository = setupRepository,
         clock = clock,
+        timeZone = timeZone,
     )
 
     /** The Belohn-o-mat: long-term rewards, filled by what the evening harvests. */
@@ -219,6 +245,7 @@ class AppContainer(
         blockDao = database.plannedBlockDao(),
         reevaluationService = reevaluationService,
         clock = clock,
+        timeZone = timeZone,
     )
 
     /**
@@ -231,17 +258,21 @@ class AppContainer(
      * matches the app by package name and signing certificate against the Android
      * OAuth client in the Cloud project, so there is nothing here to leak.
      */
-    private val googleAuth: GoogleAuth = GoogleAuth(appContext)
+    /** Series kept single or acknowledged; a fact about this install, cleared by "Alles zurücksetzen". */
+    val declinedSeriesStore: DeclinedSeriesStore = DeclinedSeriesStore(appContext, sandbox = sandbox)
 
     val calendarRepository: CalendarRepository = CalendarRepository(
         dao = database.calendarDao(),
-        api = GoogleCalendarApi(),
+        api = calendarApi,
+        declinedSeries = declinedSeriesStore,
         clock = clock,
+        timeZone = timeZone,
     )
 
     val calendarSyncService: CalendarSyncService = CalendarSyncService(
-        auth = googleAuth,
+        auth = calendarAuth,
         repository = calendarRepository,
+        timeZone = timeZone,
     )
 
     val calendarImportService: CalendarImportService = CalendarImportService(
@@ -261,7 +292,9 @@ class AppContainer(
         calendarRepository = calendarRepository,
         planRepository = planRepository,
         setupRepository = setupRepository,
+        scheduleMaintenance = scheduleMaintenance,
         clock = clock,
+        timeZone = timeZone,
     )
 
     /** Reads the calendar about hourly while an account is connected. Off in the sandbox. */
@@ -270,7 +303,7 @@ class AppContainer(
         calendarRepository = calendarRepository,
         refresh = calendarRefreshService,
         clock = clock,
-        enabled = !sandbox,
+        enabled = alarms,
     )
 
     val planningPhaseService: PlanningPhaseService = PlanningPhaseService(
@@ -278,6 +311,7 @@ class AppContainer(
         planRepository = planRepository,
         weekPlanningService = weekPlanningService,
         clock = clock,
+        timeZone = timeZone,
     )
 
     val planningAlarmCoordinator: PlanningAlarmCoordinator = PlanningAlarmCoordinator(
@@ -285,7 +319,7 @@ class AppContainer(
         phaseService = planningPhaseService,
         isAppInForeground = isAppInForeground,
         clock = clock,
-        enabled = !sandbox,
+        enabled = alarms,
     )
 
     /**
@@ -297,7 +331,8 @@ class AppContainer(
         planRepository = planRepository,
         setupRepository = setupRepository,
         clock = clock,
-        enabled = !sandbox,
+        timeZone = timeZone,
+        enabled = alarms,
     )
 
     val reminderRepository: ReminderRepository = ReminderRepository(database.reminderDao(), clock = clock)
@@ -307,6 +342,7 @@ class AppContainer(
         dao = database.reminderDao(),
         planRepository = planRepository,
         clock = clock,
+        timeZone = timeZone,
     )
 
     /** The Erinnerungen tab's one alarm, always aimed at the soonest reminder. */
@@ -315,7 +351,8 @@ class AppContainer(
         repository = reminderRepository,
         taskReminders = taskReminderService,
         clock = clock,
-        enabled = !sandbox,
+        timeZone = timeZone,
+        enabled = alarms,
     )
 
     /** The evening's choices: where the wake alarm rings, and whether the wind-down hint shows. */
@@ -327,7 +364,8 @@ class AppContainer(
         setupRepository = setupRepository,
         preferences = eveningStore,
         clock = clock,
-        enabled = !sandbox,
+        timeZone = timeZone,
+        enabled = alarms,
         nightService = nightService,
     )
 
@@ -347,6 +385,7 @@ class AppContainer(
             itemDao = database.itemDao(),
             planRepository = planRepository,
             clock = clock,
+            timeZone = timeZone,
         )
     } else {
         null

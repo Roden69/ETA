@@ -51,6 +51,7 @@ data class RemoteSeries(
     /** The `recurrence` lines: `RRULE:…`, and any `EXDATE`/`RDATE` next to it. */
     val recurrence: List<String>,
     val start: LocalDate?,
+    val startTime: LocalTime? = null,
 )
 
 /** What an all-day event is offered at until the user says otherwise. */
@@ -69,7 +70,7 @@ val ALL_DAY_SUGGESTED_DURATION: Duration = 1.hours
  * Everything here throws [IOException] carrying the message Google gave, which
  * the sync turns into a sentence the settings card can print.
  */
-class GoogleCalendarApi(private val timeZone: TimeZone = TimeZone.currentSystemDefault()) {
+class GoogleCalendarApi(private val timeZone: TimeZone = TimeZone.currentSystemDefault()) : CalendarApi {
 
     /**
      * Every calendar the account can see, subscribed and shared ones included.
@@ -79,7 +80,7 @@ class GoogleCalendarApi(private val timeZone: TimeZone = TimeZone.currentSystemD
      * everything that account holds — its own calendars and anything anyone has
      * shared into it.
      */
-    suspend fun calendars(token: String): List<RemoteCalendar> = withContext(Dispatchers.IO) {
+    override suspend fun calendars(token: String): List<RemoteCalendar> = withContext(Dispatchers.IO) {
         val result = mutableListOf<RemoteCalendar>()
         var pageToken: String? = null
         do {
@@ -124,7 +125,7 @@ class GoogleCalendarApi(private val timeZone: TimeZone = TimeZone.currentSystemD
      * is what keeps a re-sync from doubling anything. An occurrence cancelled in
      * Google is dropped here: it is not a decision to put to the user.
      */
-    suspend fun events(
+    override suspend fun events(
         token: String,
         calendarId: String,
         from: LocalDate,
@@ -158,13 +159,6 @@ class GoogleCalendarApi(private val timeZone: TimeZone = TimeZone.currentSystemD
     }
 
     /**
-     * One event out of the JSON, or null when it carries no usable time.
-     *
-     * Skipped rather than guessed at, in the same spirit as `expandRecurring`
-     * passing over a definition without a start time: an invented hour would be
-     * planned against, and nothing would tell it apart from one the user chose.
-     */
-    /**
      * The series master of one occurrence: its rule and its first date.
      *
      * Read once per series a user chooses to adopt, never during the sync. The
@@ -172,7 +166,7 @@ class GoogleCalendarApi(private val timeZone: TimeZone = TimeZone.currentSystemD
      * The first date is taken in the user's time zone, which is the one the
      * occurrences were expanded in too.
      */
-    suspend fun seriesMaster(token: String, calendarId: String, seriesId: String): RemoteSeries =
+    override suspend fun seriesMaster(token: String, calendarId: String, seriesId: String): RemoteSeries =
         withContext(Dispatchers.IO) {
             val url = "https://www.googleapis.com/calendar/v3/calendars/" +
                 "${encode(calendarId)}/events/${encode(seriesId)}"
@@ -180,14 +174,21 @@ class GoogleCalendarApi(private val timeZone: TimeZone = TimeZone.currentSystemD
             val recurrence = item.optJSONArray("recurrence")
             val lines = (0 until (recurrence?.length() ?: 0)).map { recurrence!!.getString(it) }
             val start = item.optJSONObject("start")
-            val day = start?.optString("dateTime")?.ifBlank { null }
+            val first = start?.optString("dateTime")?.ifBlank { null }
                 ?.let { runCatching { Instant.parse(it) }.getOrNull() }
-                ?.toLocalDateTime(timeZone)?.date
-                ?: start?.optString("date")?.ifBlank { null }
-                    ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-            RemoteSeries(recurrence = lines, start = day)
+                ?.toLocalDateTime(timeZone)
+            val day = first?.date ?: start?.optString("date")?.ifBlank { null }
+                ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            RemoteSeries(recurrence = lines, start = day, startTime = first?.time)
         }
 
+    /**
+     * One event out of the JSON, or null when it carries no usable time.
+     *
+     * Skipped rather than guessed at, in the same spirit as `expandRecurring`
+     * passing over a definition without a start time: an invented hour would be
+     * planned against, and nothing would tell it apart from one the user chose.
+     */
     private fun parseEvent(calendarId: String, item: JSONObject): RemoteEvent? {
         val id = item.optString("id")
         if (id.isBlank()) return null

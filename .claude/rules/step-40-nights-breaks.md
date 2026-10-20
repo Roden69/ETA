@@ -112,7 +112,9 @@ carries "Nebenbei" so that it pays and is still the meal.
   "Ignorieren": a `PlannerDismissal` for that date and `PlannerWarning`, stored
   for the reason `conflict_dismissals` is. Not on the confirmed "Liste für
   Morgen".
-- **Settings → Pausenchecker** (`BreakCheckerBox`), applied at once.
+- **Settings → Pausen & Freizeit** (`SettingsPage.BREAKS`, formerly "Pausenchecker"):
+  the checker (`BreakCheckerBox`) applies at once; "Pause nach Aufgaben" and
+  "Tägliche Freizeit" are draft answers saved with "Sichern".
 - **The questionnaire's own working day sets it off**: 09:00–12:30 is three and
   a half hours. That is the rule as given, with the default the user named.
 - Off in the tutorial's practice setup.
@@ -122,6 +124,25 @@ carries "Nebenbei" so that it pays and is still the meal.
   It rides on `BreakFindings.backToBack`, so the `breakChecker` switch silences it
   too. Shown as `PlannerWarning.BACK_TO_BACK` in the same bar as the other two,
   waved away per day. Pinned in `BackToBackTest`.
+
+#### The default break ("Pause nach Aufgaben", issue #56)
+
+`UserSetup.defaultBreakAfter` (nullable, seconds; database 35, `MIGRATION_34_35`).
+`effectiveBreakAfter(ownBreak, type, setup)` in `domain/planning/DefaultBreak.kt`
+decides the break a card takes onto the day: its own "Pause danach", else — for a
+`TODO` only — the default. Asked once, where a card is placed
+(`DayPlannerViewModel.place` and `createTodo`, the planner's single placement
+path); the block stores the answer, so the Pausenchecker, `fittedSpan` and the
+containers read the same value from the block. Recurring tasks and calendar
+imports never take it. An empty card editor field shows the default as its hint
+(`LocalDefaultBreakAfter`, handed down from `EtaApp`). Consequence: a card cannot
+opt out of a set default — the checkbox starts at 5 minutes. Blocks already on
+the day keep their break when the default changes.
+
+**Daily free time** (`setup:freetime`) is settings-owned (`SETTINGS_OWNED_KEYS`).
+Zero minutes lays no item down, so going from zero to a positive length creates
+the definition, and back retires it, through the same `saveSettings` path as bed
+preparation and the morning. The occurrences from the first open day are re-laid.
 
 **Verified by the compiler, the suite (626, 24 in `NightsAndBreaksTest`),
 `assembleRelease`, `lint` and the migration against `29.json`.** Nobody has seen

@@ -1,8 +1,10 @@
 package com.example.eta.data.local
 
 import androidx.room3.Dao
+import androidx.room3.Delete
 import androidx.room3.Query
 import androidx.room3.Upsert
+import androidx.room3.Transaction
 import com.example.eta.domain.model.CalendarEvent
 import com.example.eta.domain.model.CalendarSeries
 import com.example.eta.domain.model.CalendarSource
@@ -19,6 +21,13 @@ data class LiveCalendarSeries(
 )
 data class CalendarSeriesImportDate(
     val itemId: String,
+    val date: LocalDate,
+)
+
+/** One day Google shows an occurrence of a series on, in a calendar that is switched on. */
+data class CalendarSeriesDate(
+    val calendarId: String,
+    val seriesId: String,
     val date: LocalDate,
 )
 
@@ -103,13 +112,73 @@ interface CalendarDao {
         DELETE FROM calendar_events
         WHERE date BETWEEN :from AND :to
           AND decision = 'PENDING'
+          AND calendarId IN (:calendarIds)
           AND id NOT IN (:keep)
         """,
     )
-    suspend fun deletePendingNotIn(from: LocalDate, to: LocalDate, keep: List<String>): Int
+    suspend fun deletePendingNotIn(from: LocalDate, to: LocalDate, keep: List<String>, calendarIds: List<String>): Int
 
     @Query("DELETE FROM calendar_events WHERE calendarId NOT IN (:keep)")
     suspend fun deleteEventsOfCalendarsNotIn(keep: List<String>): Int
+
+    /**
+     * The occurrences of adopted series inside a stretch.
+     *
+     * Their card stands for them, so these rows are only Google's facts about the
+     * series. One Google no longer shows (an `EXDATE` added later, a cancellation)
+     * has no business staying behind as if it were still there.
+     */
+    @Query(
+        """
+        SELECT * FROM calendar_events
+        WHERE date BETWEEN :from AND :to
+          AND seriesId IS NOT NULL
+          AND decision = 'IMPORTED'
+          AND itemId IN (SELECT itemId FROM calendar_series)
+        """,
+    )
+    suspend fun findAdoptedSeriesOccurrences(from: LocalDate, to: LocalDate): List<CalendarEvent>
+
+    @Delete
+    suspend fun deleteEvents(events: List<CalendarEvent>)
+
+    /** Rows and their authoritative coverage become visible together, never half a sync. */
+    @Transaction
+    suspend fun commitSnapshot(
+        sources: List<CalendarSource>,
+        events: List<CalendarEvent>,
+        from: LocalDate,
+        through: LocalDate,
+        keep: List<String>,
+        removedAdoptions: List<CalendarEvent>,
+    ) {
+        upsertEvents(events)
+        deletePendingNotIn(from, through, keep, sources.map { it.id })
+        deleteEvents(removedAdoptions)
+        upsertSources(sources)
+    }
+
+    /**
+     * Google's occurrence days of every series, in the calendars that are switched on.
+     *
+     * Whatever was decided about an occurrence, it is still a day Google showed the
+     * series on — which is what tells a holiday apart from a day the card should run.
+     */
+    @Query(
+        """
+        SELECT calendar_events.calendarId AS calendarId,
+               calendar_events.seriesId AS seriesId,
+               calendar_events.date AS date
+        FROM calendar_events
+        INNER JOIN calendar_sources
+          ON calendar_sources.id = calendar_events.calendarId
+         AND calendar_sources.enabled = 1
+         AND calendar_sources.syncToken = calendar_events.seenInSync
+        WHERE calendar_events.seriesId IS NOT NULL
+          AND calendar_events.date BETWEEN :from AND :to
+        """,
+    )
+    suspend fun findSeriesDatesBetween(from: LocalDate, to: LocalDate): List<CalendarSeriesDate>
 
     /** Marks the undecided occurrences of an adopted series as taken by its card. */
     @Query(

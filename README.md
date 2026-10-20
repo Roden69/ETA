@@ -67,7 +67,7 @@ Der Fork [Roden69/ETA](https://github.com/Roden69/ETA) ergänzt die Originalapp 
 - **Respekt vor dem Handy:** Stumm- und Vibrationsmodus, „Nicht stören“ und Schlummerdauer folgen klaren Regeln.
 - **Parallel testbar:** Die Variante **Eta Fork** (`com.example.erik_iteration_2.fork`) läuft neben der Originalinstallation, mit eigenen Daten.
 - **Fertige APKs aus der CI:** Jeder Lauf auf `main` stellt Debug- und Fork-APK bereit, Versions-Tags veröffentlichen eine signierte Release-APK.
-- **Prüfbare Migrationen:** Jeder Schemaschritt der Room-Datenbank (aktuell Version 34) wird gegen die exportierten Schemas getestet, dazu rund 880 Unit-Tests.
+- **Prüfbare Migrationen und Abläufe:** Jeder Schemaschritt der Room-Datenbank (aktuell Version 36) wird gegen die exportierten Schemas getestet. Regel-, mehrtägige Szenario- und Oberflächentests laufen im Pull Request, Gerätetests zusätzlich nachts.
 - **Dokumentation als Code:** Anforderungen, Fachnotizen und Architektur sind versioniert, geprüft und als durchsuchbare Website baubar.
 
 Änderungen laufen als Pull Requests über Themenzweige und `dev/*`-Zweige; `main` ist der geprüfte Stand.
@@ -107,7 +107,7 @@ APKs landen unter `app/build/outputs/apk/<variante>/`. Ablauf, Gerätekontrolle 
 | | |
 | --- | --- |
 | Sprache, UI | Kotlin, Jetpack Compose **Foundation** (ohne Material), eigenes Design-System `Eta*` |
-| Daten | Room 3, `kotlinx-datetime`, lokale Datenbank `erik.db` (Schema 34) |
+| Daten | Room 3, `kotlinx-datetime`, lokale Datenbank `erik.db` (Schema 36) |
 | Struktur | Ein Gradle-Modul `:app`, manuelle Abhängigkeiten (`AppContainer`), keine Navigationsbibliothek, kein WorkManager |
 | Alarme | `AlarmManager` mit je einem Coordinator, Scheduler und Receiver pro Art |
 | Android | `minSdk` 24, `targetSdk` 37 |

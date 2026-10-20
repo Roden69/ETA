@@ -2,15 +2,27 @@ package com.example.eta.data.repository
 
 import com.example.eta.data.local.CalendarDao
 import com.example.eta.data.local.ItemDao
+import com.example.eta.domain.calendar.seriesHolidays
 import com.example.eta.domain.growth.placeDynamicGrowth
 import com.example.eta.domain.model.BlockOrigin
+import com.example.eta.domain.model.PlannedBlock
+import com.example.eta.domain.model.RecurrenceRule
 import com.example.eta.domain.planning.minuteToLocalTime
+import com.example.eta.domain.recurrence.isLaidAfterEdit
+import com.example.eta.domain.recurrence.isRelayableToday
 import com.example.eta.domain.recurrence.matches
+import com.example.eta.domain.recurrence.isPlacedByHand
+import com.example.eta.domain.recurrence.startsAt
+import com.example.eta.domain.planning.timerWasUsed
 import kotlin.time.Clock
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
+import kotlinx.datetime.atTime
 import kotlinx.datetime.todayIn
 
 /** How far ahead the standing schedule is kept materialized. */
@@ -36,14 +48,31 @@ class ScheduleMaintenance(
     private val clock: Clock = Clock.System,
     private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) {
+    /**
+     * One run at a time. Every entry point reads the definitions, then writes
+     * blocks with `IGNORE`; two overlapping runs let a top-up that read the old
+     * definitions re-insert a block an edit had just taken off, and the edit's
+     * own block is then ignored. The planner starts a top-up as it opens, so a
+     * settings save right after left today's bed preparation at the old hour.
+     */
+    private val lock = Mutex()
 
-    /** Materializes from today to the horizon. Returns how many blocks were added. */
-    suspend fun topUp(): Int = topUpUntil(clock.todayIn(timeZone).plus(DatePeriod(days = SCHEDULE_HORIZON_DAYS)))
+    /**
+     * Materializes from today to the horizon. Returns how many blocks were added.
+     * [keep] decides which new occurrences are laid down; the default keeps all.
+     */
+    suspend fun topUp(keep: (PlannedBlock) -> Boolean = { true }): Int =
+        topUpUntil(clock.todayIn(timeZone).plus(DatePeriod(days = SCHEDULE_HORIZON_DAYS)), keep)
 
     /** Materializes at least as far as [until], for a range that reaches further. */
-    suspend fun topUpUntil(until: LocalDate): Int {
+    suspend fun topUpUntil(until: LocalDate, keep: (PlannedBlock) -> Boolean = { true }): Int =
+        lock.withLock { topUpLocked(until, keep) }
+
+    private suspend fun topUpLocked(until: LocalDate, keep: (PlannedBlock) -> Boolean): Int {
         val today = clock.todayIn(timeZone)
         val horizon = maxOf(until, today.plus(DatePeriod(days = SCHEDULE_HORIZON_DAYS)))
+        val tomorrow = today.plus(DatePeriod(days = 1))
+        val tomorrowConfirmed = planRepository.findDayPlan(tomorrow)?.isConfirmed == true
         // A standing task past its "Wiederholen bis" has nothing left to lay
         // down. Retiring it here takes it off the lists that describe the week
         // as it still is; expansion would pass over it either way.
@@ -55,11 +84,13 @@ class ScheduleMaintenance(
             val definition = definitionIds[retained.itemId] ?: return@mapNotNull null
             val rule = definition.recurrenceRule ?: return@mapNotNull null
             if (rule.matches(retained.date)) retained.itemId to retained.date else null
-        }.toSet()
+        }.toSet() + holidaysOfAdoptedSeries(today, horizon)
         if (suppressed.isNotEmpty()) {
             planRepository.findRange(today, horizon)
                 .filter { it.block.origin == BlockOrigin.RECURRING }
                 .filter { it.block.isOpen && (it.item.id to it.block.date) in suppressed }
+                .filter { !it.block.isPlacedByHand() && !it.block.timerWasUsed }
+                .filter { it.block.startsAt() > clock.now().toLocalDateTime(timeZone) }
                 .forEach { planRepository.removeBlock(it.block) }
         }
         val added = planRepository.materializeRecurring(
@@ -68,12 +99,53 @@ class ScheduleMaintenance(
             to = horizon,
             vacations = vacationRepository.plansFrom(today),
             suppressed = suppressed,
+            keep = { block ->
+                val editedAt = definitionIds[block.itemId]?.updatedAt?.toLocalDateTime(timeZone)
+                keep(block) &&
+                    !(tomorrowConfirmed && block.date == tomorrow) &&
+                    (block.date != today || editedAt == null ||
+                        editedAt.date != today || block.date.atTime(block.start) >= editedAt)
+            },
         )
         // A dynamic growth task's hour is not a property of the task but of the
         // day it lands in, so a freshly materialized occurrence has no hour worth
         // keeping until this has run over it.
-        relayDynamicGrowth(horizon)
+        relayDynamicGrowthLocked(horizon)
         return added
+    }
+
+    /**
+     * The days an adopted series' card must not lay a block on: Google shows no
+     * occurrence of the series that day, though the calendar was read over it.
+     *
+     * Only the days the sync has covered count — from today to the schedule
+     * horizon — because days beyond that were never read and are not holidays
+     * yet. Derived from the stored occurrences on every run, so nothing extra
+     * needs remembering.
+     */
+    private suspend fun holidaysOfAdoptedSeries(today: LocalDate, horizon: LocalDate): Set<Pair<String, LocalDate>> {
+        val cards = calendarDao.findLiveSeries()
+        if (cards.isEmpty()) return emptySet()
+        val sources = calendarDao.findEnabledSources().associateBy { it.id }
+        val occurrences = calendarDao.findSeriesDatesBetween(today, horizon)
+            .groupBy({ it.calendarId to it.seriesId }, { it.date })
+            .mapValues { (_, days) -> days.toSet() }
+        return cards.flatMap { card ->
+            val source = sources[card.calendarId] ?: return@flatMap emptyList()
+            val syncedFrom = source.syncedFrom ?: return@flatMap emptyList()
+            val syncedThrough = source.syncedThrough ?: return@flatMap emptyList()
+            if (source.syncToken == null) return@flatMap emptyList()
+            val from = maxOf(today, syncedFrom)
+            val through = minOf(horizon, syncedThrough)
+            if (through < from) return@flatMap emptyList()
+            seriesHolidays(
+                rule = RecurrenceRule.decode(card.recurrenceRule),
+                repeatUntil = card.repeatUntil,
+                from = from,
+                to = through,
+                occurrences = occurrences[card.calendarId to card.seriesId].orEmpty(),
+            ).map { card.itemId to it }
+        }.toSet()
     }
 
     /**
@@ -90,7 +162,10 @@ class ScheduleMaintenance(
      * tomorrow is a promise already made; the same line every other edit to a
      * standing task respects. Returns how many blocks moved.
      */
-    suspend fun relayDynamicGrowth(until: LocalDate? = null): Int {
+    suspend fun relayDynamicGrowth(until: LocalDate? = null): Int =
+        lock.withLock { relayDynamicGrowthLocked(until) }
+
+    private suspend fun relayDynamicGrowthLocked(until: LocalDate?): Int {
         val from = planRepository.firstOpenDay()
         val to = maxOf(
             until ?: from,
@@ -116,12 +191,25 @@ class ScheduleMaintenance(
      * Takes the still-open occurrences of [itemIds] off the days that are still
      * open and lays them down again from the definitions as they now stand.
      *
-     * The rule every edit to a standing task follows: today, and tomorrow once
-     * its plan is confirmed, keep what they have.
+     * The rule every edit to a standing task follows. Days after today: as before,
+     * what is still open from the first open day on. Today: only what has not
+     * started yet is taken off ([isRelayableToday]), and an occurrence that would
+     * start before now is not laid down again ([isLaidAfterEdit]). Today's
+     * started, running, completed and called-off blocks stay.
      */
     suspend fun relayOccurrences(itemIds: List<String>) {
         if (itemIds.isEmpty()) return
-        planRepository.clearUpcoming(itemIds, planRepository.firstOpenDay())
-        topUp()
+        val now = clock.now().toLocalDateTime(timeZone)
+        val edited = itemIds.toSet()
+        lock.withLock {
+            planRepository.findDay(now.date)
+                .map { it.block }
+                .filter { isRelayableToday(it, edited, now) }
+                .forEach { planRepository.removeBlock(it) }
+            planRepository.clearUpcoming(itemIds, planRepository.firstOpenDay())
+            topUpLocked(clock.todayIn(timeZone).plus(DatePeriod(days = SCHEDULE_HORIZON_DAYS))) {
+                isLaidAfterEdit(it, edited, now)
+            }
+        }
     }
 }

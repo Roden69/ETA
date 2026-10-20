@@ -6,6 +6,7 @@ import androidx.lifecycle.viewModelScope
 import com.example.eta.alarm.TaskStartCoordinator
 import com.example.eta.alarm.WakeAlarmCoordinator
 import com.example.eta.alarm.EveningStore
+import com.example.eta.alarm.PlanningAlarmCoordinator
 import com.example.eta.data.repository.PlanRepository
 import com.example.eta.data.repository.ReminderRepository
 import com.example.eta.data.backup.BackupResult
@@ -71,6 +72,7 @@ class SettingsViewModel(
     private val phaseService: PlanningPhaseService,
     private val wakeAlarmCoordinator: WakeAlarmCoordinator,
     private val taskStartCoordinator: TaskStartCoordinator,
+    private val planningAlarmCoordinator: PlanningAlarmCoordinator,
     private val planRepository: PlanRepository,
     private val reminderRepository: ReminderRepository,
     private val eveningStore: EveningStore,
@@ -174,13 +176,11 @@ class SettingsViewModel(
     val phrase: StateFlow<String> = _phrase.asStateFlow()
 
     init {
-        viewModelScope.launch {
-            stored.value = setupRepository.find()
-            _draft.value = stored.value
-        }
         // The answers can change behind this tab's back — a night changed on
         // the week timetable is written straight to the setup. An untouched
-        // draft follows; one with unsaved answers keeps them.
+        // draft follows; one with unsaved answers keeps them. The first row is
+        // the initial load: a separate one-shot read used to finish after it
+        // and overwrite an answer typed in between.
         viewModelScope.launch {
             setupRepository.observe().collect { row ->
                 if (row == null) return@collect
@@ -257,6 +257,7 @@ class SettingsViewModel(
             // So does the task alarm: the still-active switch, and the morning
             // blocks that were just laid down again.
             taskStartCoordinator.reschedule()
+            planningAlarmCoordinator.rescheduleAll()
             refreshAlarms()
             _message.value = SettingsMessage.Saved
         }

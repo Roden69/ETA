@@ -94,14 +94,15 @@ class SetupRepository(
     /**
      * Stores the standing configuration from the settings tab.
      *
-     * Of the recurring definitions, only the two the settings still own are
-     * regenerated — bed preparation and the morning, see [isOwnedBySettings].
+     * Of the recurring definitions, only the three the settings still own are
+     * regenerated — bed preparation, the morning and free time, see [isOwnedBySettings].
      * Everything else lives on the Listen tab now; regenerating it here would undo
      * whatever was changed there.
      *
-     * Their occurrences follow the same rule as any edit to a standing task: the
-     * confirmed days keep theirs, every day after is laid down again. Before, a
-     * changed wake time only reached the schedule three weeks later.
+     * Their occurrences follow the same rule as any edit to a standing task: today
+     * keeps what has started or is done and re-lays what has not started yet; a
+     * confirmed tomorrow keeps its occurrences; every day after is laid down again.
+     * Before, a changed wake time only reached the schedule three weeks later.
      */
     suspend fun saveSettings(setup: UserSetup) {
         val now = clock.now()

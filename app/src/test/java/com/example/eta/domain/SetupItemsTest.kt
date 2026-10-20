@@ -18,6 +18,7 @@ import com.example.eta.domain.setup.WeeklySlot
 import com.example.eta.domain.setup.WorkBlock
 import com.example.eta.domain.setup.WorkSchedule
 import com.example.eta.domain.setup.hasMorningRoutine
+import com.example.eta.domain.setup.isOwnedBySettings
 import com.example.eta.domain.setup.recurringItems
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.hours
@@ -291,5 +292,25 @@ class SetupItemsTest {
 
         assertEquals(RecurrenceRule.Daily, item.recurrenceRule)
         assertEquals(Category.ACHTSAM, item.category)
+    }
+
+    @Test
+    fun `free time of zero minutes has no definition, thirty minutes has one daily`() {
+        val none = setup().copy(freeTime = DailySlot(LocalTime(7, 0), Duration.ZERO)).recurringItems(now)
+        assertTrue(none.none { it.role == ItemRole.FREE_TIME })
+
+        val daily = setup().copy(freeTime = DailySlot(LocalTime(7, 0), 30.minutes)).recurringItems(now)
+        val item = daily.single { it.role == ItemRole.FREE_TIME }
+        assertEquals("setup:freetime", item.id)
+        assertEquals(RecurrenceRule.Daily, item.recurrenceRule)
+        assertEquals(LocalTime(7, 0), item.startTime)
+        assertEquals(30.minutes, item.estimatedDuration)
+    }
+
+    @Test
+    fun `free time is a definition the settings own, so saving them regenerates it`() {
+        assertTrue(isOwnedBySettings("setup:freetime"))
+        assertTrue(isOwnedBySettings("setup:bedprep"))
+        assertFalse(isOwnedBySettings("setup:sport"))
     }
 }

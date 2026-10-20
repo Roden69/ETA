@@ -194,11 +194,64 @@ class WeekPlannerViewModel(
      * The gate is the phase's own rule, so it is checked here as well as drawn on
      * screen: a tap on a card that was offered a frame ago must not take in what
      * the week may not hold — an unlock day after the week's end, or goals of an
-     * earlier cycle still lying unplanned.
+     * earlier cycle still lying unplanned. A card without its answers is refused
+     * as well: the screen asks for them first, see [concretizeGoal].
      */
     fun pullIntoWeek(item: Item) {
+        if (!item.isConcretized) return
         if (pullBlockOf(item, weekEnd, uiState.value.unfinished.size) != null) return
         viewModelScope.launch { itemRepository.takeIntoWeek(item, cycleStart.value) }
+    }
+
+    /**
+     * Hands an unfinished goal of an earlier cycle on to this one.
+     *
+     * An explicit choice, never a silent carry-over. The gate does not apply: the
+     * goal is already in the week and only gets this cycle's stamp.
+     */
+    fun takeUnfinishedIntoWeek(item: Item) {
+        if (!item.isConcretized) return
+        viewModelScope.launch { itemRepository.takeIntoWeek(item, cycleStart.value) }
+    }
+
+    /**
+     * Gives a card its answers from the concretize dialog and, when [intoWeek], takes
+     * it into the week in the same step. Cancelling the dialog writes nothing, so the
+     * card stays where it was.
+     *
+     * [intoWeek] with a Sammelliste card is a pull: the gate is checked before anything
+     * is written, and again on the answered card, whose unlock day may now lie after the
+     * week's end. Without [intoWeek] the card is already a week goal and stays one.
+     */
+    fun concretizeGoal(item: Item, name: String, attributes: TodoAttributes, intoWeek: Boolean) {
+        val openGoals = uiState.value.unfinished.size
+        if (intoWeek && item.stage == Stage.COLLECTION && pullBlockOf(item, weekEnd, openGoals) != null) return
+        viewModelScope.launch {
+            val now = clock.now()
+            itemRepository.concretize(
+                item = if (name.isNotBlank() && name != item.name) item.renamed(name.trim(), now) else item,
+                category = attributes.category,
+                priority = attributes.priority,
+                targetDate = attributes.unlockFrom,
+                estimatedDuration = attributes.duration,
+                travelBefore = attributes.travelBefore,
+                returnAfter = attributes.returnAfter,
+                breakAfter = attributes.breakAfter,
+                endSound = attributes.endSound,
+                extras = attributes.extras,
+                // The dialog does not show existing steps; an empty list must not wipe them.
+                subtasks = attributes.subtasks.takeIf { it.isNotEmpty() },
+                folded = attributes.foldedItemIds,
+            )
+            if (!intoWeek) return@launch
+            val fresh = itemRepository.findById(item.id) ?: return@launch
+            if (fresh.stage == Stage.COLLECTION && pullBlockOf(fresh, weekEnd, openGoals) != null) {
+                _notice.value = "»${fresh.name}« ist jetzt ausgefüllt und bleibt in der Sammelliste: " +
+                    "die Woche nimmt sie gerade nicht auf."
+                return@launch
+            }
+            itemRepository.takeIntoWeek(fresh, cycleStart.value)
+        }
     }
 
     /**

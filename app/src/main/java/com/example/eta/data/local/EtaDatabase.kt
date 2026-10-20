@@ -54,7 +54,7 @@ import com.example.eta.domain.setup.UserSetup
         SleepLog::class,
         Note::class,
     ],
-    version = 34,
+    version = 36,
     exportSchema = true,
 )
 @ColumnTypeConverters(Converters::class)
@@ -1058,6 +1058,28 @@ val MIGRATION_33_34 = object : Migration(33, 34) {
 }
 
 /**
+ * Version 35: the default break for ToDo cards ("Pause nach Aufgaben").
+ *
+ * `user_setup.defaultBreakAfter` (seconds, nullable). Null for every existing row,
+ * which is "no default", so no ToDo gets a break it did not have and nothing
+ * already planned changes shape.
+ */
+val MIGRATION_34_35 = object : Migration(34, 35) {
+    override suspend fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `user_setup` ADD COLUMN `defaultBreakAfter` INTEGER")
+    }
+}
+
+val MIGRATION_35_36 = object : Migration(35, 36) {
+    override suspend fun migrate(connection: SQLiteConnection) {
+        connection.execSQL("ALTER TABLE `calendar_sources` ADD COLUMN `syncedFrom` TEXT")
+        connection.execSQL("ALTER TABLE `calendar_sources` ADD COLUMN `syncedThrough` TEXT")
+        connection.execSQL("ALTER TABLE `calendar_sources` ADD COLUMN `syncToken` TEXT")
+        connection.execSQL("ALTER TABLE `calendar_events` ADD COLUMN `seenInSync` TEXT")
+    }
+}
+
+/**
  * Reconciles both shipped version-28 schemas without rewriting their history.
  *
  * The fork added night corrections where upstream added flexibility switches.
@@ -1123,5 +1145,7 @@ internal val ETA_DATABASE_MIGRATIONS = arrayOf(
     MIGRATION_31_32,
     MIGRATION_32_33,
     MIGRATION_33_34,
+    MIGRATION_34_35,
+    MIGRATION_35_36,
     MIGRATION_28_33,
 )

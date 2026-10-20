@@ -3,11 +3,14 @@ package com.example.eta.data.repository
 import android.app.PendingIntent
 import android.content.Intent
 import com.example.eta.data.calendar.AuthOutcome
-import com.example.eta.data.calendar.GoogleAuth
+import com.example.eta.data.calendar.CalendarAuth
+import com.example.eta.domain.calendar.SeriesPattern
 import com.example.eta.domain.calendar.SeriesReading
 import com.example.eta.domain.calendar.readSeriesRule
+import com.example.eta.domain.model.CalendarEvent
 import java.io.IOException
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
 
 /** What a sync ended in. */
 sealed interface SyncOutcome {
@@ -39,17 +42,34 @@ sealed interface SeriesOutcome {
 }
 
 /**
+ * A recurring series among the undecided appointments, and what the calendar step
+ * says about it. One per series, never per occurrence.
+ *
+ * [event] is the series' earliest undecided occurrence: the one the card names.
+ */
+sealed interface SeriesProposal {
+    val event: CalendarEvent
+
+    /** Eta can take the series on as recurring tasks, with [pattern] as its rhythm. */
+    data class Offer(override val event: CalendarEvent, val pattern: SeriesPattern) : SeriesProposal
+
+    /** Eta cannot represent the series; [reason] says why, in a sentence a screen can show. */
+    data class Refused(override val event: CalendarEvent, val reason: String) : SeriesProposal
+}
+
+/**
  * One round of talking to Google: a token, the calendar list, then the events.
  *
  * Keeps the two halves apart on purpose. [CalendarRepository] knows about rows
- * and decisions and nothing about Play Services; [GoogleAuth] knows about tokens
+ * and decisions and nothing about Play Services; [CalendarAuth] knows about tokens
  * and nothing about calendars. This is the only place that needs both, and it is
  * also the only place that has to turn three different kinds of failure — no
  * grant, no network, a refused API — into something a screen can say.
  */
 class CalendarSyncService(
-    private val auth: GoogleAuth,
+    private val auth: CalendarAuth,
     private val repository: CalendarRepository,
+    private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) {
 
     /**
@@ -86,19 +106,15 @@ class CalendarSyncService(
         }
 
     /**
-     * Reads how a series repeats, from its master.
+     * Reads how the series of [event] repeats, from its master.
      *
-     * Asked only when the user chooses to adopt a series, never by the sync: the
-     * occurrences a sync brings do not say the rule, and this is the one extra
-     * request a series costs.
+     * Never done by the sync itself: the occurrences a sync brings do not say the
+     * rule, and the master is one extra request per series.
      */
-    suspend fun readSeries(calendarId: String, seriesId: String): SeriesOutcome =
+    suspend fun readSeries(event: CalendarEvent): SeriesOutcome =
         when (val outcome = auth.token()) {
             is AuthOutcome.Ok -> try {
-                val master = repository.readSeries(outcome.accessToken, calendarId, seriesId)
-                val start = master.start
-                    ?: return SeriesOutcome.Failed("Der Anfang der Serie ist nicht bekannt.")
-                SeriesOutcome.Ok(readSeriesRule(master.recurrence, start))
+                SeriesOutcome.Ok(readRule(outcome.accessToken, event))
             } catch (error: IOException) {
                 SeriesOutcome.Failed(error.message ?: "Keine Verbindung zu Google.")
             }
@@ -106,6 +122,71 @@ class CalendarSyncService(
             is AuthOutcome.NeedsConsent -> SeriesOutcome.NeedsConsent(outcome.pendingIntent)
             is AuthOutcome.Failed -> SeriesOutcome.Failed(outcome.reason)
         }
+
+    /**
+     * The series among [pending] that the calendar step offers, one per series.
+     *
+     * Read without a tap, but only for series the user has neither adopted nor
+     * kept single. A series whose master cannot be read right now is left out
+     * silently: the next read of the step asks again, and a flaky network must not
+     * turn into a refusal that is then remembered.
+     *
+     * Silent without a grant too: the step has already reported the missing grant
+     * on its own sync, and a second consent screen must not appear from here.
+     */
+    suspend fun proposeSeries(pending: List<CalendarEvent>): List<SeriesProposal> {
+        val candidates = undecidedSeries(pending)
+        if (candidates.isEmpty()) return emptyList()
+        val token = when (val outcome = auth.token()) {
+            is AuthOutcome.Ok -> outcome.accessToken
+            is AuthOutcome.NeedsConsent, is AuthOutcome.Failed -> return emptyList()
+        }
+        return candidates.mapNotNull { event ->
+            try {
+                when (val reading = readRule(token, event)) {
+                    is SeriesReading.Repeats -> SeriesProposal.Offer(event, reading.pattern)
+                    is SeriesReading.Unsupported -> SeriesProposal.Refused(event, reading.reason)
+                }
+            } catch (error: IOException) {
+                null
+            }
+        }
+    }
+
+    /**
+     * One earliest undecided occurrence per series that is neither adopted nor
+     * declined, in the order the days come.
+     */
+    private suspend fun undecidedSeries(pending: List<CalendarEvent>): List<CalendarEvent> =
+        pending
+            .filter { it.seriesId != null }
+            .sortedWith(compareBy({ it.date }, { it.start }))
+            .groupBy { it.calendarId to it.seriesId.orEmpty() }
+            .values
+            .map { it.first() }
+            .filterNot { event ->
+                val seriesId = event.seriesId.orEmpty()
+                repository.isSeriesAdopted(event.calendarId, seriesId) ||
+                    repository.isSeriesDeclined(event.calendarId, seriesId)
+            }
+
+    /**
+     * The series master's rule, read as the series of [event] is repeated.
+     *
+     * An all-day series has no hour of its own, so an `UNTIL` instant is read on
+     * the day only; a timed one is read against the hour its occurrences start.
+     */
+    private suspend fun readRule(token: String, event: CalendarEvent): SeriesReading {
+        val master = repository.readSeries(token, event.calendarId, requireNotNull(event.seriesId))
+        val start = master.start
+            ?: return SeriesReading.Unsupported("Der Anfang der Serie ist nicht bekannt.")
+        return readSeriesRule(
+            recurrence = master.recurrence,
+            start = start,
+            timeZone = timeZone,
+            occurrenceTime = master.startTime,
+        )
+    }
 
     /** Forgets the account. Nothing is asked of Google; see the repository. */
     suspend fun disconnect() = repository.disconnect()

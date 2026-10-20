@@ -18,7 +18,7 @@ import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import kotlinx.datetime.DatePeriod
@@ -51,8 +51,15 @@ class ConcretizeViewModel(
 
     val today: LocalDate = clock.todayIn(timeZone)
 
-    val pending: StateFlow<List<Item>> = itemRepository.observeStage(Stage.COLLECTION)
-        .map { items -> items.filterNot { it.isConcretized } }
+    /**
+     * Cards still missing answers. Besides the Quick-Adds, this includes ToDos that
+     * already sit in the week without them — earlier versions let such a card in.
+     * They stay in the week; answering them here is the way out.
+     */
+    val pending: StateFlow<List<Item>> = combine(
+        itemRepository.observeStage(Stage.COLLECTION),
+        itemRepository.observeStage(Stage.WEEK),
+    ) { collection, week -> (collection + week).filterNot { it.isConcretized } }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),

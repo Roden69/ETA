@@ -23,6 +23,8 @@ import com.example.eta.domain.planning.startedAfter
 import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlinx.datetime.LocalTime
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** What an event is turned into. No priority: the date already outranks one. */
 data class AppointmentDetails(
@@ -97,6 +99,7 @@ class CalendarImportService(
     private val scheduleMaintenance: ScheduleMaintenance,
     private val clock: Clock = Clock.System,
 ) {
+    private val adoptionMutex = Mutex()
 
     /**
      * Makes the card and puts it on its day.
@@ -200,7 +203,9 @@ class CalendarImportService(
      * import asks for, so the card is an ordinary standing task afterwards and is
      * edited like one. Every undecided occurrence of the series is taken off the
      * list by [CalendarRepository.adoptSeries], and later ones are taken as they
-     * arrive. Changes Google makes to the series afterwards are not followed.
+     * arrive. The cards end on the series' last day, if Google has one, so a
+     * series that ends is not repeated after its end. Changes Google makes to the
+     * series afterwards are not followed.
      *
      * Returns the ids of the cards made.
      */
@@ -208,8 +213,10 @@ class CalendarImportService(
         event: CalendarEvent,
         pattern: SeriesPattern,
         details: AppointmentDetails,
-    ): List<String> {
+    ): List<String> = adoptionMutex.withLock {
         val seriesId = requireNotNull(event.seriesId) { "Only an occurrence of a series can be adopted" }
+        val existing = calendarRepository.seriesItemIds(event.calendarId, seriesId)
+        if (existing.isNotEmpty()) return@withLock existing
         val ids = recurringTaskService.createGroup(
             edit = RecurringEdit(
                 name = event.title,
@@ -222,14 +229,14 @@ class CalendarImportService(
                 returnAfter = details.returnAfter,
                 breakAfter = details.breakAfter,
                 endSound = details.endSound,
-                extras = details.extras,
+                extras = details.extras.copy(repeatUntil = pattern.lastDate),
             ),
             rhythm = pattern.rhythm,
         )
         calendarRepository.adoptSeries(event.calendarId, seriesId, ids)
         replaceSingleImports(event.calendarId, seriesId, ids)
         scheduleMaintenance.topUp()
-        return ids
+        ids
     }
 
     /**

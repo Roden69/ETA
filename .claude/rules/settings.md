@@ -12,9 +12,9 @@ had become every box under every other). `SettingsPage` lists the pages in menu
 order under three section labels; the menu shows titles and nothing else, a tap
 opens the page, "‹ Einstellungen" or the system back returns. The page is held
 by name in `rememberSaveable`. **Flexibilität** (step 39) follows Advanced Features
-and applies at once the same way — see *Step 39* — and so does **Pausenchecker**
-(step 40) after it. The draft follows the stored row while it is untouched; see
-*Step 40*. Urlaubsmodus is a row that leads straight to its
+and applies at once the same way — see *Step 39* — and so does the checker of
+**Pausen & Freizeit** (step 40), whose two draft answers are saved with "Sichern".
+The draft follows the stored row while it is untouched; see *Step 40*. Urlaubsmodus is a row that leads straight to its
 flow, Wertverfall and Absagen are listed only while the points are on, and
 Tutorial is the last row, under Debug. The tutorial page lists every tutorial;
 the ones about a single subject (`FeatureTutorialsBox`) are mounted a second
@@ -39,14 +39,17 @@ stays null until stored answers arrive, so defaults cannot be saved by accident.
 morning (the morning steps editor is shown only while the stored morning has minutes),
 the wake alarm, the still-active question, the planning times,
 the four "Advanced Features" switches (`AdvancedFeaturesBox` — see *Step 36*; they
-apply at once, and the points one folds the next two away), inflation and the cancellation rate. Meals, housekeeping, sport, free time,
+apply at once, and the points one folds the next two away), inflation and the cancellation rate. Meals, housekeeping, sport,
 mindfulness and work are standing *tasks* and are edited on the Listen tab. Saving
-goes through `SetupRepository.saveSettings`, which regenerates only bed preparation
-and the morning (`SETTINGS_OWNED_ITEM_IDS`: `setup:bedprep`, `setup:morning`), never `complete` — calling `complete`
-here would overwrite every edit made on the Listen tab. The weekly social budget and its `SocialTimeBox` were removed in step 38, and
+goes through `SetupRepository.saveSettings`, which regenerates only bed preparation,
+the morning and the daily free time (`SETTINGS_OWNED_KEYS` in `SetupItems.kt`: `setup:bedprep`,
+`setup:morning`, `setup:freetime`), never `complete` — calling `complete`
+here would overwrite every edit made on the Listen tab. Free time is therefore edited
+here and not on the Listen tab: an edit to `setup:freetime` there is replaced on the next save.
+The weekly social budget and its `SocialTimeBox` were removed in step 38, and
 `SettingsMessage.Saved` lost its conflict
 count, `UserSetup.conflicts()` having described answers that no longer describe the
-schedule.
+schedule. Afterwards today's open blocks that have not started yet are laid down again from the new answers (rule in `step-18-standing-schedule.md`); started, running, completed and called-off blocks stay.
 
 **Individual nights** are stored in `UserSetup.nightOverrides`, keyed by wake day.
 The sleep page lists these under "Einzelne Nächte" with bedtime, wake-up and reset

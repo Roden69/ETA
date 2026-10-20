@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.example.eta.data.local.BlockWithItem
 import com.example.eta.data.repository.ConflictingBlock
+import com.example.eta.data.repository.SeriesProposal
 import com.example.eta.domain.calendar.SeriesPattern
 import com.example.eta.domain.model.BlockOrigin
 import com.example.eta.domain.model.CalendarEvent
@@ -58,6 +59,7 @@ fun CalendarEventsSection(
     val conflicts by viewModel.conflicts.collectAsStateWithLifecycle()
     val seriesOffer by viewModel.seriesOffer.collectAsStateWithLifecycle()
     val seriesNotice by viewModel.seriesNotice.collectAsStateWithLifecycle()
+    val proposals by viewModel.proposals.collectAsStateWithLifecycle()
 
     // The account picker and the consent screen are Google's, and only an Activity
     // can put them on screen — so the `PendingIntent` travels up from the sync and
@@ -110,6 +112,18 @@ fun CalendarEventsSection(
                         onClick = viewModel::refresh,
                     )
                 }
+            }
+        }
+
+        // One question per series, asked here without a tap. The occurrences below it
+        // stay as they are: a series' offer decides nothing until it is taken up.
+        proposals.forEach { proposal ->
+            key(proposal.event.id) {
+                SeriesProposalCard(
+                    proposal = proposal,
+                    onAdopt = viewModel::openSeries,
+                    onKeepSingle = { viewModel.keepSeriesSingle(proposal.event) },
+                )
             }
         }
 
@@ -535,3 +549,61 @@ private fun SeriesPattern.describe(): String {
 /** "Mo, 19. Oktober bis Sa, 24. Oktober", or the one day when both ends are the same. */
 private fun LocalDate.rangeText(to: LocalDate): String =
     if (this == to) formatLong() else "${formatLong()} bis ${to.formatLong()}"
+
+/**
+ * A recurring series found among the undecided appointments: one question for the
+ * whole series, or the reason Eta cannot take it on. The occurrences stay listed
+ * below either way, so the question decides nothing for the user by itself.
+ */
+@Composable
+private fun SeriesProposalCard(
+    proposal: SeriesProposal,
+    onAdopt: (SeriesProposal.Offer) -> Unit,
+    onKeepSingle: () -> Unit,
+) {
+    EtaSurface(modifier = Modifier.fillMaxWidth(), contentPadding = EtaTheme.spacing.md) {
+        Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
+            when (proposal) {
+                is SeriesProposal.Offer -> {
+                    EtaText(
+                        text = "„${proposal.event.title}“ wiederholt sich ${proposal.repeats()} – " +
+                            "als wiederkehrende Aufgabe übernehmen?",
+                        style = EtaTheme.typography.body,
+                    )
+                    Row(horizontalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
+                        EtaButton(
+                            text = "Einzeln lassen",
+                            style = EtaButtonStyle.Secondary,
+                            onClick = onKeepSingle,
+                        )
+                        Spacer(Modifier.weight(1f))
+                        EtaButton(text = "Übernehmen", onClick = { onAdopt(proposal) })
+                    }
+                }
+
+                is SeriesProposal.Refused -> {
+                    EtaText(
+                        text = "„${proposal.event.title}“ wiederholt sich, Eta kann das nicht übernehmen. " +
+                            proposal.reason,
+                        style = EtaTheme.typography.body,
+                        color = EtaTheme.colors.textSecondary,
+                    )
+                    EtaButton(
+                        text = "Verstanden",
+                        style = EtaButtonStyle.Secondary,
+                        onClick = onKeepSingle,
+                    )
+                }
+            }
+        }
+    }
+}
+
+/** "jeden Mo 08:00 bis Sa, 5. Februar", "alle 3 Wochen Mi 08:00" — the offer's sentence. */
+private fun SeriesProposal.Offer.repeats(): String {
+    val days = formatWeekdays(pattern.weekdays)
+    val rhythm = if (pattern.weeks == 1) "jeden $days" else "alle ${pattern.weeks} Wochen $days"
+    val at = if (event.allDay) "" else " " + event.start.formatClock()
+    val until = pattern.lastDate?.let { " bis ${it.formatLong()}" }.orEmpty()
+    return rhythm + at + until
+}

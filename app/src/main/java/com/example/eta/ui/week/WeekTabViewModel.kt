@@ -448,6 +448,7 @@ class WeekTabViewModel(
 
         viewModelScope.launch {
             recurringTaskService.reschedule(group.ids, days, start, duration)
+            taskStartCoordinator.reschedule()
             // A warning, not a refusal — two things at once can be meant, and
             // the same collision is said in the Listen tab's form.
             _notice.value = if (clashes.isEmpty()) {
@@ -468,6 +469,7 @@ class WeekTabViewModel(
         if (attributes.weekdays.isEmpty()) return
         viewModelScope.launch {
             recurringTaskService.saveGroup(ids = group.ids, edit = attributes.toEdit(name, note))
+            taskStartCoordinator.reschedule()
         }
     }
 
@@ -479,6 +481,7 @@ class WeekTabViewModel(
         if (attributes.weekdays.isEmpty()) return
         viewModelScope.launch {
             recurringTaskService.saveWeekday(ids = group.ids, day = day, edit = attributes.toEdit(name, note))
+            taskStartCoordinator.reschedule()
         }
     }
 
@@ -487,6 +490,7 @@ class WeekTabViewModel(
         if (attributes.weekdays.isEmpty()) return
         viewModelScope.launch {
             recurringTaskService.createGroup(attributes.toEdit(name, note))
+            taskStartCoordinator.reschedule()
         }
     }
 

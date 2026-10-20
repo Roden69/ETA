@@ -1,0 +1,74 @@
+name: Android emulator tests
+
+on:
+  schedule:
+    - cron: '30 2 * * *'
+  workflow_dispatch:
+  # Dialog and device flows are release gates on every PR as well as nightly.
+  pull_request:
+    branches:
+      - main
+      - 'dev/**'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: android-emulator-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  connected:
+    name: Instrumented tests (API 35 emulator)
+    runs-on: ubuntu-24.04
+    timeout-minutes: 60
+    permissions:
+      contents: read
+    steps:
+      - name: Check out source
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Enable KVM for the emulator
+        run: |
+          set -euo pipefail
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - name: Set up Java 25
+        uses: actions/setup-java@de7274f081f381c8f8158605e0321c36c376e2e6 # v6.0.1
+        with:
+          distribution: temurin
+          java-version: '25'
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@be39fa834029ff78f1a44aa3bb0819b8fc2bd8fd # v4.0.4
+        with:
+          packages: platforms;android-37.0 build-tools;36.0.0 platform-tools emulator system-images;android-35;google_apis;x86_64
+          log-accepted-android-sdk-licenses: false
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@3f5f9adaf7d9fecd50b5935e54106014257a94e6 # v6.4.0
+        with:
+          cache-provider: basic
+      - name: Run instrumented tests on API 35 emulator
+        # Pinned to the commit of tag v2.38.0 (latest v2 release at pinning time).
+        uses: ReactiveCircus/android-emulator-runner@a421e43855164a8197daf9d8d40fe71c6996bb0d # v2.38.0
+        with:
+          api-level: 35
+          target: google_apis
+          arch: x86_64
+          avd-name: eta-ci-35
+          disable-animations: true
+          disable-spellchecker: true
+          script: bash ./gradlew --console=plain --stacktrace connectedDebugAndroidTest
+      - name: Summarize instrumented test results
+        if: always()
+        run: python3 scripts/test_summary.py app/build/outputs/androidTest-results --title "Instrumented tests (API 35 emulator)" >> "$GITHUB_STEP_SUMMARY"
+      - name: Upload instrumented test reports
+        if: always()
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: eta-androidtest-reports
+          path: |
+            app/build/reports/androidTests/**
+            app/build/outputs/androidTest-results/**
+          if-no-files-found: ignore

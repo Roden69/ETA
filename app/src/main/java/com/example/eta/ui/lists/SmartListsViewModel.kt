@@ -2,6 +2,7 @@ package com.example.eta.ui.lists
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.eta.alarm.TaskStartCoordinator
 import com.example.eta.data.local.BlockWithItem
 import com.example.eta.data.repository.ItemRepository
 import com.example.eta.data.repository.PlanRepository
@@ -130,6 +131,7 @@ class SmartListsViewModel(
     private val planRepository: PlanRepository,
     private val scheduleMaintenance: ScheduleMaintenance,
     private val recurringTaskService: RecurringTaskService,
+    private val taskStartCoordinator: TaskStartCoordinator,
     private val reevaluationService: ReevaluationService,
     private val subtaskRepository: SubtaskRepository,
     private val setupRepository: SetupRepository,
@@ -305,8 +307,8 @@ class SmartListsViewModel(
                         } else {
                             _notice.value = "»$name« liegt in der Sammelliste. In der Wochenliste " +
                                 (if (owed.size == 1) "wartet noch ein Ziel" else "warten noch ${owed.size} Ziele") +
-                                " aus der letzten Woche — erst wenn sie abgearbeitet oder " +
-                                "zurückgegeben sind, nimmt die Woche Neues auf."
+                                " aus der letzten Woche. Die Wochenplanung zeigt sie oben in der " +
+                                "Sammelliste: übernehmen oder zurückgeben, dann nimmt die Woche Neues auf."
                         }
                     }
                 }
@@ -321,6 +323,12 @@ class SmartListsViewModel(
      */
     fun takeOfferedIntoWeek(item: Item) {
         viewModelScope.launch {
+            // A step that was never filled in cannot be a week goal; the editor answers it.
+            if (!item.isConcretized) {
+                _notice.value = "»${item.name}« ist noch unvollständig. Bitte zuerst über Bearbeiten " +
+                    "Kategorie, Priorität und Dauer eintragen — dann kann es in die Woche."
+                return@launch
+            }
             val cycleStart = weekPlanningService.cycleStart()
             val owed = itemRepository.observeUnfinishedWeekGoals(cycleStart).first()
             if (owed.isEmpty()) {
@@ -328,7 +336,8 @@ class SmartListsViewModel(
             } else {
                 _notice.value = "»${item.name}« ist jetzt dran, bleibt aber in der Sammelliste. " +
                     (if (owed.size == 1) "Erst das offene Ziel" else "Erst die ${owed.size} offenen Ziele") +
-                    " aus der letzten Woche verplanen oder zurückgeben."
+                    " aus der letzten Woche verplanen oder zurückgeben — sie stehen oben in der " +
+                    "Sammelliste der Wochenplanung."
             }
         }
     }
@@ -338,6 +347,7 @@ class SmartListsViewModel(
         if (attributes.weekdays.isEmpty()) return
         viewModelScope.launch {
             recurringTaskService.createGroup(attributes.toEdit(name, note))
+            taskStartCoordinator.reschedule()
         }
     }
 
@@ -424,6 +434,7 @@ class SmartListsViewModel(
                 startTimes = attributes.ownStartTimes,
             )
             scheduleMaintenance.topUp()
+            taskStartCoordinator.reschedule()
         }
     }
 
@@ -446,12 +457,16 @@ class SmartListsViewModel(
                 ids = group.ids,
                 edit = attributes.toEdit(name, note),
             )
+            taskStartCoordinator.reschedule()
         }
     }
 
     /** Ends a standing task; past occurrences stay in the Erfolgsliste. */
     fun endRecurringGroup(group: RecurringGroup) {
-        viewModelScope.launch { recurringTaskService.endGroup(group.ids) }
+        viewModelScope.launch {
+            recurringTaskService.endGroup(group.ids)
+            taskStartCoordinator.reschedule()
+        }
     }
 
     /**

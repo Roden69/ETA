@@ -13,6 +13,7 @@ import com.example.eta.data.repository.ConflictingBlock
 import com.example.eta.data.repository.PlanRepository
 import com.example.eta.data.repository.ScheduleMaintenance
 import com.example.eta.data.repository.SeriesOutcome
+import com.example.eta.data.repository.SeriesProposal
 import com.example.eta.data.repository.SyncOutcome
 import com.example.eta.domain.calendar.SeriesPattern
 import com.example.eta.domain.calendar.SeriesReading
@@ -126,6 +127,17 @@ class CalendarEventsViewModel(
     private val _seriesNotice = MutableStateFlow<SeriesNotice?>(null)
     val seriesNotice: StateFlow<SeriesNotice?> = _seriesNotice.asStateFlow()
 
+    private val _proposals = MutableStateFlow<List<SeriesProposal>>(emptyList())
+    private val adopting = mutableSetOf<Pair<String, String?>>()
+    private val _adoptingSeries = MutableStateFlow(false)
+    val adoptingSeries: StateFlow<Boolean> = _adoptingSeries.asStateFlow()
+
+    /**
+     * The series the step offers, one per series: an offer to take it on, or the
+     * reason Eta cannot. Read from the undecided appointments, without a tap.
+     */
+    val proposals: StateFlow<List<SeriesProposal>> = _proposals.asStateFlow()
+
     val uiState: StateFlow<CalendarStepUiState> = combine(
         calendarRepository.observePending(from, to),
         planRepository.observeRange(from, to),
@@ -140,6 +152,8 @@ class CalendarEventsViewModel(
             error = failure,
             clashes = pendingClashes(events, blocks).mapValues { (_, entries) -> entries.map { it.describe() } },
         )
+    }.combine(adoptingSeries) { state, adopting ->
+        state.copy(syncing = state.syncing || adopting)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -168,7 +182,13 @@ class CalendarEventsViewModel(
             syncing.value = true
             error.value = null
             when (val outcome = syncService.refresh(from, to)) {
-                is SyncOutcome.Ok -> connected.value = true
+                is SyncOutcome.Ok -> {
+                    connected.value = true
+                    // The schedule follows what the calendar now shows, so a holiday of
+                    // an adopted series stops carrying its block here, not at next start.
+                    scheduleMaintenance.topUpUntil(to)
+                    reloadProposals()
+                }
                 is SyncOutcome.NotConnected -> connected.value = false
                 is SyncOutcome.NeedsConsent -> {
                     connected.value = true
@@ -249,10 +269,10 @@ class CalendarEventsViewModel(
      * represent answers with the reason, and nothing is made.
      */
     fun requestSeries(event: CalendarEvent) {
-        val seriesId = event.seriesId ?: return
+        if (event.seriesId == null) return
         viewModelScope.launch {
             _seriesNotice.value = null
-            when (val outcome = syncService.readSeries(event.calendarId, seriesId)) {
+            when (val outcome = syncService.readSeries(event)) {
                 is SeriesOutcome.Ok -> when (val reading = outcome.reading) {
                     is SeriesReading.Repeats -> _seriesOffer.value = SeriesOffer(event, reading.pattern)
                     is SeriesReading.Unsupported ->
@@ -272,6 +292,30 @@ class CalendarEventsViewModel(
         _seriesOffer.value = null
     }
 
+    /** Re-reads the offers from the undecided appointments as they stand now. */
+    private suspend fun reloadProposals() {
+        _proposals.value = syncService.proposeSeries(calendarRepository.pendingFor(from, to))
+            .filterNot { (it.event.calendarId to it.event.seriesId) in adopting }
+    }
+
+    /** "Übernehmen" on an offer: the same form as from an occurrence, for the whole series. */
+    fun openSeries(offer: SeriesProposal.Offer) {
+        if ((offer.event.calendarId to offer.event.seriesId) in adopting) return
+        _seriesOffer.value = SeriesOffer(offer.event, offer.pattern)
+    }
+
+    /**
+     * "Einzeln lassen" on an offer, and "Verstanden" on a refusal: the series stays a
+     * list of single appointments and is not asked about again.
+     */
+    fun keepSeriesSingle(event: CalendarEvent) {
+        val seriesId = event.seriesId ?: return
+        viewModelScope.launch {
+            calendarRepository.declineSeries(event.calendarId, seriesId)
+            reloadProposals()
+        }
+    }
+
     /**
      * Makes the series into recurring tasks, one per weekday, with the hour and
      * length the form gives. The offer is cleared first, so a second tap cannot
@@ -280,8 +324,18 @@ class CalendarEventsViewModel(
     fun adoptSeries(attributes: AppointmentAttributes) {
         val offer = _seriesOffer.value ?: return
         _seriesOffer.value = null
+        val key = offer.event.calendarId to offer.event.seriesId
+        if (!adopting.add(key)) return
+        _proposals.value = _proposals.value.filterNot { (it.event.calendarId to it.event.seriesId) == key }
+        _adoptingSeries.value = true
         viewModelScope.launch {
-            importService.adoptSeries(offer.event, offer.pattern, attributes.toDetails())
+            try {
+                importService.adoptSeries(offer.event, offer.pattern, attributes.toDetails())
+                reloadProposals()
+            } finally {
+                adopting.remove(key)
+                _adoptingSeries.value = adopting.isNotEmpty()
+            }
         }
     }
 

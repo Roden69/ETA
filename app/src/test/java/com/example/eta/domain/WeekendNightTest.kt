@@ -1,5 +1,6 @@
 package com.example.eta.domain
 
+import com.example.eta.domain.model.ItemRole
 import com.example.eta.domain.model.RecurrenceRule
 import com.example.eta.domain.planning.nextWake
 import com.example.eta.domain.planning.sleepStretches
@@ -110,7 +111,8 @@ class WeekendNightTest {
     @Test
     fun `every night gets its own winding down and morning`() {
         val items = lateWeekend.recurringItems(now)
-        val owned = items.filter { isOwnedBySettings(it.id) }
+        // Free time is one daily task, owned by the settings but not a night's.
+        val owned = items.filter { isOwnedBySettings(it.id) && it.role != ItemRole.FREE_TIME }
 
         assertEquals(14, owned.size)
         assertEquals(owned.size, owned.map { it.id }.toSet().size)
@@ -133,10 +135,10 @@ class WeekendNightTest {
     }
 
     @Test
-    fun `with every night alike the two stay single daily tasks`() {
+    fun `with every night alike the three stay single daily tasks`() {
         val configured = draft.copy(bedPrepTime = LocalTime(22, 0), morningDuration = 45.minutes)
         val owned = configured.recurringItems(now).filter { isOwnedBySettings(it.id) }
-        assertEquals(setOf("setup:bedprep", "setup:morning"), owned.map { it.id }.toSet())
+        assertEquals(setOf("setup:bedprep", "setup:morning", "setup:freetime"), owned.map { it.id }.toSet())
         assertTrue(owned.all { it.recurrenceRule == RecurrenceRule.Daily })
         assertFalse(isOwnedBySettings("setup:sport-tuesday"))
     }

@@ -27,6 +27,10 @@ interface ItemDao {
     @Query("SELECT * FROM items WHERE id = :id")
     suspend fun findById(id: String): Item?
 
+    /** One consistent item snapshot for diagnostics and cross-list invariants. */
+    @Query("SELECT * FROM items ORDER BY createdAt")
+    suspend fun findAll(): List<Item>
+
     /** Backs each of the six list views; ordering is refined per screen. */
     @Query("SELECT * FROM items WHERE stage = :stage ORDER BY createdAt")
     fun observeByStage(stage: Stage): Flow<List<Item>>

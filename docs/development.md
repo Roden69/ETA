@@ -55,7 +55,7 @@ Beide Installationen sind getrennt:
 - **Eigene Wecker im Gerät:** Wecker, die Eta in die Uhr-App des Telefons schreibt, landen in deren Liste. Installiert man beide Varianten, kann es so doppelte Wecker geben. Das ist ein offener Punkt, keine Schutzmaßnahme.
 - **Signatur:** Ein Update mit einer anderen Signatur derselben Application-ID ist nicht möglich. Für die Fork-Variante ist das unkritisch, weil sie eine eigene ID hat; die Originalinstallation bleibt unangetastet.
 
-Zum Testen des Originals ist die Fork-Variante gedacht, nicht als Ersatz. Die Instrumentierungstests erwarten die Basis-ID und laufen gegen den Debug-Build.
+Zum Testen des Originals ist die Fork-Variante gedacht, nicht als Ersatz. Die Instrumentierungstests unter `app/src/androidTest` erwarten die Basis-ID `com.example.erik_iteration_2` und laufen gegen den Debug-Build; siehe [Instrumentierte Tests auf dem Emulator](#instrumentierte-tests-auf-dem-emulator).
 
 ## Lokale Voraussetzungen und SDK
 
@@ -86,7 +86,26 @@ bash ./gradlew --console=plain assembleRelease
 
 Eine APK kann eine bestehende Installation nur aktualisieren, wenn sie mit demselben Schlüssel signiert ist. Bei einer Signaturabweichung nicht deinstallieren, um das Update zu erzwingen: Dabei gingen die lokalen App-Daten verloren.
 
-Tests, Kompilierung und Lint ersetzen keine Prüfung der wirklichen Android-Oberfläche. Bei Änderungen an Screens, Navigation, Berechtigungen, Alarmen, Kalenderintegration, Bedienabläufen oder Darstellung muss die tatsächliche Oberfläche auf einem physischen Android-Gerät mit der relevanten Nutzerroute geprüft werden. Instrumentierte Compose-Tests können ergänzen, aber sie allein belegen nicht, dass Layout, Systemdialoge und reale Geräteintegration wie beabsichtigt funktionieren.
+Tests, Kompilierung und Lint ersetzen keine Prüfung der wirklichen Android-Oberfläche. Bei Änderungen an Screens, Navigation, Berechtigungen, Alarmen, Kalenderintegration, Bedienabläufen oder Darstellung muss die tatsächliche Oberfläche auf einem physischen Android-Gerät mit der relevanten Nutzerroute geprüft werden. Die Schritte dafür stehen in der [Gerätecheckliste](device-checklist.md). Die Emulator-Tests unten ersetzen diese Prüfung nicht; sie belegen nur Erststart und Alarmeinrichtung im Emulator.
+
+## Instrumentierte Tests auf dem Emulator
+
+Die Instrumentierungstests liegen unter `app/src/androidTest/java/com/example/eta/`:
+
+- `AppSmokeTest`: Paket-ID und Benachrichtigungskanäle. Der Test liest nur und läuft auf jedem Gerät.
+- `FirstRunSmokeTest`: Erststart mit Willkommensseite, Abschluss der Einrichtung, Rückkehr zum Dashboard nach einem Neustart der Activity und die beiden Planungswecker. Vor jedem Test setzt er die Datenbank der App zurück. Auf einem Gerät, dessen Build-Fingerprint keinen Emulator nennt, wird er übersprungen.
+
+Lokal auf einem Emulator mit Android 35 (`google_apis`, x86_64) starten, dann den Serial explizit setzen:
+
+```bash
+sdkmanager "system-images;android-35;google_apis;x86_64"
+avdmanager create avd -n eta-ci-35 -k "system-images;android-35;google_apis;x86_64"
+emulator -avd eta-ci-35 -no-window -no-audio -no-boot-anim -gpu swiftshader_indirect
+adb -s emulator-5554 wait-for-device
+ANDROID_SERIAL=emulator-5554 bash ./gradlew --console=plain connectedDebugAndroidTest
+```
+
+`connectedDebugAndroidTest` ohne `ANDROID_SERIAL` installiert auf jedes angeschlossene Gerät; den Serial deshalb immer setzen, damit ein Telefon nie als Ziel dient. Meldet der Emulator `Unable to connect character device modem`, startet man ihn mit `-feature -ModemSimulator`. Die nächtliche CI-Variante beschreibt [CI/CD](ci-cd.md).
 
 ## Daten- und Signiersicherheit
 

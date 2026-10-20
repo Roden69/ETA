@@ -88,6 +88,8 @@ import com.example.eta.ui.setup.OnSetupChange
 import com.example.eta.ui.setup.PlanningStep
 import com.example.eta.ui.setup.SleepStep
 import com.example.eta.ui.components.EtaField
+import com.example.eta.ui.components.EtaTimePicker
+import kotlin.time.Duration
 import com.example.eta.ui.components.EtaTextField
 import com.example.eta.ui.format.formatClock
 import com.example.eta.ui.format.formatLong
@@ -267,7 +269,7 @@ fun SettingsScreen(
                         when (page) {
                             SettingsPage.SLEEP -> {
                                 EtaText(
-                                    text = "Essen, Hausputz, Sport, Freizeit, Achtsamkeit und " +
+                                    text = "Essen, Hausputz, Sport, Achtsamkeit und " +
                                         "Arbeit sind wiederkehrende Aufgaben und werden im " +
                                         "Reiter Listen bearbeitet. Hier bleibt, was an deiner " +
                                         "Nacht hängt.",
@@ -298,7 +300,13 @@ fun SettingsScreen(
                                 onStartTutorial?.let { FeatureTutorialsBox(onStart = it) }
                             }
                             SettingsPage.FLEXIBILITY -> FlexibilityBox(setup, viewModel::setFeature)
-                            SettingsPage.BREAKS -> BreakCheckerBox(setup, viewModel::setFeature)
+                            // The checker applies at once; the default break and the
+                            // free time are answers like the rest, saved with "Sichern".
+                            SettingsPage.BREAKS -> {
+                                BreakCheckerBox(setup, viewModel::setFeature)
+                                DefaultBreakBox(setup, viewModel::update)
+                                FreeTimeBox(setup, viewModel::update)
+                            }
                             SettingsPage.STATISTICS -> StatisticsBox(setup, viewModel::setFeature)
                             SettingsPage.INFLATION -> InflationBox(setup, viewModel::update)
                             SettingsPage.CANCELLATION -> CancellationBox(setup, viewModel::update)
@@ -306,11 +314,9 @@ fun SettingsScreen(
                         }
 
                         // The switches of the Advanced Features, the Flexibilität
-                        // and the Pausenchecker apply at once and have nothing
-                        // to save.
+                        // and the Statistiken apply at once and have nothing to save.
                         if (page != SettingsPage.FEATURES &&
                             page != SettingsPage.FLEXIBILITY &&
-                            page != SettingsPage.BREAKS &&
                             page != SettingsPage.STATISTICS
                         ) {
                             Row(horizontalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
@@ -355,7 +361,7 @@ private enum class SettingsPage(val title: String, val section: SettingsSection)
     ANNOUNCEMENT("Audio", SettingsSection.SETUP),
     FEATURES("Advanced Features", SettingsSection.SETUP),
     FLEXIBILITY("Flexibilität", SettingsSection.SETUP),
-    BREAKS("Pausenchecker", SettingsSection.SETUP),
+    BREAKS("Pausen & Freizeit", SettingsSection.SETUP),
     STATISTICS("Statistiken", SettingsSection.SETUP),
     INFLATION("Wertverfall", SettingsSection.SETUP),
     CANCELLATION("Absagen", SettingsSection.SETUP),
@@ -1087,6 +1093,82 @@ private fun BreakCheckerBox(setup: UserSetup, onChange: OnSetupChange) {
                         minimum = 1.hours,
                     )
                 }
+            }
+        }
+    }
+}
+
+/**
+ * "Pause nach Aufgaben": the break a ToDo card brings to the day when its own
+ * "Pause danach" is empty. Saved with "Sichern"; nothing else is laid down again.
+ */
+@Composable
+private fun DefaultBreakBox(setup: UserSetup, onChange: OnSetupChange) {
+    EtaSurface(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
+            EtaText(text = "Pause nach Aufgaben", style = EtaTheme.typography.heading)
+            EtaText(
+                text = "Wird mit „Sichern“ übernommen.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textMuted,
+            )
+            EtaField(
+                label = "Standardpause für ToDos",
+                hint = "Bekommt ein ToDo beim Einplanen keine eigene „Pause danach“, gilt diese " +
+                    "Pause. Ohne Eintrag (keine) gibt es keine Standardpause. Schon " +
+                    "eingeplante Blöcke behalten ihre Pause. Wiederkehrende Aufgaben und " +
+                    "Kalendertermine sind nicht betroffen.",
+            ) {
+                EtaDurationPicker(
+                    value = setup.defaultBreakAfter ?: Duration.ZERO,
+                    onValueChange = { length ->
+                        onChange { current -> current.copy(defaultBreakAfter = length.takeIf { it > Duration.ZERO }) }
+                    },
+                    step = 5.minutes,
+                )
+            }
+        }
+    }
+}
+
+/**
+ * "Tägliche Freizeit": the time and length of the free time every day.
+ *
+ * The one answer on this page that lays tasks down again: saving regenerates the
+ * free time task from the first open day (see `SetupRepository.saveSettings`), so
+ * an edit to it on the Listen tab is replaced by these answers.
+ */
+@Composable
+private fun FreeTimeBox(setup: UserSetup, onChange: OnSetupChange) {
+    EtaSurface(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
+            EtaText(text = "Tägliche Freizeit", style = EtaTheme.typography.heading)
+            EtaText(
+                text = "Wird mit „Sichern“ übernommen: heutige Freizeit, die noch nicht begonnen " +
+                    "hat, und spätere offene Tage werden neu eingeplant. Ein bestätigter Morgen " +
+                    "bleibt. Änderungen an der Freizeit-Aufgabe im Reiter Listen werden ersetzt.",
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textMuted,
+            )
+            EtaField(label = "Beginn") {
+                EtaTimePicker(
+                    value = setup.freeTime.start,
+                    onValueChange = { time ->
+                        onChange { current -> current.copy(freeTime = current.freeTime.copy(start = time)) }
+                    },
+                )
+            }
+            EtaField(
+                label = "Dauer",
+                hint = "Keine (0) nimmt die Freizeit aus dem Plan.",
+            ) {
+                EtaDurationPicker(
+                    value = setup.freeTime.duration,
+                    onValueChange = { length ->
+                        onChange { current -> current.copy(freeTime = current.freeTime.copy(duration = length)) }
+                    },
+                    step = 15.minutes,
+                )
             }
         }
     }
