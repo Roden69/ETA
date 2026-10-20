@@ -3,6 +3,7 @@ package com.example.eta.domain.model
 import androidx.room3.Entity
 import androidx.room3.PrimaryKey
 import kotlin.time.Instant
+import kotlinx.datetime.LocalDate
 
 /**
  * One calendar the connected Google account can see, and whether it counts.
@@ -32,4 +33,8 @@ data class CalendarSource(
     val isForeign: Boolean,
     val enabled: Boolean,
     val updatedAt: Instant,
+    /** The last fully fetched window; absence is meaningful only inside it. */
+    val syncedFrom: LocalDate? = null,
+    val syncedThrough: LocalDate? = null,
+    val syncToken: String? = null,
 )

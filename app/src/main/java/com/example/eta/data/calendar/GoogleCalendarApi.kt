@@ -51,6 +51,7 @@ data class RemoteSeries(
     /** The `recurrence` lines: `RRULE:…`, and any `EXDATE`/`RDATE` next to it. */
     val recurrence: List<String>,
     val start: LocalDate?,
+    val startTime: LocalTime? = null,
 )
 
 /** What an all-day event is offered at until the user says otherwise. */
@@ -173,12 +174,12 @@ class GoogleCalendarApi(private val timeZone: TimeZone = TimeZone.currentSystemD
             val recurrence = item.optJSONArray("recurrence")
             val lines = (0 until (recurrence?.length() ?: 0)).map { recurrence!!.getString(it) }
             val start = item.optJSONObject("start")
-            val day = start?.optString("dateTime")?.ifBlank { null }
+            val first = start?.optString("dateTime")?.ifBlank { null }
                 ?.let { runCatching { Instant.parse(it) }.getOrNull() }
-                ?.toLocalDateTime(timeZone)?.date
-                ?: start?.optString("date")?.ifBlank { null }
-                    ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
-            RemoteSeries(recurrence = lines, start = day)
+                ?.toLocalDateTime(timeZone)
+            val day = first?.date ?: start?.optString("date")?.ifBlank { null }
+                ?.let { runCatching { LocalDate.parse(it) }.getOrNull() }
+            RemoteSeries(recurrence = lines, start = day, startTime = first?.time)
         }
 
     /**

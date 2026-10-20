@@ -19,6 +19,9 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
 import kotlinx.datetime.todayIn
+import java.util.UUID
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 
 /** What one round of syncing produced. */
 data class CalendarSyncSummary(
@@ -41,7 +44,9 @@ class CalendarRepository(
     private val api: CalendarApi,
     private val declinedSeries: DeclinedSeriesStore,
     private val clock: Clock = Clock.System,
+    private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) {
+    private val syncMutex = Mutex()
 
     fun observeSources(): Flow<List<CalendarSource>> = dao.observeSources()
 
@@ -90,6 +95,9 @@ class CalendarRepository(
                     isForeign = calendar.isForeign,
                     enabled = known[calendar.id]?.enabled ?: calendar.isPrimary,
                     updatedAt = now,
+                    syncedFrom = known[calendar.id]?.syncedFrom,
+                    syncedThrough = known[calendar.id]?.syncedThrough,
+                    syncToken = known[calendar.id]?.syncToken,
                 )
             },
         )
@@ -116,11 +124,11 @@ class CalendarRepository(
      * no occurrence, so the schedule can only tell them apart where a sync has read
      * the calendar — and the planning steps alone read only about a week ahead.
      */
-    suspend fun syncEvents(token: String, from: LocalDate, to: LocalDate): Int {
+    suspend fun syncEvents(token: String, from: LocalDate, to: LocalDate): Int = syncMutex.withLock {
         val calendars = dao.findEnabledSources()
-        if (calendars.isEmpty()) return 0
+        if (calendars.isEmpty()) return@withLock 0
 
-        val today = clock.todayIn(TimeZone.currentSystemDefault())
+        val today = clock.todayIn(timeZone)
         val windowFrom = minOf(from, today)
         val windowTo = maxOf(to, today.plus(DatePeriod(days = SCHEDULE_HORIZON_DAYS)))
 
@@ -130,9 +138,9 @@ class CalendarRepository(
         val seriesItems = dao.findSeries().map { it.itemId }.toSet()
         val liveDefinitions = dao.findLiveSeries()
         val now = clock.now()
+        val snapshot = UUID.randomUUID().toString()
 
-        dao.upsertEvents(
-            remote.map { event ->
+        val merged = remote.map { event ->
                 val activeDefinitions = liveDefinitions
                     .filter { it.calendarId == event.calendarId && it.seriesId == event.seriesId }
                     .filter { it.repeatUntil == null || event.date <= it.repeatUntil }
@@ -147,19 +155,22 @@ class CalendarRepository(
                 } else {
                     row
                 }
-                merge(event, existing, adoptedItemId, now)
+                merge(event, existing, adoptedItemId, now).copy(seenInSync = snapshot)
+            }
+        val syncedIds = calendars.map { it.id }.toSet()
+        val removed = dao.findAdoptedSeriesOccurrences(windowFrom, windowTo)
+            .filter { it.calendarId in syncedIds && it.id !in remoteIds }
+        dao.commitSnapshot(
+            sources = calendars.map {
+                it.copy(syncedFrom = windowFrom, syncedThrough = windowTo, syncToken = snapshot)
             },
+            events = merged,
+            from = windowFrom,
+            through = windowTo,
+            keep = remoteIds.ifEmpty { setOf("") }.toList(),
+            removedAdoptions = removed,
         )
-        // What the calendar no longer offers and nobody has decided about is gone.
-        // Room binds an empty list as NULL, which would match nothing; no event id is
-        // blank, so a blank stand-in keeps "nothing offered" meaning "delete all".
-        dao.deletePendingNotIn(windowFrom, windowTo, remoteIds.ifEmpty { setOf("") }.toList())
-        // An adopted series' occurrence Google no longer shows is gone too: its card
-        // was the decision, and a holiday must not keep counting as an occurrence.
-        dao.deleteEvents(
-            dao.findAdoptedSeriesOccurrences(windowFrom, windowTo).filter { it.id !in remoteIds },
-        )
-        return remote.size
+        remote.size
     }
 
     private fun idOf(event: RemoteEvent) = CalendarEvent.idOf(event.calendarId, event.eventId)
@@ -202,6 +213,11 @@ class CalendarRepository(
     suspend fun isSeriesAdopted(calendarId: String, seriesId: String): Boolean =
         seriesKey(calendarId, seriesId) in adoptedSeries()
 
+
+    /** Existing live cards make a repeated adoption an idempotent read. */
+    suspend fun seriesItemIds(calendarId: String, seriesId: String): List<String> =
+        dao.findLiveSeries().filter { it.calendarId == calendarId && it.seriesId == seriesId }
+            .map { it.itemId }
     /**
      * Links the cards made from a series to it, and takes every undecided
      * occurrence of that series off the list.

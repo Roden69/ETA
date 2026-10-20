@@ -87,6 +87,8 @@ data class CalendarEvent(
     val conflictNotified: Boolean = false,
     val createdAt: Instant,
     val updatedAt: Instant,
+    /** Snapshot that last confirmed remote presence, independent of the user's decision. */
+    val seenInSync: String? = null,
 ) {
     @get:Ignore
     val isPending: Boolean get() = decision == EventDecision.PENDING

@@ -4,6 +4,7 @@ import androidx.room3.Dao
 import androidx.room3.Delete
 import androidx.room3.Query
 import androidx.room3.Upsert
+import androidx.room3.Transaction
 import com.example.eta.domain.model.CalendarEvent
 import com.example.eta.domain.model.CalendarSeries
 import com.example.eta.domain.model.CalendarSource
@@ -111,10 +112,11 @@ interface CalendarDao {
         DELETE FROM calendar_events
         WHERE date BETWEEN :from AND :to
           AND decision = 'PENDING'
+          AND calendarId IN (:calendarIds)
           AND id NOT IN (:keep)
         """,
     )
-    suspend fun deletePendingNotIn(from: LocalDate, to: LocalDate, keep: List<String>): Int
+    suspend fun deletePendingNotIn(from: LocalDate, to: LocalDate, keep: List<String>, calendarIds: List<String>): Int
 
     @Query("DELETE FROM calendar_events WHERE calendarId NOT IN (:keep)")
     suspend fun deleteEventsOfCalendarsNotIn(keep: List<String>): Int
@@ -140,6 +142,22 @@ interface CalendarDao {
     @Delete
     suspend fun deleteEvents(events: List<CalendarEvent>)
 
+    /** Rows and their authoritative coverage become visible together, never half a sync. */
+    @Transaction
+    suspend fun commitSnapshot(
+        sources: List<CalendarSource>,
+        events: List<CalendarEvent>,
+        from: LocalDate,
+        through: LocalDate,
+        keep: List<String>,
+        removedAdoptions: List<CalendarEvent>,
+    ) {
+        upsertEvents(events)
+        deletePendingNotIn(from, through, keep, sources.map { it.id })
+        deleteEvents(removedAdoptions)
+        upsertSources(sources)
+    }
+
     /**
      * Google's occurrence days of every series, in the calendars that are switched on.
      *
@@ -155,6 +173,7 @@ interface CalendarDao {
         INNER JOIN calendar_sources
           ON calendar_sources.id = calendar_events.calendarId
          AND calendar_sources.enabled = 1
+         AND calendar_sources.syncToken = calendar_events.seenInSync
         WHERE calendar_events.seriesId IS NOT NULL
           AND calendar_events.date BETWEEN :from AND :to
         """,
