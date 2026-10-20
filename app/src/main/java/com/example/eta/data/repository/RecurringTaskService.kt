@@ -67,9 +67,11 @@ data class RecurringEdit(
  * Changing the standing schedule after the fact — the task itself, not one day
  * of it.
  *
- * **Confirmed days keep what they have.** Today is being lived, and tomorrow, once
- * its plan is confirmed, is a promise already made; an edit to the definition
- * reaching into either would rewrite a plan behind the user's back. Every
+ * **Confirmed days keep what they have.** Tomorrow, once its plan is confirmed, is
+ * a promise already made, and today keeps whatever has started or is done. What
+ * of today has not started yet is laid down again, unless it would start before
+ * now (see `isRelayableToday`). An edit reaching further into either would rewrite
+ * a plan behind the user's back. Every
  * occurrence after that is still only laid down ahead of time — the schedule
  * materializes three weeks out — so those still-open ones are taken off and laid
  * down again from the new definition. Leaving them would make an edit show up

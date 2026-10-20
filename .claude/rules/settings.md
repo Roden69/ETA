@@ -46,7 +46,7 @@ and the morning (`SETTINGS_OWNED_ITEM_IDS`: `setup:bedprep`, `setup:morning`), n
 here would overwrite every edit made on the Listen tab. The weekly social budget and its `SocialTimeBox` were removed in step 38, and
 `SettingsMessage.Saved` lost its conflict
 count, `UserSetup.conflicts()` having described answers that no longer describe the
-schedule.
+schedule. Afterwards today's open blocks that have not started yet are laid down again from the new answers (rule in `step-18-standing-schedule.md`); started, running, completed and called-off blocks stay.
 
 **Individual nights** are stored in `UserSetup.nightOverrides`, keyed by wake day.
 The sleep page lists these under "Einzelne Nächte" with bedtime, wake-up and reset

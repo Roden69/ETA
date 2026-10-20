@@ -41,9 +41,24 @@ tomorrow if tomorrow is confirmed; `relayOccurrences` clears the still-open bloc
 would have made every edit show up three weeks late, which is not what "only future
 ones change" meant. Completed and called-off blocks are never touched. That line lives
 on `PlanRepository` because three services draw it and three copies would be three
-chances for one to drift. **The frame of the day can keep paying nothing**:
-`RecurringAttributes.category` is nullable and the editor offers "Keine", or correcting
-the time of Pause would have made Pause pay Fokus points.
+chances for one to drift. The growth increment and the dynamic placement pass still
+use `lastKeptDay`/`firstOpenDay` unchanged.
+
+**Today is re-laid too, but only what has not started.** Before, an edit left today
+alone, so a changed bedtime or wake time showed up tomorrow while today's old block
+stayed. Now `relayOccurrences` takes off today's blocks of the edited definitions that
+are open, have no timer ever started, and start strictly after now (`isRelayableToday`,
+`domain/recurrence/EditRelay.kt`), and `topUp` lays them down again. Started, running,
+paused-with-timer, completed and called-off blocks stay. A block starting exactly now
+has begun and stays. A re-laid occurrence that would start before now is **not** laid
+today (`isLaidAfterEdit`): an open block whose time has passed would later count as
+missed. Confirmed tomorrow and every earlier day keep their rows as before. The same
+path serves the settings' bed-preparation and morning rows (`saveSettings`) and every
+edit on the Listen tab (`saveGroup`, `saveWeekday`, `reschedule`, `endGroup`).
+
+**The frame of the day can keep paying nothing**: `RecurringAttributes.category` is
+nullable and the editor offers "Keine", or correcting the time of Pause would have
+made Pause pay Fokus points.
 
 #### Overlap warnings
 
