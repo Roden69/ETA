@@ -9,6 +9,7 @@ import com.example.eta.domain.model.PlannedBlock
 import com.example.eta.domain.model.PointsTransaction
 import com.example.eta.domain.model.Priority
 import com.example.eta.domain.model.Stage
+import com.example.eta.domain.planning.WeekBudget
 import com.example.eta.domain.reevaluation.DailySettlement
 import com.example.eta.ui.attributes.TodoAttributes
 import com.example.eta.ui.concretize.ConcretizeViewModel
@@ -112,6 +113,41 @@ class WeekPlannerDriver internal constructor(
             state.collection.any { it.id == item.id }
         }
     }
+
+    /**
+     * An unfinished card of an earlier cycle, taken into the week through the
+     * GoalDialog: [attributes] concretize it and the same save puts it in the week.
+     */
+    suspend fun goal(item: Item, attributes: TodoAttributes) {
+        scenario.awaitState(vm.uiState, "\"${item.name}\" offered as an open goal") { state ->
+            (state.unfinished + state.collection).any { it.id == item.id }
+        }
+        vm.concretizeGoal(item, item.name, attributes, intoWeek = true)
+        scenario.awaitState(vm.uiState, "\"${item.name}\" in the week list") { state ->
+            state.weekList.any { it.id == item.id }
+        }
+    }
+
+    /** "In diese Woche übernehmen" on an open goal of an earlier cycle. */
+    suspend fun takeUnfinished(item: Item) {
+        scenario.awaitState(vm.uiState, "\"${item.name}\" among the open goals") { state ->
+            state.unfinished.any { it.id == item.id }
+        }
+        vm.takeUnfinishedIntoWeek(item)
+        scenario.awaitState(vm.uiState, "\"${item.name}\" in the week list") { state ->
+            state.weekList.any { it.id == item.id }
+        }
+    }
+
+    /** The week's budget as the screen shows it, once the planning has loaded. */
+    suspend fun budget(): WeekBudget = scenario.awaitState(vm.uiState, "the week budget loaded") { state ->
+        state.weekStart != null
+    }.budget
+
+    /** The open goals of an earlier cycle the screen shows at the top of the Sammelliste column. */
+    suspend fun openGoals(): List<Item> = scenario.awaitState(vm.uiState, "the week planner loaded") { state ->
+        state.weekEnd != state.weekStart
+    }.unfinished
 }
 
 /** The weekly planning screen for [scope], for the duration of [body]. */
@@ -143,6 +179,39 @@ class DayPlanDriver internal constructor(
             scenario.container.planRepository.observeDayPlan(vm.date),
             "the plan of ${vm.date} confirmed",
         ) { it?.isConfirmed == true }
+    }
+
+    /** Drags the placed [entry] to [at] on the same day. */
+    suspend fun move(entry: BlockWithItem, at: LocalTime) {
+        scenario.awaitState(vm.uiState, "\"${entry.item.name}\" placed on the day") { state ->
+            state.blocks.any { it.block.id == entry.block.id }
+        }
+        vm.move(entry.block.id, at.hour * MINUTES_PER_HOUR + at.minute)
+        scenario.awaitState(vm.uiState, "\"${entry.item.name}\" moved to $at") { state ->
+            state.blocks.any { it.block.id == entry.block.id && it.block.start == at }
+        }
+    }
+
+    /** "Zurück in die Woche": the placed [entry] goes back to the week list. */
+    suspend fun returnToWeek(entry: BlockWithItem) {
+        scenario.awaitState(vm.uiState, "\"${entry.item.name}\" placed on the day") { state ->
+            state.blocks.any { it.block.id == entry.block.id }
+        }
+        vm.returnToWeek(entry.block.id)
+        scenario.awaitState(vm.uiState, "\"${entry.item.name}\" gone from the day") { state ->
+            state.blocks.none { it.block.id == entry.block.id }
+        }
+    }
+
+    /** Creates a ToDo right on the day at [at], as the planner's "Neue Aufgabe" does; returns it. */
+    suspend fun createTodo(name: String, attributes: TodoAttributes, at: LocalTime): Item {
+        vm.createTodo(name, attributes, note = "", atMinute = at.hour * MINUTES_PER_HOUR + at.minute)
+        scenario.awaitState(vm.uiState, "\"$name\" placed at $at") { state ->
+            state.blocks.any { it.item.name == name }
+        }
+        return checkNotNull(scenario.container.itemRepository.observeStage(Stage.DAY).first().firstOrNull { it.name == name }) {
+            "\"$name\" is not in the day list"
+        }
     }
 
     private companion object {
@@ -193,6 +262,21 @@ class EveningChain internal constructor(
         return scenario.awaitState(vm.uiState, "the settlement of ${vm.date}") {
             it.settled != null || it.alreadySettled
         }.settled
+    }
+
+    /**
+     * "Verwerfen" on the evening's open block of [item]: the block is called off, and
+     * the card goes back to the Sammelliste with its clock.
+     */
+    suspend fun discard(item: Item) {
+        val entry = scenario.awaitState(vm.uiState, "\"${item.name}\" open in the evening review") { state ->
+            state.blocks.any { it.item.id == item.id && it.block.isOpen }
+        }.blocks.first { it.item.id == item.id && it.block.isOpen }
+        vm.discard(entry)
+        scenario.awaitState(
+            scenario.container.itemRepository.observeStage(Stage.COLLECTION),
+            "\"${item.name}\" back in the Sammelliste",
+        ) { cards -> cards.any { it.id == item.id } }
     }
 }
 

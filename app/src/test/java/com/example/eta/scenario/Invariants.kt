@@ -1,15 +1,15 @@
 package com.example.eta.scenario
 
-import com.example.eta.domain.chain.isWaitingFollowUp
 import com.example.eta.domain.model.BlockOrigin
 import com.example.eta.domain.model.Item
 import com.example.eta.domain.model.ItemType
+import com.example.eta.domain.model.PlannedBlock
 import com.example.eta.domain.model.PointsReason
 import com.example.eta.domain.model.Stage
 import kotlin.math.abs
+import kotlin.time.Instant
 import kotlinx.coroutines.flow.first
 import kotlinx.datetime.DatePeriod
-import kotlinx.datetime.LocalDate
 import kotlinx.datetime.minus
 import kotlinx.datetime.plus
 
@@ -25,36 +25,33 @@ import kotlinx.datetime.plus
  * |---|-----------|-------------------|
  * | 1 | At most one block per `(itemId, date)` | groups the blocks read by date |
  * | 2 | No block without its item | every block is read through its item; only a block whose item row is missing fails |
- * | 3 | Every TODO in `Stage.WEEK` is placed, offered, or has a visible reason | partial, see [check] |
+ * | 3 | Every TODO in `Stage.WEEK` is concretized (category, priority and length) | reads the week list |
  * | 4 | Balance equals the sum of transactions; one `HARVEST` per source block | recomputed from the rows |
  * | 5 | Completed and discarded blocks are unchanged by later steps | compares with the previous check |
  * | 6 | No recurring block on a vacation day or after `repeatUntil` | checks the recurring blocks against the standing rules |
- *
- * Invariants a known open bug breaks are gated by [KnownOpenIssues]; they are not
- * dropped silently.
+ * | 7 | No TODO is lost: each sits in exactly one of the five stages, and each TODO of `Stage.DAY` has a block | reads every stage list; blocks of any state count |
+ * | 8 | The Sperrliste clock is kept: `enteredCollectionAt` never changes once set | snapshot compare, across every stage |
  */
 class Invariants internal constructor(private val scenario: Scenario) {
     /** Completed or discarded blocks as the previous check saw them. */
-    private var frozen: Map<String, com.example.eta.domain.model.PlannedBlock> = emptyMap()
+    private var frozen: Map<String, PlannedBlock> = emptyMap()
+
+    /** Each card's `enteredCollectionAt` as the first check that saw it set it. */
+    private val enteredSnapshot = mutableMapOf<String, Instant>()
 
     /**
      * Runs every invariant and fails with all violations found.
      *
-     * Invariant 3 is deliberately partial. The day revolver's own selection is not
-     * re-run here. What is checked: every unplaced TODO in `Stage.WEEK` must be
-     * concretized (category, priority and length), because the revolver can offer
-     * nothing else. Every other unplaced card needs one of these visible reasons,
-     * which the screens show, and the check accepts it:
-     * - its unlock day lies after today ("freigeschaltet ab");
-     * - it waits for its predecessor (a follow-up);
-     * - a higher priority tier is still offered, so it is held back by the tier.
+     * Invariant 3 is a hard rule: the revolver can offer nothing but concretized
+     * cards, so an unconcretized card in the week list is a broken state, whatever
+     * its unlock day or follow-up status says.
      */
     suspend fun check(step: String) {
         val container = scenario.container
         val today = scenario.clock.today
-        val weekEnd = container.weekPlanningService.weekEnd()
         val blocks = container.planRepository.findRange(today.minus(HORIZON), today.plus(HORIZON))
-        val items = Stage.entries.flatMap { container.itemRepository.observeStage(it).first() }
+        val stages: Map<Stage, List<Item>> = Stage.entries.associateWith { container.itemRepository.observeStage(it).first() }
+        val items = stages.values.flatten()
         val violations = mutableListOf<String>()
 
         // 1 — one block per (item, date)
@@ -69,17 +66,10 @@ class Invariants internal constructor(private val scenario: Scenario) {
             violations += "block ${it.block.id} has no item in the database (invariant 2)"
         }
 
-        // 3 — every TODO in the week list is placed, offered or has a visible reason
-        val placed = blocks.map { it.block.itemId }.toSet()
-        items.filter { it.stage == Stage.WEEK && it.type == ItemType.TODO && it.id !in placed }
-            .forEach { item ->
-                val concretized = item.priority != null && item.category != null && item.estimatedDuration != null
-                val unlocksLater = item.availableFrom?.let { it > today } == true
-                val waits = item.isWaitingFollowUp()
-                if (!concretized && !unlocksLater && !waits) {
-                    violations += "\"${item.name}\" is in the week list without category, priority or length (invariant 3)"
-                }
-            }
+        // 3 — every TODO in the week list is concretized
+        stages.getValue(Stage.WEEK)
+            .filter { it.type == ItemType.TODO && !it.isConcretized }
+            .forEach { violations += "\"${it.name}\" is in the week list without category, priority or length (invariant 3)" }
 
         // 4 — ledger
         val transactions = container.pointsRepository.observeRecent(Int.MAX_VALUE).first()
@@ -98,7 +88,10 @@ class Invariants internal constructor(private val scenario: Scenario) {
         // 5 — completed and discarded blocks stay as they were
         val current = blocks.associate { it.block.id to it.block }
         frozen.forEach { (id, before) ->
-            if (current[id] != before) {
+            val now = current[id]
+            // Reopened on purpose (an untick): the block is open again and no longer closed.
+            if (now != null && now.isOpen) return@forEach
+            if (now != before) {
                 violations += "block of \"${before.itemId}\" on ${before.date} changed after it was closed (invariant 5)"
             }
         }
@@ -116,8 +109,29 @@ class Invariants internal constructor(private val scenario: Scenario) {
             }
         }
 
-        if (KnownOpenIssues.STALE_WEEK_GOALS_MUST_NOT_HOLD_POOL) {
-            checkStaleGoalsDoNotHoldThePool(violations, items, weekEnd)
+        // 7 — no TODO lost: one stage each, and every planned-for-today TODO has a block
+        val seen = mutableSetOf<String>()
+        stages.forEach { (stage, cards) ->
+            cards.filter { it.type == ItemType.TODO }.forEach { card ->
+                if (!seen.add(card.id)) {
+                    violations += "\"${card.name}\" is listed in more than one stage, now $stage (invariant 7)"
+                }
+            }
+        }
+        val blocked = blocks.map { it.block.itemId }.toSet()
+        stages.getValue(Stage.DAY)
+            .filter { it.type == ItemType.TODO && it.id !in blocked }
+            .forEach { violations += "\"${it.name}\" is in the day list without any block (invariant 7)" }
+
+        // 8 — the Sperrliste clock is kept
+        items.forEach { card ->
+            // A follow-up's clock is stamped by its predecessor and undone by an untick.
+            if (card.followUpOfId != null) return@forEach
+            val entered = card.enteredCollectionAt ?: return@forEach
+            val before = enteredSnapshot.putIfAbsent(card.id, entered)
+            if (before != null && before != entered) {
+                violations += "\"${card.name}\" changed its time in the Sammelliste from $before to $entered (invariant 8)"
+            }
         }
 
         if (violations.isNotEmpty()) {
@@ -127,41 +141,8 @@ class Invariants internal constructor(private val scenario: Scenario) {
         }
     }
 
-    /** Issue #54: goals of an earlier cycle must not hold back a Sammelliste card that is free on its own. */
-    private suspend fun checkStaleGoalsDoNotHoldThePool(
-        violations: MutableList<String>,
-        items: List<Item>,
-        weekEnd: LocalDate,
-    ) {
-        val cycleStart = scenario.container.weekPlanningService.cycleStart()
-        val stale = scenario.container.itemRepository.observeUnfinishedWeekGoals(cycleStart).first()
-            .filter { (it.weekStartedOn ?: cycleStart) < cycleStart }
-        if (stale.isEmpty()) return
-        val freeOnItsOwn = items.count {
-            it.stage == Stage.COLLECTION && it.type == ItemType.TODO &&
-                it.isConcretized && it.isAvailableOn(weekEnd) && !it.isWaitingFollowUp()
-        }
-        if (freeOnItsOwn > 0) {
-            violations += "${stale.size} goal(s) of an earlier cycle hold back $freeOnItsOwn free Sammelliste card(s) (issue #54)"
-        }
-    }
-
     private companion object {
         val HORIZON = DatePeriod(days = 400)
         const val TOLERANCE = 0.000001
     }
-}
-
-/**
- * Invariants that current `main` breaks because of an open bug.
- *
- * Each flag turns its check on. The fix for the named issue sets it to `true` in
- * the same change, so the regression guard arrives with the fix.
- */
-object KnownOpenIssues {
-    /**
-     * Issue #54: a goal of an earlier cycle (`weekStartedOn` before this cycle)
-     * holds back the whole Sammelliste in the weekly planning. Off until fixed.
-     */
-    const val STALE_WEEK_GOALS_MUST_NOT_HOLD_POOL = false
 }

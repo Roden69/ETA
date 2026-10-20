@@ -1,5 +1,7 @@
 package com.example.eta.scenario
 
+import com.example.eta.domain.growth.GrowthSetting
+import com.example.eta.domain.growth.withGrowth
 import com.example.eta.domain.model.Category
 import com.example.eta.domain.model.Item
 import com.example.eta.domain.model.Priority
@@ -99,7 +101,7 @@ object SampleData {
             Item.newRecurring(
                 name = "Wäsche",
                 category = Category.NEBENBEI,
-                recurrenceRule = RecurrenceRule.EveryWeeks(DayOfWeek.SATURDAY, weeks = 2, anchor = LocalDate(2026, 10, 17)),
+                recurrenceRule = RecurrenceRule.EveryWeeks(DayOfWeek.SATURDAY, weeks = 2, anchor = LocalDate(2026, 10, 24)),
                 startTime = LocalTime(15, 0),
                 estimatedDuration = 1.hours,
                 now = now,
@@ -119,7 +121,7 @@ object SampleData {
      * with an unlock day, a three-step follow-up chain, one with steps, one
      * deadline, and one entered long ago that the Sperrliste should catch.
      */
-    fun lenaCollection(now: Instant, today: LocalDate, zone: TimeZone): List<SeedCard> {
+    fun lenaCollection(now: Instant, zone: TimeZone): List<SeedCard> {
         val concretized = listOf(
             Triple("Steuerunterlagen sortieren", Category.FOKUS, Priority.MUST to 90),
             Triple("Zahnarzt anrufen", Category.NEBENBEI, Priority.URGENT_MUST to 15),
@@ -159,7 +161,7 @@ object SampleData {
                     name = "Urlaubsplanung",
                     category = Category.FOKUS,
                     priority = Priority.MUST,
-                    targetDate = today.plus(DatePeriod(days = 14)),
+                    targetDate = LocalDate(2026, 11, 5),
                     estimatedDuration = 1.hours,
                     now = now,
                 ),
@@ -169,7 +171,7 @@ object SampleData {
                     name = "Winterreifen wechseln",
                     category = Category.NEBENBEI,
                     priority = Priority.WANT,
-                    targetDate = today.plus(DatePeriod(days = 21)),
+                    targetDate = LocalDate(2026, 11, 20),
                     estimatedDuration = 30.minutes,
                     now = now,
                 ),
@@ -201,11 +203,42 @@ object SampleData {
             Item.newDeadline(
                 name = "Miete überweisen",
                 category = Category.FOKUS,
-                deadlineAt = today.plus(DatePeriod(days = 5)).atTime(12, 0).toInstant(zone),
+                deadlineAt = LocalDate(2026, 10, 30).atTime(12, 0).toInstant(zone),
                 now = now,
             ),
         )
-        val forgotten = SeedCard(Item.newQuickTodo("Idee: Gewürzregal", now - 60.days))
+        val forgotten = SeedCard(Item.newQuickTodo("Idee: Gewürzregal", LocalDate(2026, 9, 15).atTime(9, 0).toInstant(zone)))
         return concretized + quick + unlocking + chain + withSteps + deadline + forgotten
     }
+
+    /**
+     * Lena's Google Calendar: the lecture series Mon/Thu 10:00–11:30 that ends at
+     * the year's end and leaves out Mon 02.11., a dentist appointment on Wed 21.10.
+     * and an all-day event on Sat 31.10.
+     */
+    fun lenaCalendar(): FakeCalendar = FakeCalendar().apply {
+        series(
+            title = "Vorlesung Statistik",
+            start = LocalDate(2026, 10, 12),
+            time = LocalTime(10, 0),
+            duration = 90.minutes,
+            rule = "FREQ=WEEKLY;BYDAY=MO,TH;UNTIL=20261231T215959Z",
+            exdates = listOf(LocalDate(2026, 11, 2)),
+        )
+        event("Zahnarzt", LocalDate(2026, 10, 21), LocalTime(10, 0), 60.minutes)
+        allDay("Geburtstag Mama", LocalDate(2026, 10, 31))
+    }
+
+    /**
+     * Lena's growth task: running, once a week on Sunday, starting at ten minutes and
+     * growing by five each time it is done (every completion).
+     */
+    fun lenaGrowthTask(now: Instant): Item = Item.newRecurring(
+        name = "Laufen",
+        category = Category.FOKUS,
+        recurrenceRule = RecurrenceRule.Weekly(DayOfWeek.SUNDAY),
+        startTime = LocalTime(10, 0),
+        estimatedDuration = 10.minutes,
+        now = now,
+    ).withGrowth(GrowthSetting(start = 10.minutes, target = 60.minutes, increment = 5.minutes, dynamic = false, every = 1))
 }

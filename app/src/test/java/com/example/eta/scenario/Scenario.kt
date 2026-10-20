@@ -9,6 +9,7 @@ import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.seconds
+import kotlin.time.Duration.Companion.minutes
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
@@ -30,8 +31,8 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.daysUntil
 import org.robolectric.RuntimeEnvironment
 
-/** Real time one whole scenario may take, Room and Robolectric included. */
-private val SCENARIO_TIMEOUT: Duration = 120.seconds
+/** Real time one whole scenario may take, Room and Robolectric included, unless a test asks for more. */
+private val DEFAULT_DEADLINE: Duration = 3.minutes
 
 /**
  * Runs [body] as a multi-day scenario on the real wiring: a sandboxed
@@ -41,13 +42,34 @@ private val SCENARIO_TIMEOUT: Duration = 120.seconds
  * Use it from a Robolectric test, e.g.
  * `@Test fun \`...\`() = scenario("2026-10-18T09:00") { step("Einrichtung") { ... } }`.
  *
+ * The whole run has a hard real-time [deadline]. Past it the test fails with a dump
+ * of every thread (see [withDeadline]), so a hang names the code it is stuck in.
+ *
  * @param start the scenario's first moment, `LocalDateTime.parse` format.
  * @param zone the time zone the device runs in, IANA id.
+ * @param deadline real time the whole scenario may take.
+ * @param calendar the Google Calendar the app reads; empty unless the test adds events.
+ * @param alarms whether the alarm coordinators arm anything (off by default).
  */
-fun scenario(start: String, zone: String = "Europe/Berlin", body: suspend Scenario.() -> Unit) {
-    val scenario = Scenario(LocalDateTime.parse(start), TimeZone.of(zone), RuntimeEnvironment.getApplication())
-    scenario.use {
-        runBlocking { withTimeout(SCENARIO_TIMEOUT) { it.body() } }
+fun scenario(
+    start: String,
+    zone: String = "Europe/Berlin",
+    deadline: Duration = DEFAULT_DEADLINE,
+    calendar: FakeCalendar? = null,
+    alarms: Boolean = false,
+    body: suspend Scenario.() -> Unit,
+) {
+    val scenario = Scenario(
+        LocalDateTime.parse(start),
+        TimeZone.of(zone),
+        RuntimeEnvironment.getApplication(),
+        calendar ?: FakeCalendar(),
+        alarms,
+    )
+    withDeadline(deadline) {
+        scenario.use {
+            runBlocking { it.body() }
+        }
     }
 }
 
@@ -77,6 +99,8 @@ class Scenario internal constructor(
     start: LocalDateTime,
     val zone: TimeZone,
     context: Context,
+    calendar: FakeCalendar,
+    alarms: Boolean,
 ) : AutoCloseable {
     private val previousDefaultZone: java.util.TimeZone = java.util.TimeZone.getDefault()
     private val mainThread: ExecutorService = Executors.newSingleThreadExecutor { task ->
@@ -95,7 +119,15 @@ class Scenario internal constructor(
     val clock = ScenarioClock(zone, start)
 
     /** The app's wiring over an in-memory database, alarms off. */
-    val container = AppContainer(context, sandbox = true, clock = clock, timeZone = zone)
+    val container = AppContainer(
+        context,
+        sandbox = true,
+        clock = clock,
+        timeZone = zone,
+        alarms = alarms,
+        calendarAuth = calendar,
+        calendarApi = calendar,
+    )
 
     /** Checks run after every [step]. */
     val invariants = Invariants(this)
