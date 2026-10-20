@@ -62,6 +62,13 @@ before that edit. A confirmed tomorrow also receives no newly introduced definit
 keeping its existing rows alone would otherwise let a renamed weekday definition
 silently add a second occurrence beside them.
 
+**One run at a time.** `topUpUntil`, `relayDynamicGrowth` and `relayOccurrences` share
+one `Mutex` in `ScheduleMaintenance`. The planner starts a top-up as it opens; when it had
+read the old definitions and wrote after an edit's removal, its `IGNORE` insert won and
+the edit's new block was dropped (seen as today's bed preparation staying at the old
+hour). Inside the lock the private `topUpLocked`/`relayDynamicGrowthLocked` are called,
+because the mutex is not reentrant.
+
 **Hand placement wins for today.** A block the user moved, resized or made flexible is kept
 as it stands, so a hand move never snaps back on an edit. `isPlacedByHand` decides it: the
 block is `isMovable` (dragged, or flexible), or its start differs from `originalStart` or

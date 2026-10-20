@@ -145,8 +145,12 @@ class SystemScenarioTest {
         val root = viewModel<RootViewModel>(rootViewModelFactory(container))
         subscribed(root.destination) {
             awaitState(root.destination, "the dashboard") { it == RootDestination.Dashboard }
-            step("Alles zurücksetzen") { root.resetEverything() }
-            awaitState(root.destination, "the setup screen again") { it == RootDestination.Setup }
+            // The reset runs on the ViewModel's scope; the step's invariant check
+            // must see the database after it, not halfway through it.
+            step("Alles zurücksetzen") {
+                root.resetEverything()
+                awaitState(root.destination, "the setup screen again") { it == RootDestination.Setup }
+            }
         }
 
         assertNull("the setup is gone", container.setupRepository.find())

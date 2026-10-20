@@ -15,6 +15,8 @@ import com.example.eta.domain.recurrence.isPlacedByHand
 import com.example.eta.domain.recurrence.startsAt
 import com.example.eta.domain.planning.timerWasUsed
 import kotlin.time.Clock
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
@@ -46,6 +48,14 @@ class ScheduleMaintenance(
     private val clock: Clock = Clock.System,
     private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) {
+    /**
+     * One run at a time. Every entry point reads the definitions, then writes
+     * blocks with `IGNORE`; two overlapping runs let a top-up that read the old
+     * definitions re-insert a block an edit had just taken off, and the edit's
+     * own block is then ignored. The planner starts a top-up as it opens, so a
+     * settings save right after left today's bed preparation at the old hour.
+     */
+    private val lock = Mutex()
 
     /**
      * Materializes from today to the horizon. Returns how many blocks were added.
@@ -55,7 +65,10 @@ class ScheduleMaintenance(
         topUpUntil(clock.todayIn(timeZone).plus(DatePeriod(days = SCHEDULE_HORIZON_DAYS)), keep)
 
     /** Materializes at least as far as [until], for a range that reaches further. */
-    suspend fun topUpUntil(until: LocalDate, keep: (PlannedBlock) -> Boolean = { true }): Int {
+    suspend fun topUpUntil(until: LocalDate, keep: (PlannedBlock) -> Boolean = { true }): Int =
+        lock.withLock { topUpLocked(until, keep) }
+
+    private suspend fun topUpLocked(until: LocalDate, keep: (PlannedBlock) -> Boolean): Int {
         val today = clock.todayIn(timeZone)
         val horizon = maxOf(until, today.plus(DatePeriod(days = SCHEDULE_HORIZON_DAYS)))
         val tomorrow = today.plus(DatePeriod(days = 1))
@@ -97,7 +110,7 @@ class ScheduleMaintenance(
         // A dynamic growth task's hour is not a property of the task but of the
         // day it lands in, so a freshly materialized occurrence has no hour worth
         // keeping until this has run over it.
-        relayDynamicGrowth(horizon)
+        relayDynamicGrowthLocked(horizon)
         return added
     }
 
@@ -149,7 +162,10 @@ class ScheduleMaintenance(
      * tomorrow is a promise already made; the same line every other edit to a
      * standing task respects. Returns how many blocks moved.
      */
-    suspend fun relayDynamicGrowth(until: LocalDate? = null): Int {
+    suspend fun relayDynamicGrowth(until: LocalDate? = null): Int =
+        lock.withLock { relayDynamicGrowthLocked(until) }
+
+    private suspend fun relayDynamicGrowthLocked(until: LocalDate?): Int {
         val from = planRepository.firstOpenDay()
         val to = maxOf(
             until ?: from,
@@ -185,11 +201,15 @@ class ScheduleMaintenance(
         if (itemIds.isEmpty()) return
         val now = clock.now().toLocalDateTime(timeZone)
         val edited = itemIds.toSet()
-        planRepository.findDay(now.date)
-            .map { it.block }
-            .filter { isRelayableToday(it, edited, now) }
-            .forEach { planRepository.removeBlock(it) }
-        planRepository.clearUpcoming(itemIds, planRepository.firstOpenDay())
-        topUp { isLaidAfterEdit(it, edited, now) }
+        lock.withLock {
+            planRepository.findDay(now.date)
+                .map { it.block }
+                .filter { isRelayableToday(it, edited, now) }
+                .forEach { planRepository.removeBlock(it) }
+            planRepository.clearUpcoming(itemIds, planRepository.firstOpenDay())
+            topUpLocked(clock.todayIn(timeZone).plus(DatePeriod(days = SCHEDULE_HORIZON_DAYS))) {
+                isLaidAfterEdit(it, edited, now)
+            }
+        }
     }
 }

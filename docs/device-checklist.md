@@ -11,6 +11,14 @@ Diese Liste ergänzt die automatischen Prüfungen aus [Entwicklung und Prüfung]
 
 Vor dem Start: Debug-Build oder signierte APK installieren. Die Datenbank nicht löschen (siehe [Entwicklung](development.md#daten-und-signiersicherheit)). Zu jedem Punkt Datum, Build-Version und Ergebnis notieren; Abweichungen mit Issue-Nummer festhalten.
 
+## 0. Planungsablauf (#54, #56)
+
+1. Listen → Wochenliste → **Wochenliste füllen**: Die Kalenderseite zeigt „Weiter zu deinen ToDos“ mit der Zahl der einplanbaren Karten.
+2. Liegt ein Ziel aus der Vorwoche noch in der Wochenliste, steht es oben in der Sammelliste-Spalte mit „In diese Woche übernehmen“ und „Zurück in die Sammelliste“. Nach einem der beiden lassen sich die übrigen Karten ziehen.
+3. Eine Karte ohne Kategorie, Priorität oder Dauer antippen: Das Formular öffnet sich; Abbrechen lässt sie in der Sammelliste, Speichern legt sie in die Woche.
+4. Nachmittags die Bettfertig- oder Weckzeit ändern: Noch nicht begonnene Blöcke von heute verschieben sich, erledigte und von Hand verschobene bleiben, der Startalarm folgt.
+5. Einstellungen → **Pausen & Freizeit**: Standardpause und tägliche Freizeit ändern, Sichern. Ein danach geplantes ToDo bekommt die Pause; die Freizeit erscheint im Tagesplan.
+
 ## 1. Stumm, Vibration und Nicht stören
 
 Bezug: Issue #48. Der Build vom 19.10. prüft den Klingelmodus laut Fachnotiz bereits; auf dem Gerät ist das noch nicht bestätigt.
@@ -39,9 +47,10 @@ Bezug: Issue #48.
 Voraussetzung: eine echte wiederkehrende Vorlesungsserie im Google-Kalender des Eigentümers.
 
 1. Kalender-Einstellungen → **Mit Google verbinden**. Die Anmeldung schließt ohne Fehler ab.
-2. Termine laden. Die Serie erscheint als Serie, nicht als Einzeltermine.
-3. Serie als **Wiederkehrende Aufgabe übernehmen**. Danach steht sie als wiederkehrende Aufgabe in der Liste, nicht als einzelne Aufgabe mit Datum.
-4. Serien mit Enddatum oder Anzahl übernimmt die App nicht; der Hinweis dazu muss erscheinen und der Termin bleibt einzeln.
+2. Abendplanung oder Wochenplanung öffnen. Ohne Antippen erscheint **ein** Angebot je Serie („… wiederholt sich jeden …“), Einzeltermine bleiben einzeln.
+3. **Übernehmen**: Die Serie steht als wiederkehrende Aufgabe in der Liste, mit dem Enddatum der Serie. An ausfallenden Terminen (Ferien, abgesagt) entsteht kein Block.
+4. Bei einer zweiten Serie **Einzeln lassen**: Das Angebot kommt beim nächsten Öffnen nicht wieder.
+5. Flugmodus an, App neu starten: Blöcke der übernommenen Serie an noch nie gelesenen Tagen bleiben stehen.
 
 ## 5. Quick-Add-Widget
 

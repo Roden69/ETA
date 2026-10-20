@@ -79,6 +79,7 @@ Sammelpaket zu den Issues #4 bis #51 ([Pull Request #52](https://github.com/Rode
 - Ein Tag wird nicht doppelt abgerechnet, auch nicht bei gleichzeitigem Abschluss.
 - Zeitblocker aus dem Kalender zählen nicht als „ungeplante Zeit“.
 - „Wochenliste füllen“ zeigte keine ToDos, solange ein Ziel einer früheren Woche offen war (#54, #49).
+- Eine Änderung an Schlaf- oder Weckzeit ging verloren, wenn gleichzeitig die Tagesplanung ihren Plan auffüllte; die Planung läuft jetzt nacheinander (#54).
 
 ### Noch auf dem Gerät zu prüfen
 

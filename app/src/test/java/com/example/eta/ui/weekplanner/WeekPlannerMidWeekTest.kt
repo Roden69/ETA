@@ -18,11 +18,9 @@ import com.example.eta.ui.UiWorld
 import com.example.eta.ui.UiWorldRule
 import com.example.eta.ui.awaitGone
 import com.example.eta.ui.awaitText
-import com.example.eta.ui.dialogNode
 import com.example.eta.ui.node
 import com.example.eta.ui.root.EtaApp
 import com.example.eta.ui.tap
-import com.example.eta.ui.tapInDialog
 import com.example.eta.ui.theme.DesignChoice
 import com.example.eta.ui.theme.EtaTheme
 import kotlin.time.Duration.Companion.minutes

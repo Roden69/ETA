@@ -48,7 +48,7 @@ class AppNavigationTest {
         click("Pausen & Freizeit", scroll = true)
         increment("Standardpause für ToDos")
         increment("Dauer")
-        click("Sichern")
+        click("Sichern", scroll = true)
         compose.waitUntil(10_000) {
             runBlocking {
                 world.container.setupRepository.find()?.let {

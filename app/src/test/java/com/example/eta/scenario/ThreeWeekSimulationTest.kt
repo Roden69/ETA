@@ -398,14 +398,15 @@ class ThreeWeekSimulationTest {
         // ---- Sa 31.10.: Ganztägiger Termin, Vertrag gebrochen -----------------------------
 
         nextDay(LocalTime(9, 0))
-        step("Sa 31.10. Ganztägiger Termin übernehmen: Vorschlag 09:00") {
+        step("Sa 31.10. Ganztägiger Termin: Vorschlag 09:00 kollidiert mit der Morgenroutine, um 12:00 übernommen") {
             calendarStep(LocalDate(2026, 10, 31), LocalDate(2026, 10, 31)) {
                 val allDay = pendingAppointments(LocalDate(2026, 10, 31), LocalDate(2026, 10, 31))
                     .single { it.title == "Geburtstag Mama" }
                 assertTrue(allDay.allDay)
-                assertNull(import(allDay))
+                assertEquals("an all-day event is suggested at 09:00", LocalTime(9, 0), allDay.start)
+                assertNull(import(allDay, AppointmentAttributes(start = LocalTime(12, 0), duration = allDay.duration)))
             }
-            assertEquals(LocalTime(9, 0), blocksOn(LocalDate(2026, 10, 31)).single { it.item.name == "Geburtstag Mama" }.block.start)
+            assertEquals(LocalTime(12, 0), blocksOn(LocalDate(2026, 10, 31)).single { it.item.name == "Geburtstag Mama" }.block.start)
         }
         step("Sa 31.10. Vertrag unterschrieben, gebrochen: Bewährung") {
             settings { feature { it.copy(contracts = true) } }

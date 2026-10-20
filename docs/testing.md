@@ -15,8 +15,8 @@ Diese Anleitung beschreibt, wie ETA geprüft wird, wie ein mehrtägiger Ablauf a
 | --- | --- | --- | --- |
 | E1 Regeln | Reine Funktionen in `domain/`: Punkte, Planung, Wiederholung, Abrechnung | JUnit 4 auf der JVM, Dateien unter [`app/src/test/java/com/example/eta/domain/`](../app/src/test/java/com/example/eta/domain/) | vorhanden |
 | E2 Abläufe | Mehrtägige Abläufe über echte ViewModels und Dienste, mit Datenbank und Uhr | Szenario-Harness unter [`app/src/test/java/com/example/eta/scenario/`](../app/src/test/java/com/example/eta/scenario/), Robolectric | vorhanden |
-| E3 Oberfläche | Compose-Bildschirme unter Robolectric | `compose-ui-test-junit4` ist als Abhängigkeit eingetragen, noch ohne Tests | geplant |
-| E4 Gerät | Emulator-Lauf nachts und Gerätecheckliste für Alarme, Kalender, Berechtigungen | `connectedDebugAndroidTest`, Checkliste im Entwicklungsleitfaden | geplant |
+| E3 Oberfläche | Echte Bildschirme mit echten ViewModels: Navigation, Wochenplanung unter der Woche, Serienangebot, Einstellungen, Abendablauf | Compose-Tests unter Robolectric in [`app/src/test/java/com/example/eta/ui/`](../app/src/test/java/com/example/eta/ui/) | vorhanden |
+| E4 Gerät | Erststart, Planungsalarme, Benachrichtigungskanäle und die Dialoge der Wochenplanung auf echtem Android; dazu die manuelle [Gerätecheckliste](device-checklist.md) | `connectedDebugAndroidTest` im Workflow `android-emulator.yml` (jeder PR und nachts) | vorhanden |
 
 E1 deckt die Regeln ab, E2 prüft, dass die Regeln im Zusammenspiel der Schichten bei einem echten Ablauf wirken. Ein Fehler, der nur durch die Reihenfolge von Eingaben über mehrere Tage entsteht, gehört in E2. Oberflächen- und Gerätefragen bleiben bei E3 und E4; Tests ersetzen keine Prüfung auf einem Gerät ([Entwicklung und Prüfung](development.md)).
 
@@ -68,63 +68,41 @@ Viele ViewModel-Flows sind `stateIn(viewModelScope, SharingStarted.WhileSubscrib
 
 ## Invarianten
 
-Die Prüfung läuft nach jedem Schritt in [`Invariants.kt`](../app/src/test/java/com/example/eta/scenario/Invariants.kt) und liest die Datenbank über Repositories, nie über ViewModels.
+Die Prüfung läuft nach jedem Schritt in [`Invariants.kt`](../app/src/test/java/com/example/eta/scenario/Invariants.kt) und liest die Datenbank direkt, nie über ViewModels. Alle Karten werden in einem einzigen Lesezugriff geholt, damit die Prüfung keine halb geschriebene Änderung sieht.
 
 | # | Invariante | Prüfung |
 | --- | --- | --- |
 | 1 | Höchstens ein Block je `(Karte, Datum)` | Gruppierung der Blöcke nach Karte und Datum |
-| 2 | Kein Block ohne Karte | Blöcke werden über ihre Karte gelesen; die Fremdschlüssel-Kaskade sorgt für den Rest |
-| 3 | Jede ToDo in `Stage.WEEK` ist eingeplant, angeboten oder hat einen sichtbaren Grund | teilweise, siehe unten |
-| 4 | Punktestand gleich Summe aller Buchungen; je abgerechnetem Tag höchstens ein `HARVEST` | aus den Zeilen nachgerechnet; die Abrechnung schreibt je Tag eine Zeile mit dem Datum als Notiz |
-| 5 | Erledigte und verworfene Blöcke ändern sich bei späteren Schritten nicht | Vergleich mit dem Stand der letzten Prüfung |
+| 2 | Kein Block ohne Karte | jeder Block gehört zu einer gespeicherten Karte |
+| 3 | Jede ToDo in `Stage.WEEK` ist konkretisiert | Kategorie, Priorität und Dauer sind gesetzt (#54) |
+| 4 | Punktestand gleich Summe aller Buchungen; je abgerechnetem Tag höchstens ein `HARVEST` | aus den Buchungszeilen nachgerechnet |
+| 5 | Erledigte und verworfene Blöcke ändern sich bei späteren Schritten nicht | Vergleich mit dem Stand der letzten Prüfung; ein bewusst zurückgenommener Haken öffnet den Block wieder |
 | 6 | Kein Serienblock an Urlaubstagen oder nach `repeatUntil` | Serienblöcke gegen Urlaube und Enddatum |
+| 7 | Keine Karte geht verloren | jede ToDo steht in genau einer Stufe; eine ToDo in `Stage.DAY` hat einen Block |
+| 8 | Die Sperrliste lässt sich nicht umgehen | eine vom Tag verworfene Karte behält ihr `enteredCollectionAt`; ein bewusstes Zurückgeben aus der Woche startet die Frist neu |
 
-Zu Invariante 3: Der Tagesrevolver wird nicht nachgerechnet. Geprüft wird, dass jede nicht eingeplante Wochenkarte konkretisiert ist, oder einen der sichtbaren Gründe hat: Freischaltung nach heute, wartende Folgeaufgabe, oder eine höhere Prioritätsstufe, die angeboten wird. Die Stufenfolge ist die Reihenfolge von `Priority`.
+Bekannte Fehler werden nicht hinter Schaltern versteckt. Ein Test, der einen echten Fehler findet, bleibt rot, bis die Korrektur kommt.
 
-Invarianten, die ein offener Fehler auf dem aktuellen Stand verletzt, werden nicht stillschweigend abgeschaltet. Sie stehen in `KnownOpenIssues` hinter einem Schalter, den die Korrektur des Fehlers auf `true` setzt; dann kommt der Regressionsschutz zusammen mit der Korrektur.
+Szenarien laufen mit einer harten Echtzeitgrenze (`scenario(deadline = …)`). Läuft sie ab, schlägt der Test mit einem Thread-Abzug fehl; Gradle bricht jeden Testlauf zusätzlich nach 25 Minuten ab.
 
-| Schalter | Fehler | Bedeutung |
+## Katalog der Szenarien
+
+Die Bereiche folgen dem Ablauf der Woche. Der Durchlauf über drei Wochen ([`ThreeWeekSimulationTest`](../app/src/test/java/com/example/eta/scenario/ThreeWeekSimulationTest.kt), 18.10.–08.11.2026 mit Zeitumstellung) verbindet sie; die Einzeltests zeigen bei einem Fehler direkt die Stelle.
+
+| Bereich | Abgedeckt | Tests |
 | --- | --- | --- |
-| `STALE_WEEK_GOALS_MUST_NOT_HOLD_POOL` | #54 | Ein Ziel einer früheren Woche hält die ganze Sammelliste zurück |
+| A Erfassen & Listen | Schnellerfassung, Konkretisieren, Sperrliste nach einem Monat und Wiederanlage, Folgeaufgaben-Kette (freigeben und wieder warten), Schritte reisen mit, Erfolgsliste ohne wiederkehrende Aufgaben | `CaptureScenarioTest`, `StandardFlowScenarioTest` |
+| B Woche | Wochenplanung und Auffüllen unter der Woche, offene Vorwochenziele übernehmen oder zurückgeben, unfertige Karten erst konkretisieren, Freischaltung nach Wochenende, Rückgabe startet die Frist neu, Wochenbudget mit 15/25-Minuten-Pausen, Wertverfall genau einmal | `WeekScenarioTest`, `WeekPlannerViewModelTest`, `WeekPlannerMidWeekTest`, `WeekPlannerDialogTest` (Gerät) |
+| C Tag | Prioritätsstufen und Überspringen, Überlappung fragt nach, zurück in Woche oder Sammelliste, Bestätigen ergibt die Liste für Morgen, heute umplanen, Pausenhinweis, Tageswechsel | `DayScenarioTest` |
+| D Wiederkehrend | Anlegen für 14 Tage, wiederholtes Auffüllen ohne Duplikate, Bearbeiten wirkt heute und später, alle zwei Wochen, Urlaub, `repeatUntil`, gelöschter und verworfener Block | `RecurringScenarioTest`, `SettingsRelayTest` |
+| E Einstellungen → Plan | Schlaf- und Weckzeiten wirken auf heutige, noch nicht begonnene Blöcke, nicht auf einen bestätigten Morgen; Freizeit 0 → 60 → 0; Standardpause nur für neu platzierte ToDos; Planungszeiten stellen die Alarme neu; Funktionen aus und an | `SettingsScenarioTest`, `PlanningSettingsScenarioTest`, `SetupFreeTimeTest`, `AppNavigationTest` |
+| F Abend & Abrechnung | Punkte erst am Abend, zweite Abrechnung bucht nichts, Verwerfen und Nachholen, verpasste Abende (1–6 Tage, ältere mit Losung), Streak, Absage- und Leerlaufabzug, verzichtete Freizeit | `EveningScenarioTest`, `ReevaluationServiceTest` |
+| G Motivation | Belohn-o-mat füllen und einlösen, Vertrag gehalten, gebrochen, auf Bewährung, wieder in Kraft, aufgegeben; Wachstumsaufgabe wächst und verlängert spätere Blöcke | `MotivationScenarioTest` |
+| H Kalender | Abgleich ohne Duplikate, Zeitblocker ohne Punkte, Serie einmal angeboten und mit Ende und Ausnahmen übernommen, „Einzeln lassen“ bleibt, Konflikt kürzen, teilen, absagen oder verschieben, Hintergrundabgleich meldet einmal, Offline-Start verwirft keine ungelesenen Tage | `CalendarScenarioTest`, `CalendarSeriesOfferTest`, `CalendarSyncBoundaryTest` |
+| I Alarme & Ton | Planungsalarme täglich und wöchentlich, Startalarm folgt einem verschobenen Block, Weckruf, Erinnerung, Sandbox stellt nichts; Klingelmodus Vibration und Lautlos spielen keinen Ton | `AlarmScenarioTest`, `EtaSoundTest`, `FirstRunSmokeTest` (Gerät) |
+| J System | Erststart, Tutorial schreibt nichts in die echte Datenbank, Tageswechsel baut die Ansichten neu, Sicherung und Wiederherstellung, „Alles zurücksetzen“ samt abgelehnter Serien, Migration aller Schemaversionen | `SystemScenarioTest`, `EtaDatabaseMigrationTest`, `AppSmokeTest` (Gerät) |
 
-Die Fehler #53 (Kalenderserien als Einzeltermine) und #56 (Freizeit am Tag ist null und nicht änderbar) haben noch keine Invariante. Sie werden über Szenarien in Bereich D und E geprüft, sobald ihre Korrektur ansteht.
-
-## Katalog geplanter Szenarien
-
-Die Bereiche folgen dem Ablauf der Woche: Erfassen (A), Woche (B), Tag (C), Serien (D), Einrichtung bis Plan (E), Abend und Abrechnung (F), Motivation (G), Kalender (H), Alarme und Ton (I), System (J). Status: `vorhanden` läuft im Harness, `offen` ist noch zu schreiben, `offen #NN` ist zu schreiben und wartet auf die Korrektur des Fehlers.
-
-| Bereich | Szenario | Status |
-| --- | --- | --- |
-| A Erfassen & Listen | Schnellerfassung legt eine Karte in der Sammelliste an | vorhanden |
-| A Erfassen & Listen | Konkretisieren mit Kategorie, Priorität und Dauer | vorhanden |
-| A Erfassen & Listen | Karte bleibt nach einem Monat ohne Einplanung in der Sperrliste | offen |
-| A Erfassen & Listen | Folgeaufgaben-Kette mit drei Schritten | offen |
-| A Erfassen & Listen | Unterpunkte einer Karte werden mitgeführt | offen |
-| B Woche | Wochenplanung zieht eine Karte in die Woche | vorhanden |
-| B Woche | Offene Ziele einer früheren Woche halten die Sammelliste nicht zurück | offen #54 |
-| B Woche | Entnahme aus der Woche zurück in die Sammelliste | offen |
-| B Woche | Freischaltung nach dem Wochenende hält die Karte zurück und nennt den Grund | offen |
-| C Tag | Karte auf den Tagesplan setzen und den Plan bestätigen | vorhanden |
-| C Tag | Überlappung verlangt eine Entscheidung | offen |
-| C Tag | Abhaken am Tag selbst | vorhanden |
-| C Tag | Nachholen eines verpassten Blocks | offen |
-| D Wiederkehrend | Wöchentliche und zweiwöchentliche Serie legt Vorkommen an | offen |
-| D Wiederkehrend | Urlaub unterdrückt Serienvorkommen | offen |
-| D Wiederkehrend | Serie endet mit `repeatUntil` | offen |
-| D Wiederkehrend | Kalenderserie wird als eine Serie übernommen, nicht als Einzeltermine | offen #53 |
-| E Einstellungen → Plan | Einrichtung legt Tagesschema und Serien an | vorhanden |
-| E Einstellungen → Plan | Freizeit am Tag kann nach der Einrichtung geändert werden | offen #56 |
-| E Einstellungen → Plan | Änderung der Schlafzeiten wirkt auf die Vorkommen ab morgen | offen |
-| F Abend & Abrechnung | Abrechnung bucht Punkte genau einmal | vorhanden |
-| F Abend & Abrechnung | Zweite Abrechnung desselben Tages bucht nichts | vorhanden |
-| F Abend & Abrechnung | Älteren Abend mit Losung nachholen | offen |
-| G Motivation | Erfolgsliste zeigt erledigte Blöcke | vorhanden |
-| G Motivation | Belohn-o-mat füllt sich aus der Abrechnung | offen |
-| H Kalender | Termin wird als Zeitblocker ohne Punkte übernommen | offen |
-| I Alarme & Ton | Wecker wird nach der Einrichtung gestellt (`alarms = true`) | offen |
-| I Alarme & Ton | Tagesplanungs-Alarm zur eingestellten Zeit | offen |
-| J System | Tageswechsel baut die Ansichten neu auf | offen |
-| J System | Zeitzonenwechsel verschiebt keine Vergangenheit | offen |
+Noch nicht automatisiert: ein Zeitzonenwechsel des Geräts, das Quick-Add-Widget und alles, was die [Gerätecheckliste](device-checklist.md) aufführt (echte Google-Anmeldung, Lautstärke auf HyperOS, Sperrbildschirm, Neustart).
 
 ## Ausführen
 
