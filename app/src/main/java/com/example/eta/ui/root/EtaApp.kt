@@ -31,73 +31,51 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
-import androidx.lifecycle.viewmodel.initializer
-import androidx.lifecycle.viewmodel.viewModelFactory
 import com.example.eta.data.repository.WeekScope
 import com.example.eta.di.AppContainer
-import kotlin.time.Clock
 import kotlinx.coroutines.delay
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.plus
-import kotlinx.datetime.TimeZone
 import com.example.eta.domain.planning.PlanningPhase
 import com.example.eta.ui.components.EtaScreen
 import com.example.eta.ui.components.EtaIcon
 import com.example.eta.ui.components.EtaTabBar
-import com.example.eta.ui.calendar.CalendarEventsViewModel
 import com.example.eta.ui.calendar.CalendarStepScreen
 import com.example.eta.ui.components.EtaTabItem
 import com.example.eta.ui.concretize.ConcretizeScreen
-import com.example.eta.ui.concretize.ConcretizeViewModel
 import com.example.eta.ui.contracts.ContractsScreen
-import com.example.eta.ui.contracts.ContractsViewModel
 import com.example.eta.ui.dashboard.DashboardScreen
-import com.example.eta.ui.dashboard.DashboardViewModel
 import com.example.eta.ui.growth.GrowthTasksScreen
-import com.example.eta.ui.growth.GrowthTasksViewModel
 import com.example.eta.ui.lists.SmartListsScreen
-import com.example.eta.ui.lists.SmartListsViewModel
 import com.example.eta.ui.planner.DayPlannerScreen
-import com.example.eta.ui.planner.DayPlannerViewModel
 import com.example.eta.ui.planner.PlannerDay
 import com.example.eta.ui.quickadd.quickAddViewModelFactory
 import com.example.eta.ui.reevaluation.ReevaluationScreen
-import com.example.eta.ui.reevaluation.ReevaluationViewModel
 import com.example.eta.ui.reminders.RemindersScreen
-import com.example.eta.ui.reminders.RemindersViewModel
 import com.example.eta.ui.notes.NotesScreen
-import com.example.eta.ui.notes.NotesViewModel
 import com.example.eta.ui.rewards.RewardsScreen
 import com.example.eta.ui.stats.StatisticsScreen
-import com.example.eta.ui.stats.StatisticsViewModel
-import com.example.eta.ui.rewards.RewardsViewModel
 import com.example.eta.ui.components.LocalPointsVisible
+import com.example.eta.ui.components.LocalEtaClock
 import com.example.eta.ui.components.Features
 import com.example.eta.ui.components.LocalFeatures
 import androidx.compose.runtime.CompositionLocalProvider
-import com.example.eta.ui.settings.CalendarSettingsViewModel
 import com.example.eta.ui.settings.SettingsScreen
-import com.example.eta.ui.settings.SettingsViewModel
 import com.example.eta.ui.setup.SetupScreen
 import com.example.eta.ui.setup.SetupWeekReview
 import com.example.eta.ui.setup.SetupViewModel
-import com.example.eta.ui.setup.FeatureSuggestionViewModel
 import com.example.eta.domain.tutorial.TutorialId
 import com.example.eta.ui.tutorial.TutorialHost
 import com.example.eta.ui.tutorial.TutorialIntroScreen
 import com.example.eta.ui.vacation.VacationScreen
-import com.example.eta.ui.vacation.VacationViewModel
 import com.example.eta.ui.week.WeekTabScreen
-import com.example.eta.ui.week.WeekTabViewModel
 import com.example.eta.ui.weekplanner.WeekPlannerScreen
 import com.example.eta.ui.weekplanner.WeekPlannerViewModel
 import com.example.eta.widget.QuickAddWidgetProvider
 import com.example.eta.ui.evening.EveningScreen
-import com.example.eta.ui.evening.EveningViewModel
 import com.example.eta.ui.reevaluation.CatchUpBanner
 import com.example.eta.ui.reevaluation.CatchUpBannerViewModel
 import com.example.eta.ui.reevaluation.CatchUpRun
@@ -186,6 +164,7 @@ fun EtaApp(
                 EtaScreen {}
             } else {
                 CompositionLocalProvider(
+                    LocalEtaClock provides container.clock,
                     LocalPointsVisible provides stored.pointsSystem,
                     LocalFeatures provides Features(
                         growthTasks = stored.growthTasks,
@@ -275,7 +254,7 @@ private fun MainScaffold(
     // View models capture "today" when they are built. Keying them to the date
     // rebuilds them when it rolls over, so an app left open overnight does not
     // spend the morning showing yesterday.
-    val dateKey = rememberDateKey()
+    val dateKey = rememberDateKey(container)
     // The dashboard's offer to catch up missed evenings. Not in the tutorial's sandbox:
     // its days are practice days, and nothing in them is owed.
     val catchUpSlot: @Composable () -> Unit = { CatchUpOffer(container, dateKey, beginCatchUp) }
@@ -421,8 +400,8 @@ private fun MainScaffold(
                     key = "calendar-day-$dateKey",
                     factory = calendarViewModelFactory(
                         container = container,
-                        from = currentDate().plus(DatePeriod(days = 1)),
-                        to = currentDate().plus(DatePeriod(days = 1)),
+                        from = currentDate(container).plus(DatePeriod(days = 1)),
+                        to = currentDate(container).plus(DatePeriod(days = 1)),
                     ),
                 ),
                 onDone = { flow = AppFlow.EveningPlanner },
@@ -571,19 +550,20 @@ private fun MainScaffold(
  * shorter would just wake the composition more often for the same answer.
  */
 @Composable
-private fun rememberDateKey(): String {
-    var date by remember { mutableStateOf(currentDate()) }
+private fun rememberDateKey(container: AppContainer): String {
+    var date by remember { mutableStateOf(currentDate(container)) }
     LaunchedEffect(Unit) {
         while (true) {
             delay(60_000)
-            date = currentDate()
+            date = currentDate(container)
         }
     }
     return date.toString()
 }
 
-private fun currentDate(): LocalDate =
-    Clock.System.todayIn(TimeZone.currentSystemDefault())
+/** Today on the container's clock, in the container's zone: a scenario test scripts both. */
+private fun currentDate(container: AppContainer): LocalDate =
+    container.clock.todayIn(container.timeZone)
 
 /**
  * Places you can always come back to.
@@ -697,115 +677,6 @@ private fun NotificationPermission() {
 }
 
 /**
- * Manual factories, matching the container-based wiring. Swapping in Hilt later
- * would replace these without touching the view models themselves.
- */
-private fun rootViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            RootViewModel(
-                container.setupRepository,
-                container.planningAlarmCoordinator,
-                container.taskStartCoordinator,
-                container.reminderCoordinator,
-                container.calendarRefreshCoordinator,
-                container.scheduleMaintenance,
-                container.weekPlanningService,
-                container.tutorialStore,
-                resetLocalStores = {
-                    container.eveningStore.reset()
-                    container.featureSuggestionStore.reset()
-                },
-            )
-        }
-    }
-
-private fun setupViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            SetupViewModel(
-                setupRepository = container.setupRepository,
-                calendarRepository = container.calendarRepository,
-                calendarSync = container.calendarSyncService,
-                clock = container.clock,
-            )
-        }
-    }
-
-private fun featureSuggestionViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            FeatureSuggestionViewModel(
-                setupRepository = container.setupRepository,
-                store = container.featureSuggestionStore,
-                tutorialStore = container.tutorialStore,
-                clock = container.clock,
-            )
-        }
-    }
-
-internal fun dashboardViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            DashboardViewModel(
-                itemRepository = container.itemRepository,
-                planRepository = container.planRepository,
-                pointsRepository = container.pointsRepository,
-                contractRepository = container.contractRepository,
-                conflictRepository = container.conflictRepository,
-                setupRepository = container.setupRepository,
-                subtaskRepository = container.subtaskRepository,
-                taskStartCoordinator = container.taskStartCoordinator,
-                clock = container.clock,
-                // Not in the practice app: its day is simulated.
-                sleepLogRepository = container.sleepLogRepository.takeIf { !container.sandbox },
-                nightService = container.nightService.takeIf { !container.sandbox },
-            )
-        }
-    }
-
-internal fun plannerViewModelFactory(
-    container: AppContainer,
-    day: PlannerDay,
-): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            DayPlannerViewModel(
-                itemRepository = container.itemRepository,
-                planRepository = container.planRepository,
-                subtaskRepository = container.subtaskRepository,
-                subtaskGroupService = container.subtaskGroupService,
-                setupRepository = container.setupRepository,
-                scheduleMaintenance = container.scheduleMaintenance,
-                weekPlanningService = container.weekPlanningService,
-                pointsRepository = container.pointsRepository,
-                nightService = container.nightService,
-                wakeAlarmCoordinator = container.wakeAlarmCoordinator,
-                day = day,
-                clock = container.clock,
-            )
-        }
-    }
-
-internal fun weekPlannerViewModelFactory(
-    container: AppContainer,
-    scope: WeekScope,
-): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            WeekPlannerViewModel(
-                scope = scope,
-                weekPlanningService = container.weekPlanningService,
-                itemRepository = container.itemRepository,
-                planRepository = container.planRepository,
-                setupRepository = container.setupRepository,
-                scheduleMaintenance = container.scheduleMaintenance,
-                clock = container.clock,
-            )
-        }
-    }
-
-/**
  * The week a planning phase is laying out, as the timetable — "Anpassungen
  * vornehmen".
  *
@@ -849,200 +720,6 @@ private fun WeekAdjustScreen(
     )
 }
 
-private fun weekTabViewModelFactory(
-    container: AppContainer,
-    from: LocalDate? = null,
-): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            WeekTabViewModel(
-                nightService = container.nightService,
-                wakeAlarmCoordinator = container.wakeAlarmCoordinator,
-                taskStartCoordinator = container.taskStartCoordinator,
-                recurringTaskService = container.recurringTaskService,
-                planRepository = container.planRepository,
-                setupRepository = container.setupRepository,
-                subtaskRepository = container.subtaskRepository,
-                itemRepository = container.itemRepository,
-                clock = container.clock,
-                from = from,
-                calendarRepository = container.calendarRepository,
-            )
-        }
-    }
-
-internal fun concretizeViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            ConcretizeViewModel(
-                itemRepository = container.itemRepository,
-                scheduleMaintenance = container.scheduleMaintenance,
-                subtaskRepository = container.subtaskRepository,
-                setupRepository = container.setupRepository,
-                clock = container.clock,
-            )
-        }
-    }
-
-private fun vacationViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            VacationViewModel(container.vacationRepository, container.itemRepository)
-        }
-    }
-
-/**
- * The calendar step, over whichever stretch its host is planning.
- *
- * The weekly phase builds its own over the week; this one is for the evening and
- * covers tomorrow alone.
- */
-private fun calendarViewModelFactory(
-    container: AppContainer,
-    from: LocalDate,
-    to: LocalDate,
-): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            CalendarEventsViewModel(
-                calendarRepository = container.calendarRepository,
-                planRepository = container.planRepository,
-                syncService = container.calendarSyncService,
-                importService = container.calendarImportService,
-                scheduleMaintenance = container.scheduleMaintenance,
-                from = from,
-                to = to,
-            )
-        }
-    }
-
-private fun calendarSettingsViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            CalendarSettingsViewModel(
-                repository = container.calendarRepository,
-                syncService = container.calendarSyncService,
-                clock = container.clock,
-                onConnectionChanged = container.calendarRefreshCoordinator::reschedule,
-            )
-        }
-    }
-
-private fun settingsViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            SettingsViewModel(
-                setupRepository = container.setupRepository,
-                backupService = container.backupService,
-                catchUpService = container.catchUpService,
-                phaseService = container.planningPhaseService,
-                wakeAlarmCoordinator = container.wakeAlarmCoordinator,
-                taskStartCoordinator = container.taskStartCoordinator,
-                planRepository = container.planRepository,
-                reminderRepository = container.reminderRepository,
-                eveningStore = container.eveningStore,
-            )
-        }
-    }
-
-internal fun smartListsViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            SmartListsViewModel(
-                itemRepository = container.itemRepository,
-                planRepository = container.planRepository,
-                scheduleMaintenance = container.scheduleMaintenance,
-                recurringTaskService = container.recurringTaskService,
-                reevaluationService = container.reevaluationService,
-                subtaskRepository = container.subtaskRepository,
-                setupRepository = container.setupRepository,
-                weekPlanningService = container.weekPlanningService,
-                clock = container.clock,
-            )
-        }
-    }
-
-internal fun rewardsViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            RewardsViewModel(
-                rewardRepository = container.rewardRepository,
-                recurringTaskService = container.recurringTaskService,
-            )
-        }
-    }
-
-internal fun statisticsViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            StatisticsViewModel(
-                planRepository = container.planRepository,
-                sleepLogRepository = container.sleepLogRepository,
-                recurringTaskService = container.recurringTaskService,
-                setupRepository = container.setupRepository,
-                nightService = container.nightService,
-                clock = container.clock,
-            )
-        }
-    }
-
-internal fun notesViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            NotesViewModel(
-                noteRepository = container.noteRepository,
-                itemRepository = container.itemRepository,
-                clock = container.clock,
-            )
-        }
-    }
-
-internal fun growthTasksViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            GrowthTasksViewModel(
-                growthService = container.growthService,
-                recurringTaskService = container.recurringTaskService,
-                subtaskRepository = container.subtaskRepository,
-                itemRepository = container.itemRepository,
-            )
-        }
-    }
-
-private fun remindersViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            RemindersViewModel(
-                repository = container.reminderRepository,
-                coordinator = container.reminderCoordinator,
-            )
-        }
-    }
-
-internal fun contractsViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer { ContractsViewModel(container.contractRepository, clock = container.clock) }
-    }
-
-/**
- * The reevaluation of [date]: the day being lived when none is given, or an earlier
- * evening that is being caught up.
- */
-internal fun reevaluationViewModelFactory(container: AppContainer, date: LocalDate? = null): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            ReevaluationViewModel(
-                date = date ?: container.clock.todayIn(TimeZone.currentSystemDefault()),
-                reevaluationService = container.reevaluationService,
-                planRepository = container.planRepository,
-                itemRepository = container.itemRepository,
-                dayClosingService = container.dayClosingService,
-                subtaskRepository = container.subtaskRepository,
-                clock = container.clock,
-            )
-        }
-    }
-
 /** The dashboard's offer: its own view model, so the dashboard's stays as it was. */
 @Composable
 private fun CatchUpOffer(container: AppContainer, dateKey: String, onRun: (CatchUpRun) -> Unit) {
@@ -1055,29 +732,3 @@ private fun CatchUpOffer(container: AppContainer, dateKey: String, onRun: (Catch
         CatchUpBanner(days = days, onStart = { offer.start(onRun) })
     }
 }
-
-private fun catchUpBannerViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            CatchUpBannerViewModel(
-                catchUpService = container.catchUpService,
-                planRepository = container.planRepository,
-                clock = container.clock,
-            )
-        }
-    }
-
-private fun eveningViewModelFactory(container: AppContainer): ViewModelProvider.Factory =
-    viewModelFactory {
-        initializer {
-            EveningViewModel(
-                setupRepository = container.setupRepository,
-                nightService = container.nightService,
-                planRepository = container.planRepository,
-                subtaskRepository = container.subtaskRepository,
-                eveningStore = container.eveningStore,
-                rearmWakeAlarm = container.wakeAlarmCoordinator::reschedule,
-                clock = container.clock,
-            )
-        }
-    }
