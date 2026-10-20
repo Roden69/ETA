@@ -19,6 +19,7 @@ import com.example.eta.data.repository.WeekScope
 import kotlin.time.Duration
 import kotlinx.datetime.LocalTime
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.combine
 
 /*
  * Drivers the simulation needs beyond the basic ones in [Drivers.kt]. Each one is a
@@ -55,13 +56,14 @@ suspend fun Scenario.untick(item: Item) {
 suspend fun Scenario.placeToday(item: Item, at: LocalTime): Boolean {
     val vm = viewModel<DayPlannerViewModel>(plannerViewModelFactory(container, PlannerDay.TODAY), key = "planner-TODAY")
     return subscribed(vm.uiState, vm.overlapPrompt) {
-        awaitState(vm.uiState, "\"${item.name}\" offered in the day revolver") { state ->
-            state.revolver.any { it.id == item.id }
-        }
+        DayPlanDriver(this@placeToday, vm).select(item)
         vm.place(item, at.hour * 60 + at.minute)
-        val asked = awaitState(vm.overlapPrompt, "the planner answered the drop of \"${item.name}\" at $at") { prompt ->
-            prompt != null || vm.uiState.value.blocks.any { it.item.id == item.id }
-        } != null
+        val asked = awaitState(
+            combine(vm.uiState, vm.overlapPrompt) { state, prompt ->
+                state.blocks.any { it.item.id == item.id } to prompt
+            },
+            "the planner answered the drop of \"${item.name}\" at $at",
+        ) { (placed, prompt) -> placed || prompt != null }.second != null
         if (asked) vm.dismissOverlap()
         !asked
     }

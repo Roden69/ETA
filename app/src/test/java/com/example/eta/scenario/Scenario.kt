@@ -4,6 +4,7 @@ import android.content.Context
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.ViewModelStore
+import androidx.lifecycle.viewModelScope
 import com.example.eta.di.AppContainer
 import java.util.concurrent.ExecutorService
 import java.util.concurrent.Executors
@@ -25,6 +26,8 @@ import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.setMain
 import kotlinx.coroutines.withTimeout
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.withContext
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDateTime
 import kotlinx.datetime.TimeZone
@@ -138,6 +141,7 @@ class Scenario internal constructor(
     private val startDate = clock.today
     private val screen = CoroutineScope(SupervisorJob() + mainDispatcher)
     private var store = ViewModelStore()
+    private val modelJobs = mutableSetOf<Job>()
 
     /** "Tag 2 (Mo 19.10.) 11:30": the prefix every failure message carries. */
     fun stamp(): String {
@@ -180,7 +184,9 @@ class Scenario internal constructor(
         factory: ViewModelProvider.Factory,
         modelClass: Class<VM>,
         key: String = modelClass.name,
-    ): VM = ViewModelProvider.create(store, factory)[key, modelClass]
+    ): VM = ViewModelProvider.create(store, factory)[key, modelClass].also {
+        it.viewModelScope.coroutineContext[Job]?.let(modelJobs::add)
+    }
 
     /** [viewModel] with the class inferred; [key] only needs setting when one class is kept twice. */
     inline fun <reified VM : ViewModel> viewModel(
@@ -215,14 +221,20 @@ class Scenario internal constructor(
         try {
             return block()
         } finally {
-            collectors.forEach { it.cancel() }
+            collectors.forEach { it.cancelAndJoin() }
         }
     }
 
     override fun close() {
-        screen.cancel()
-        store.clear()
+        runBlocking {
+            withTimeout(10.seconds) {
+                withContext(mainDispatcher) { store.clear() }
+                screen.coroutineContext[Job]?.cancelAndJoin()
+                modelJobs.forEach { it.cancelAndJoin() }
+            }
+        }
         container.close()
+        mainThread.submit {}.get()
         Dispatchers.resetMain()
         mainThread.shutdownNow()
         java.util.TimeZone.setDefault(previousDefaultZone)

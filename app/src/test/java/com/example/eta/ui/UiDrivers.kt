@@ -21,12 +21,18 @@ private const val SHOW_TIMEOUT_MILLIS = 10_000L
 
 /** Waits until [text] is on screen; fails with the text when it never appears. */
 fun ComposeTestRule.awaitText(text: String) {
-    waitUntil(timeoutMillis = SHOW_TIMEOUT_MILLIS) { isShown(text) }
+    waitUntil(timeoutMillis = SHOW_TIMEOUT_MILLIS) {
+        if (!mainClock.autoAdvance) mainClock.advanceTimeByFrame()
+        isShown(text)
+    }
 }
 
 /** Waits until [text] is no longer on screen. */
 fun ComposeTestRule.awaitGone(text: String) {
-    waitUntil(timeoutMillis = SHOW_TIMEOUT_MILLIS) { !isShown(text) }
+    waitUntil(timeoutMillis = SHOW_TIMEOUT_MILLIS) {
+        if (!mainClock.autoAdvance) mainClock.advanceTimeByFrame()
+        !isShown(text)
+    }
 }
 
 /** Whether a node with exactly [text] is in the tree right now. */
@@ -37,6 +43,7 @@ fun ComposeTestRule.isShown(text: String): Boolean =
 fun ComposeTestRule.tap(text: String) {
     awaitText(text)
     node(text).performScrollTo().performClick()
+    if (!mainClock.autoAdvance) mainClock.advanceTimeBy(64)
 }
 
 /** The node with exactly [text]; fails when there is not exactly one. */
@@ -53,4 +60,5 @@ fun ComposeTestRule.tapInDialog(text: String) {
     }
     // The form is taller than a phone-sized window: its buttons may sit below the fold.
     dialogNode(text).performScrollTo().performClick()
+    if (!mainClock.autoAdvance) mainClock.advanceTimeBy(64)
 }

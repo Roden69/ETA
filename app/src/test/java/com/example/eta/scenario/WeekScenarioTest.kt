@@ -138,7 +138,7 @@ class WeekScenarioTest {
                     state.held.any { it.first.id == later.id }
                 }
                 val block = state.held.single { it.first.id == later.id }.second
-                assertEquals(PullBlock.NotYetAvailable(LocalDate(2026, 11, 1)), block)
+                assertEquals(PullBlock.NotYetAvailable(LocalDate(2026, 11, 5)), block)
                 vm.pullIntoWeek(later)
             }
             assertEquals("a held card cannot be pulled", Stage.COLLECTION, itemNamed("Urlaubsplanung").stage)

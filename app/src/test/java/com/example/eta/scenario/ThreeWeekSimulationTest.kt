@@ -15,6 +15,8 @@ import com.example.eta.domain.model.PointsReason
 import com.example.eta.domain.model.Priority
 import com.example.eta.domain.model.Stage
 import com.example.eta.domain.model.Vacation
+import com.example.eta.domain.model.VacationRule
+import com.example.eta.domain.model.VacationTreatment
 import com.example.eta.domain.streak.CATCH_UP_PHRASE
 import com.example.eta.domain.subtask.SubtaskDraft
 import com.example.eta.ui.attributes.AppointmentAttributes
@@ -71,7 +73,7 @@ class ThreeWeekSimulationTest {
         step("Einrichtung") {
             val now = clock.now()
             val persona = SampleData.lenaSetup(now)
-            completeSetup(persona.copy(setup = persona.setup.copy(growthTasks = true)))
+            completeSetup(persona.copy(setup = persona.setup.copy(growthTasks = true, allowPrioritySkip = true, allowTodoBesideWeek = true)))
             seedCollection(SampleData.lenaCollection(now, zone))
             seededIds += items(Stage.COLLECTION).map { it.id }
             container.itemRepository.add(SampleData.lenaGrowthTask(now))
@@ -96,7 +98,7 @@ class ThreeWeekSimulationTest {
                 goal(card("Pflaster kaufen"), TodoAttributes(category = Category.NEBENBEI, priority = Priority.WANT, duration = 15.minutes))
                 goal(card("Mail an Vermieter"), TodoAttributes(category = Category.NEBENBEI, priority = Priority.WANT, duration = 20.minutes))
                 // The GoalDialog of "Paket abholen" is cancelled: nothing is saved.
-                committed = budget().committedMinutes
+                committed = budget().plannedMinutes
             }
         }
         step("So 18:00 Wochenbudget zählt die Pausen") {
@@ -109,6 +111,9 @@ class ThreeWeekSimulationTest {
         assertEquals("the cancelled goal stays in the Sammelliste", Stage.COLLECTION, card("Paket abholen").stage)
 
         at(LocalTime(20, 0))
+        step("Sonntagabend eine zusätzliche Geburtstagskarte in die Woche nehmen") {
+            weekPlanner { pull(card("Geburtstagskarte schreiben")) }
+        }
         step("So 20:00 Montag planen: drei Karten, bestätigt") {
             planDay(PlannerDay.TOMORROW) {
                 place(card("Zahnarzt anrufen"), LocalTime(9, 0))
@@ -124,7 +129,7 @@ class ThreeWeekSimulationTest {
         step("Mo 09:00 Tag wie geplant") {
             assertEquals(
                 listOf(LocalTime(9, 0), LocalTime(12, 0), LocalTime(18, 0)),
-                blocksOn(monday).map { it.block.start }.sorted(),
+                blocksOn(monday).filter { it.block.origin == BlockOrigin.DRAGGED }.map { it.block.start }.sorted(),
             )
         }
         at(LocalTime(11, 0))
@@ -197,10 +202,11 @@ class ThreeWeekSimulationTest {
             assertEquals(LocalTime(11, 30), blockOf(card("Steuerunterlagen sortieren"), tuesday).start)
         }
         step("Di 14:00 neue Aufgabe am Tag bekommt die Standardpause von 10 min") {
+            var added: Item? = null
             planDay(PlannerDay.TODAY) {
-                createTodo("Akku laden", TodoAttributes(category = Category.NEBENBEI, priority = Priority.WANT, duration = 15.minutes), LocalTime(16, 0))
+                added = createTodo("Akku laden", TodoAttributes(category = Category.NEBENBEI, priority = Priority.WANT, duration = 15.minutes), LocalTime(16, 0))
             }
-            assertEquals(10.minutes, blockOf(card("Akku laden"), tuesday).breakAfter)
+            assertEquals(10.minutes, blockOf(checkNotNull(added), tuesday).breakAfter)
         }
 
         // ---- Mi 21.10.: Wochenliste füllen (MIDWEEK), Zahnarzt-Termin -------------------
@@ -245,12 +251,12 @@ class ThreeWeekSimulationTest {
 
         nextDay(LocalTime(9, 0))
         step("Fr 09:00 Donnerstag nachholen") {
-            val result = catchUp(thursday, CATCH_UP_PHRASE)
-            assertTrue("the catch-up settles Thursday: $result", result is CatchUpResult.Resolved)
+            assertTrue(container.catchUpService.dailyDays().contains(thursday))
+            assertNotNull(evening(thursday) { settle() })
         }
-        step("Fr 09:10 Tag planen: Linsensuppe 60 min um 12:00, bestätigt") {
+        step("Fr 09:10 Tag planen: Linsensuppe 60 min um 11:30, bestätigt") {
             planDay(PlannerDay.TODAY) {
-                place(card("Linsensuppe ausprobieren"), LocalTime(12, 0))
+                place(card("Linsensuppe ausprobieren"), LocalTime(11, 30))
                 confirm()
             }
         }
@@ -270,11 +276,12 @@ class ThreeWeekSimulationTest {
         at(LocalTime(20, 0))
         step("Sa 20:00 Wäsche verpasst: Nachholen angeboten und angelegt") {
             evening {
+                discard(card("Wäsche"))
                 val offer = makeUpOffers().single { it.entry.item.name == "Wäsche" }
                 makeUp(offer.entry.item)
             }
         }
-        assertTrue(items(Stage.WEEK).any { it.name == "Nachholen von Wäsche" })
+        assertTrue(items(Stage.COLLECTION).any { it.name == "Nachholen von Wäsche" })
 
         at(LocalTime(23, 50))
         nextDay(LocalTime(0, 5))
@@ -288,8 +295,9 @@ class ThreeWeekSimulationTest {
         step("So 25.10. 18:00 Wochenplanung: Ziel der letzten Woche wird gezeigt") {
             weekPlanner {
                 assertTrue("an open goal of the previous cycle is shown", openGoals().isNotEmpty())
-                takeUnfinished(card("Kleiderschrank aussortieren"))
-                returnToCollection(card("Bewerbung überarbeiten"))
+                for (goal in openGoals()) {
+                    if (goal.name == "Bewerbung überarbeiten") returnToCollection(goal) else takeUnfinished(goal)
+                }
             }
         }
         step("So 25.10. Sperrliste: die Karte vom 15.09. bleibt gesperrt, Wiederanlage wird abgewiesen") {
@@ -411,7 +419,7 @@ class ThreeWeekSimulationTest {
                 endsOn = LocalDate(2026, 12, 31),
             )
             val contract = container.contractRepository.observeAll().first().single()
-            container.contractRepository.recordVerdict(contract, kept = false, date = LocalDate(2026, 10, 31))
+            container.contractRepository.recordVerdict(contract, kept = false, date = LocalDate(2026, 10, 31), keepServing = true)
             assertEquals(ContractState.PROBATION, container.contractRepository.observeAll().first().single().state)
         }
 
@@ -419,6 +427,13 @@ class ThreeWeekSimulationTest {
 
         nextDay(LocalTime(10, 30))
         step("So 01.11. 10:30 Laufen erledigt") { tick(card("Laufen")) }
+        at(LocalTime(18, 0))
+        step("So 01.11. nächste Woche: offene Ziele bewusst übernehmen und Versicherung hinzunehmen") {
+            weekPlanner {
+                for (goal in openGoals()) takeUnfinished(goal)
+                pull(card("Versicherungen vergleichen"))
+            }
+        }
         at(LocalTime(20, 0))
         step("So 01.11. 20:00 Abrechnung: das Wachstum steigt um 5 min") {
             eveningChain { settle() }
@@ -443,16 +458,14 @@ class ThreeWeekSimulationTest {
 
         nextDay(LocalTime(9, 0))
         step("Di 03.11. Urlaub anlegen: die Blöcke der Urlaubstage fallen weg") {
-            container.vacationRepository.save(
-                Vacation(
-                    label = "Urlaub",
-                    from = tuesday03,
-                    to = LocalDate(2026, 11, 4),
-                    createdAt = clock.now(),
-                    updatedAt = clock.now(),
-                ),
-                rules = emptyList(),
+            val vacation = Vacation(
+                label = "Urlaub", from = tuesday03, to = LocalDate(2026, 11, 4),
+                createdAt = clock.now(), updatedAt = clock.now(),
             )
+            val rules = container.itemRepository.observeRecurringDefinitions().first().map {
+                VacationRule(vacationId = vacation.id, itemId = it.id, treatment = VacationTreatment.SUSPEND)
+            }
+            container.vacationRepository.save(vacation, rules)
             assertTrue(blocksOn(tuesday03).none { it.item.name == "Lernen" })
         }
         nextDay(LocalTime(9, 0))
@@ -467,7 +480,7 @@ class ThreeWeekSimulationTest {
         nextDay(LocalTime(9, 0))
         step("Fr 06.11. Samstag planen und bestätigen") {
             planDay(PlannerDay.TOMORROW) {
-                place(card("Versicherungen vergleichen"), LocalTime(10, 0))
+                place(card("Versicherungen vergleichen"), LocalTime(11, 15))
                 confirm()
             }
         }
@@ -495,7 +508,7 @@ class ThreeWeekSimulationTest {
     private suspend fun Scenario.card(name: String): Item =
         checkNotNull(allCards().firstOrNull { it.name == name }) { "\"$name\" is nowhere in the database" }
 
-    private suspend fun Scenario.allCards(): List<Item> = Stage.entries.flatMap { items(it) }
+    private suspend fun Scenario.allCards(): List<Item> = container.database.itemDao().findAll()
 
     /** The planned block of [item] on [date] as a [BlockWithItem]. */
     private suspend fun Scenario.blockWithItem(item: Item, date: LocalDate): BlockWithItem =

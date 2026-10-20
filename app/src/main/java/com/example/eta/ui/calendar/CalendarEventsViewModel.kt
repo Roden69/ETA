@@ -129,6 +129,8 @@ class CalendarEventsViewModel(
 
     private val _proposals = MutableStateFlow<List<SeriesProposal>>(emptyList())
     private val adopting = mutableSetOf<Pair<String, String?>>()
+    private val _adoptingSeries = MutableStateFlow(false)
+    val adoptingSeries: StateFlow<Boolean> = _adoptingSeries.asStateFlow()
 
     /**
      * The series the step offers, one per series: an offer to take it on, or the
@@ -150,6 +152,8 @@ class CalendarEventsViewModel(
             error = failure,
             clashes = pendingClashes(events, blocks).mapValues { (_, entries) -> entries.map { it.describe() } },
         )
+    }.combine(adoptingSeries) { state, adopting ->
+        state.copy(syncing = state.syncing || adopting)
     }.stateIn(
         scope = viewModelScope,
         started = SharingStarted.WhileSubscribed(5_000),
@@ -323,13 +327,15 @@ class CalendarEventsViewModel(
         val key = offer.event.calendarId to offer.event.seriesId
         if (!adopting.add(key)) return
         _proposals.value = _proposals.value.filterNot { (it.event.calendarId to it.event.seriesId) == key }
+        _adoptingSeries.value = true
         viewModelScope.launch {
             try {
                 importService.adoptSeries(offer.event, offer.pattern, attributes.toDetails())
+                reloadProposals()
             } finally {
                 adopting.remove(key)
+                _adoptingSeries.value = adopting.isNotEmpty()
             }
-            reloadProposals()
         }
     }
 

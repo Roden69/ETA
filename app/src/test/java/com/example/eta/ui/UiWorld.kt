@@ -83,6 +83,7 @@ class UiWorld(
     zone: String = "Europe/Berlin",
     calendarApi: CalendarApi = FixedCalendarApi(),
     context: Context = RuntimeEnvironment.getApplication(),
+    sandbox: Boolean = true,
 ) : AutoCloseable {
     private val previousZone: TimeZone = TimeZone.getDefault()
     private val timeZone: KxTimeZone = KxTimeZone.of(zone)
@@ -94,7 +95,7 @@ class UiWorld(
     val clock = ScenarioClock(timeZone, LocalDateTime.parse(start))
     val container = AppContainer(
         context = context,
-        sandbox = true,
+        sandbox = sandbox,
         clock = clock,
         timeZone = timeZone,
         alarms = false,
@@ -136,7 +137,7 @@ class UiWorld(
     }
 
     override fun close() {
-        container.close()
+        container.database.close()
         TimeZone.setDefault(previousZone)
     }
 

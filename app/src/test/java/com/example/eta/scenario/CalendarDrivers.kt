@@ -62,6 +62,7 @@ class CalendarStepDriver internal constructor(
     suspend fun adopt(offer: SeriesProposal.Offer, attributes: AppointmentAttributes = AppointmentAttributes()) {
         vm.openSeries(offer)
         vm.adoptSeries(attributes)
+        scenario.awaitState(vm.adoptingSeries, "\"${offer.event.title}\" adoption completed") { !it }
         scenario.awaitState(vm.proposals, "\"${offer.event.title}\" taken on as a series") { proposals ->
             proposals.none { it.event.seriesId == offer.event.seriesId }
         }

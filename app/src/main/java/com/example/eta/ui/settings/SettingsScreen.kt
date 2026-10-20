@@ -1144,9 +1144,9 @@ private fun FreeTimeBox(setup: UserSetup, onChange: OnSetupChange) {
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = "Tägliche Freizeit", style = EtaTheme.typography.heading)
             EtaText(
-                text = "Wird mit „Sichern“ übernommen und ab dem ersten offenen Tag neu " +
-                    "eingeplant. Änderungen an der Freizeit-Aufgabe im Reiter Listen werden " +
-                    "dabei ersetzt.",
+                text = "Wird mit „Sichern“ übernommen: heutige Freizeit, die noch nicht begonnen " +
+                    "hat, und spätere offene Tage werden neu eingeplant. Ein bestätigter Morgen " +
+                    "bleibt. Änderungen an der Freizeit-Aufgabe im Reiter Listen werden ersetzt.",
                 style = EtaTheme.typography.caption,
                 color = EtaTheme.colors.textMuted,
             )

@@ -120,6 +120,12 @@ private class FreshEmulatorState : TestRule {
             check(context.packageName == "com.example.erik_iteration_2") {
                 "Refusing to reset data of ${context.packageName}"
             }
+            val automation = InstrumentationRegistry.getInstrumentation().uiAutomation
+            automation.executeShellCommand(
+                "appops set ${context.packageName} SCHEDULE_EXACT_ALARM allow",
+            ).use { descriptor ->
+                android.os.ParcelFileDescriptor.AutoCloseInputStream(descriptor).use { it.readBytes() }
+            }
             val container = (context.applicationContext as EtaApplication).container
             runBlocking {
                 container.tutorialStore.reset()

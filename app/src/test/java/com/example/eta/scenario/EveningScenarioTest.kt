@@ -303,7 +303,7 @@ class EveningScenarioTest {
     private suspend fun Scenario.dashboardStreak(): Int {
         val vm = viewModel<DashboardViewModel>(dashboardViewModelFactory(container))
         return subscribed(vm.uiState) {
-            awaitState(vm.uiState, "the dashboard of ${clock.today} loaded") { it.today == clock.today }.streak.length
+            awaitState(vm.uiState, "the dashboard of ${clock.today} loaded") { it.today == clock.today && it.phase != null }.streak.length
         }
     }
 

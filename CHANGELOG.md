@@ -10,7 +10,7 @@ Sammelpaket zu den Issues #4 bis #51 ([Pull Request #52](https://github.com/Rode
 
 ### Vor dem Update
 
-- Unter *Einstellungen → Deine Daten* **Sichern** drücken. Die Datenbank wird beim ersten Start auf Version 35 migriert (von 33 oder 34). Zurück zu einer älteren App führt danach kein Weg.
+- Unter *Einstellungen → Deine Daten* **Sichern** drücken. Die Datenbank wird beim ersten Start auf Version 36 migriert (von 33, 34 oder 35). Zurück zu einer älteren App führt danach kein Weg.
 - Eine APK aktualisiert nur eine Installation mit demselben Signaturschlüssel. Bei einem Konflikt **nicht deinstallieren** (das löscht die Datenbank), sondern *Eta Fork* daneben installieren.
 
 ### Neu

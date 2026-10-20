@@ -87,6 +87,7 @@ class CalendarSeriesOfferTest {
                         EtaUiHost(world, world.locals()) {
                             CalendarStepScreen(
                                 viewModel = androidx.lifecycle.viewmodel.compose.viewModel(
+                                    key = "calendar-${generation.intValue}",
                                     factory = calendarViewModelFactory(
                                         world.container,
                                         LocalDate(2026, 10, 22),
@@ -103,14 +104,14 @@ class CalendarSeriesOfferTest {
 
         compose.awaitText("Teamrunde")
         compose.waitUntil(timeoutMillis = 10_000) {
-            compose.onAllNodesWithText("wiederholt sich jeden Do 10:00").fetchSemanticsNodes().isNotEmpty()
+            compose.onAllNodesWithText("wiederholt sich jeden Do 10:00", substring = true).fetchSemanticsNodes().isNotEmpty()
         }
         assertEquals(1, compose.onAllNodesWithText("Einzeln lassen").fetchSemanticsNodes().size)
         compose.tap("Einzeln lassen")
         compose.awaitGone("Einzeln lassen")
 
-        compose.tap("Neue ViewModel-Instanz")
-        compose.awaitText("Neue Termine")
+        compose.onAllNodesWithText("Neue ViewModel-Instanz")[0].performClick()
+        compose.awaitText("Termine")
         compose.waitUntil(timeoutMillis = 10_000) {
             compose.onAllNodesWithText("Einzeln lassen").fetchSemanticsNodes().isEmpty()
         }

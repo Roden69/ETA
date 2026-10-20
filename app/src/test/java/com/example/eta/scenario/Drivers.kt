@@ -110,7 +110,7 @@ class WeekPlannerDriver internal constructor(
         }
         vm.returnToCollection(item)
         scenario.awaitState(vm.uiState, "\"${item.name}\" back in the Sammelliste") { state ->
-            state.collection.any { it.id == item.id }
+            (state.collection + state.held.map { it.first }).any { it.id == item.id }
         }
     }
 
@@ -135,7 +135,7 @@ class WeekPlannerDriver internal constructor(
         }
         vm.takeUnfinishedIntoWeek(item)
         scenario.awaitState(vm.uiState, "\"${item.name}\" in the week list") { state ->
-            state.weekList.any { it.id == item.id }
+            state.weekList.any { it.id == item.id } && state.unfinished.none { it.id == item.id }
         }
     }
 
@@ -161,11 +161,30 @@ class DayPlanDriver internal constructor(
     private val scenario: Scenario,
     private val vm: DayPlannerViewModel,
 ) {
-    /** Drops [item] from the revolver onto [at]; an overlap would be a prompt, so the test fails on one. */
-    suspend fun place(item: Item, at: LocalTime) {
+    /** Selects a priority through the real skip/reset buttons, only when settings permit it. */
+    suspend fun select(item: Item) {
+        val setup = scenario.container.setupRepository.find()
+        scenario.awaitState(vm.uiState, "the planner reflects the saved settings") { it.setup == setup }
+        if (vm.uiState.value.canSkipPriority && vm.uiState.value.revolver.none { it.id == item.id }) {
+            vm.resetPriority()
+            scenario.awaitState(vm.uiState, "priority selection reset") { !it.prioritySkipped }
+            repeat(Priority.entries.size) {
+                val before = vm.uiState.value
+                if (before.revolver.any { it.id == item.id }) return@repeat
+                vm.skipPriority()
+                scenario.awaitState(vm.uiState, "next priority selected") {
+                    it.revolverPriority != before.revolverPriority
+                }
+            }
+        }
         scenario.awaitState(vm.uiState, "\"${item.name}\" offered in the day revolver") { state ->
             state.revolver.any { it.id == item.id }
         }
+    }
+
+    /** Drops the selected card onto the day; an overlap must be answered by its caller. */
+    suspend fun place(item: Item, at: LocalTime) {
+        select(item)
         vm.place(item, at.hour * MINUTES_PER_HOUR + at.minute)
         scenario.awaitState(vm.uiState, "\"${item.name}\" placed at $at") { state ->
             state.blocks.any { it.item.id == item.id }

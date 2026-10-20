@@ -68,9 +68,11 @@ class RecurringScenarioTest {
         step("Einrichtung") { completeSetup(SampleData.lenaSetup(clock.now())) }
         val laundry = standingNamed("Wäsche")
 
-        step("Wäsche: am 24. Oktober nicht, am 31. Oktober wieder") {
-            assertTrue(blocksOf(laundry, LocalDate(2026, 10, 24), LocalDate(2026, 10, 24)).isEmpty())
-            assertEquals(1, blocksOf(laundry, LocalDate(2026, 10, 31), LocalDate(2026, 10, 31)).size)
+        step("Wäsche: am 24. Oktober, am 31. nicht, am 7. November wieder") {
+            container.scheduleMaintenance.topUp()
+            assertEquals(1, blocksOf(laundry, LocalDate(2026, 10, 24), LocalDate(2026, 10, 24)).size)
+            assertTrue(blocksOf(laundry, LocalDate(2026, 10, 31), LocalDate(2026, 10, 31)).isEmpty())
+            assertEquals(1, blocksOf(laundry, LocalDate(2026, 11, 7), LocalDate(2026, 11, 7)).size)
         }
     }
 

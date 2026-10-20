@@ -36,8 +36,8 @@ class Invariants internal constructor(private val scenario: Scenario) {
     /** Completed or discarded blocks as the previous check saw them. */
     private var frozen: Map<String, PlannedBlock> = emptyMap()
 
-    /** Each card's `enteredCollectionAt` as the first check that saw it set it. */
-    private val enteredSnapshot = mutableMapOf<String, Instant>()
+    /** The previous item state distinguishes day discards from intentional week returns. */
+    private var enteredSnapshot: Map<String, Item> = emptyMap()
 
     /**
      * Runs every invariant and fails with all violations found.
@@ -50,8 +50,8 @@ class Invariants internal constructor(private val scenario: Scenario) {
         val container = scenario.container
         val today = scenario.clock.today
         val blocks = container.planRepository.findRange(today.minus(HORIZON), today.plus(HORIZON))
-        val stages: Map<Stage, List<Item>> = Stage.entries.associateWith { container.itemRepository.observeStage(it).first() }
-        val items = stages.values.flatten()
+        val items = container.database.itemDao().findAll()
+        val stages = Stage.entries.associateWith { stage -> items.filter { it.stage == stage } }
         val violations = mutableListOf<String>()
 
         // 1 — one block per (item, date)
@@ -125,14 +125,15 @@ class Invariants internal constructor(private val scenario: Scenario) {
 
         // 8 — the Sperrliste clock is kept
         items.forEach { card ->
-            // A follow-up's clock is stamped by its predecessor and undone by an untick.
             if (card.followUpOfId != null) return@forEach
-            val entered = card.enteredCollectionAt ?: return@forEach
-            val before = enteredSnapshot.putIfAbsent(card.id, entered)
-            if (before != null && before != entered) {
-                violations += "\"${card.name}\" changed its time in the Sammelliste from $before to $entered (invariant 8)"
+            val before = enteredSnapshot[card.id] ?: return@forEach
+            if (before.stage == Stage.DAY && card.stage == Stage.COLLECTION &&
+                before.enteredCollectionAt != null && before.enteredCollectionAt != card.enteredCollectionAt
+            ) {
+                violations += "\"${card.name}\" restarted its Sperrliste clock when discarded from the day (invariant 8)"
             }
         }
+        enteredSnapshot = items.associateBy { it.id }
 
         if (violations.isNotEmpty()) {
             throw AssertionError(

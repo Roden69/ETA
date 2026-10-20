@@ -88,7 +88,7 @@ class AppContainer(
 ) {
     private val appContext = context.applicationContext
 
-    private val database: EtaDatabase = if (sandbox) {
+    internal val database: EtaDatabase = if (sandbox) {
         Room.inMemoryDatabaseBuilder(appContext, EtaDatabase::class.java).build()
     } else {
         Room

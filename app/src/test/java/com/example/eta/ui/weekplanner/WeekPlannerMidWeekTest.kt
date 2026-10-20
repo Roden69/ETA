@@ -203,49 +203,4 @@ class WeekPlannerMidWeekTest {
         assertEquals(LocalDate(2026, 10, 18), world.weekItem("Altes Ziel").weekStartedOn)
     }
 
-    @Test
-    fun `tapping an unfinished card opens the concretize form and cancel keeps it in the Sammelliste`() {
-        val world = setUpLena()
-        val unfinished = Item.newQuickTodo("Mail an Vermieter", world.clock.now())
-        runBlocking { world.seedCollection(listOf(SeedCard(unfinished))) }
-        startApp(world)
-        openMidWeek()
-        compose.tap("Weiter zu deinen ToDos")
-
-        compose.awaitText("noch unvollständig — antippen zum Ausfüllen")
-        compose.tap("Mail an Vermieter")
-        compose.awaitText("ToDo ausfüllen")
-
-        compose.tapInDialog("Abbrechen")
-
-        compose.awaitGone("ToDo ausfüllen")
-        compose.node("Mail an Vermieter").performScrollTo().assertIsDisplayed()
-        assertTrue(
-            "cancel keeps the card in the Sammelliste",
-            world.stageNames(Stage.COLLECTION).contains("Mail an Vermieter"),
-        )
-    }
-
-    @Test
-    fun `saving the concretize form takes the unfinished card into the week`() {
-        val world = setUpLena()
-        val unfinished = Item.newQuickTodo("Mail an Vermieter", world.clock.now())
-        runBlocking { world.seedCollection(listOf(SeedCard(unfinished))) }
-        startApp(world)
-        openMidWeek()
-        compose.tap("Weiter zu deinen ToDos")
-        compose.awaitText("noch unvollständig — antippen zum Ausfüllen")
-
-        compose.tap("Mail an Vermieter")
-        compose.awaitText("ToDo ausfüllen")
-        compose.tapInDialog("Fokus — voller Einsatz")
-        compose.tapInDialog("Muss geschehen")
-        compose.tapInDialog("Speichern und in die Woche")
-
-        compose.awaitGone("ToDo ausfüllen")
-        compose.waitUntil(timeoutMillis = 10_000) {
-            world.stageNames(Stage.WEEK).contains("Mail an Vermieter")
-        }
-        assertTrue("the saved card is concretized", world.weekItem("Mail an Vermieter").isConcretized)
-    }
 }

@@ -67,6 +67,7 @@ class CalendarScenarioTest {
                 container.calendarSyncService.connect()
                 container.calendarSyncService.refresh(tuesday, windowEnd)
             }
+            val withoutBlocker = container.reevaluationService.preview(thursday, emptyList())
             val blocker = step("Donnerstag: als Zeitblocker übernehmen") {
                 container.calendarImportService.import(
                     pendingOn(thursday).single(),
@@ -82,7 +83,7 @@ class CalendarScenarioTest {
             val settlement = step("Donnerstag Abend: abrechnen") { checkNotNull(evening(thursday) { settle() }) }
 
             assertEquals("a time blocker earns nothing", 0.0, settlement.harvest, TOLERANCE)
-            assertEquals("it holds its hour, so nothing is dropped", 0.0, settlement.droppedHours, TOLERANCE)
+            assertEquals("the blocker holds one hour without earning points", withoutBlocker.unplannedHours - 1.0, settlement.unplannedHours, TOLERANCE)
             assertTrue("no harvest is booked for it", transactions().none { it.reason == PointsReason.HARVEST })
         }
     }
@@ -126,6 +127,7 @@ class CalendarScenarioTest {
             step("Einrichtung") { completeSetup(SampleData.lenaSetup(clock.now())) }
             val offers = step("Kalender lesen: die Serie wird angeboten") {
                 container.calendarRefreshService.run()
+                container.calendarSyncService.connect()
                 container.calendarSyncService.refresh(tuesday, windowEnd)
                 container.calendarSyncService.proposeSeries(pendingFor()).filterIsInstance<SeriesProposal.Offer>()
             }
@@ -212,7 +214,10 @@ class CalendarScenarioTest {
         val calendar = FakeCalendar()
         calendar.event("Zahnarzt", tuesday, LocalTime(17, 30), 30.minutes)
         scenario(start = "2026-10-20T08:00", calendar = calendar) {
-            step("Einrichtung") { completeSetup(SampleData.lenaSetup(clock.now())) }
+            step("Einrichtung mit freiem Platz nach dem Termin") {
+                val persona = SampleData.lenaSetup(clock.now())
+                completeSetup(persona.copy(setup = persona.setup.copy(meals = com.example.eta.domain.setup.MealPlan.DailyCooking(emptyList()))))
+            }
             sportToday()
             val conflict = importDentistAndClash()
             assertNotNull("the session can wait until the appointment is over", conflict.pushed)
@@ -256,7 +261,7 @@ class CalendarScenarioTest {
 
     /** Lena's Sport session of today: the standing block the appointment collides with. */
     private suspend fun Scenario.sportToday() =
-        blocksOn(tuesday).single { it.block.origin == BlockOrigin.RECURRING && it.block.start == LocalTime(17, 15) }
+        blocksOn(tuesday).single { it.block.origin == BlockOrigin.RECURRING && it.item.name == "Sport" }
 
     private fun details(start: LocalTime = LocalTime(17, 30), duration: Duration = 30.minutes) = AppointmentDetails(
         category = Category.FOKUS,

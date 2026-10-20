@@ -4,15 +4,11 @@ on:
   schedule:
     - cron: '30 2 * * *'
   workflow_dispatch:
-  # A change to the instrumented tests or to this workflow is checked before it
-  # merges, not only by the next nightly run.
+  # Dialog and device flows are release gates on every PR as well as nightly.
   pull_request:
     branches:
       - main
       - 'dev/**'
-    paths:
-      - 'app/src/androidTest/**'
-      - '.github/workflows/android-emulator.yml'
 
 permissions:
   contents: read
