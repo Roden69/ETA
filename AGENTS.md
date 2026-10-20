@@ -43,7 +43,7 @@ flowchart LR
   `ScheduleMaintenance.topUp()` and the weekly inflation.
 - **DI (manual):** `di/AppContainer.kt` holds every repository, service and
   coordinator as an eager `val`; declare dependencies above their users and pass
-  `clock = clock`. ViewModels get it through factories in `ui/root/EtaApp.kt`;
+  `clock = clock`. ViewModels get it through factories in `ui/root/ViewModelFactories.kt`;
   activities, receivers and the widget use
   `(applicationContext as EtaApplication).container`.
 - **Sandbox:** the tutorial runs a second
@@ -128,7 +128,7 @@ Each guards against a past bug or an owner decision; background in
 | `data/local/` | `EtaDatabase` (version, migrations, `ETA_DATABASE_MIGRATIONS`), DAOs, `Converters`, `ResetDao` |
 | `data/repository/` | `*Repository` (flows, CRUD), `*Service` (multi-step use cases), `ScheduleMaintenance` |
 | `alarm/` | Coordinators, schedulers, receivers, notifications, sound, speech, wake screen |
-| `ui/root/` | `EtaApp.kt` (navigation, ViewModel factories), `RootViewModel` |
+| `ui/root/` | `EtaApp.kt` (navigation), `ViewModelFactories.kt` (ViewModel factories), `RootViewModel` |
 | `ui/components/`, `ui/theme/`, `ui/format/` | `Eta*` Foundation design system, designs, German formatters |
 | `widget/` | Quick-Add `RemoteViews` widget and its translucent `QuickAddActivity` |
 | `app/schemas/com.example.eta.data.local.EtaDatabase/` | Committed Room schema JSON per version |
@@ -183,7 +183,7 @@ No git hooks, formatter task, lint baseline or release/copy script exist.
 - **ViewModels:** constructor takes services plus `clock: Clock = Clock.System`
   and usually `timeZone: TimeZone = TimeZone.currentSystemDefault()`. Factories
   (`viewModelFactory { initializer { … container.x … } }`) sit in
-  `ui/root/EtaApp.kt`, except `quickAddViewModelFactory` and
+  `ui/root/ViewModelFactories.kt`, except `quickAddViewModelFactory` and
   `tutorialViewModelFactory`. Obtain with
   `viewModel(key = "<feature>-$dateKey", factory = …)`; the date key
   (`rememberDateKey()`) recreates the ViewModel at midnight.
@@ -336,13 +336,15 @@ Never "repair" a migration by deleting or recreating a user database.
 
 ## Testing & QA
 
-- **Stack:** JUnit 4 on the JVM (`app/src/test/java/com/example/eta/`). Only
-  `EtaDatabaseMigrationTest` uses Robolectric (`@Config(sdk = [35])`) and
-  `room3-testing`'s `MigrationTestHelper`. No mocking library, coroutine-test,
-  Turbine or Truth; the only fake is a private `FixedClock` in `TutorialTest`.
+- **Stack:** JUnit 4 on the JVM (`app/src/test/java/com/example/eta/`). Robolectric
+  runs `EtaDatabaseMigrationTest` (`@Config(sdk = [35])`, `room3-testing`'s
+  `MigrationTestHelper`), the repository tests and the scenario harness in
+  `scenario/` ([`docs/testing.md`](docs/testing.md)). `kotlinx-coroutines-test`
+  supplies `Dispatchers.setMain` for the harness only. No mocking library, Turbine
+  or Truth; the only fake is a private `FixedClock` in `TutorialTest`.
 - **Coverage:** pure `domain/` rules plus `ui/` design and formatting helpers.
   Repositories, DAOs beyond migrations, alarms, calendar, backup, widget,
-  ViewModels and screens are untested: put new logic in a pure `domain/` function
+  screens are untested, ViewModels are covered only by `scenario/`: put new logic in a pure `domain/` function
   and test it there. No coverage tool; lint has no baseline, keep it error-free.
 - **House style:** `<Subject>Test` with backticked sentence names; all domain tests
   in package `com.example.eta.domain`; private per-class builders over real

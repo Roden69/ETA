@@ -51,6 +51,7 @@ import com.example.eta.domain.planning.minuteOfDay
 import com.example.eta.domain.planning.snapToGrid
 import com.example.eta.ui.components.EtaButton
 import com.example.eta.ui.components.LocalPointsVisible
+import com.example.eta.ui.components.LocalEtaClock
 import com.example.eta.ui.components.tutorialAllows
 import com.example.eta.domain.tutorial.TutorialGate
 import com.example.eta.ui.components.EtaButtonStyle
@@ -64,7 +65,6 @@ import com.example.eta.ui.format.formatSignedPoints
 import com.example.eta.ui.subtasks.foldCandidatesExcept
 import com.example.eta.ui.theme.EtaTheme
 import kotlin.math.roundToInt
-import kotlin.time.Clock
 import kotlin.time.Duration
 import kotlin.time.Duration.Companion.minutes
 import kotlinx.datetime.LocalDate
@@ -198,6 +198,7 @@ fun DayPlannerScreen(
     // Keyed on the viewport as well: centring needs to know how tall it is, and
     // that is only reported once the day has been laid out.
     val viewportKnown = viewportHeight > 0f
+    val clock = LocalEtaClock.current
     LaunchedEffect(minutePx, state.isToday, focusMinute, viewportKnown) {
         if (minutePx <= 1f) return@LaunchedEffect
         if (focusMinute != null) {
@@ -207,7 +208,7 @@ fun DayPlannerScreen(
             return@LaunchedEffect
         }
         val minute = if (state.isToday) {
-            (Clock.System.now()
+            (clock.now()
                 .toLocalDateTime(TimeZone.currentSystemDefault())
                 .time.minuteOfDay() - 60).coerceAtLeast(0)
         } else {
