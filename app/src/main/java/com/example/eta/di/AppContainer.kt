@@ -240,10 +240,13 @@ class AppContainer(
      * matches the app by package name and signing certificate against the Android
      * OAuth client in the Cloud project, so there is nothing here to leak.
      */
+    /** Series kept single or acknowledged; a fact about this install, cleared by "Alles zurücksetzen". */
+    val declinedSeriesStore: DeclinedSeriesStore = DeclinedSeriesStore(appContext)
+
     val calendarRepository: CalendarRepository = CalendarRepository(
         dao = database.calendarDao(),
         api = calendarApi,
-        declinedSeries = DeclinedSeriesStore(appContext),
+        declinedSeries = declinedSeriesStore,
         clock = clock,
     )
 

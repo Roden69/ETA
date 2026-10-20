@@ -715,6 +715,7 @@ private fun rootViewModelFactory(container: AppContainer): ViewModelProvider.Fac
                 resetLocalStores = {
                     container.eveningStore.reset()
                     container.featureSuggestionStore.reset()
+                    container.declinedSeriesStore.reset()
                 },
             )
         }

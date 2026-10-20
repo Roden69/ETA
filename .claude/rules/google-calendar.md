@@ -227,7 +227,8 @@ shows a sentence.
   **Einzeln lassen**. `CalendarSyncService.proposeSeries` does the reading; a series Eta
   refuses shows its reason once, acknowledged with "Verstanden". "Einzeln lassen" and the
   acknowledgement are remembered per series in `DeclinedSeriesStore` (SharedPreferences,
-  no migration), so the series is not asked again. The occurrence button "Als
+  no migration), so the series is not asked again; "Alles zurücksetzen" clears them, so a
+  fresh start offers every series again. The occurrence button "Als
   wiederkehrende Aufgabe übernehmen" stays as the manual path. One-off events are never
   turned into recurring tasks.
 - **What converts:** `FREQ=WEEKLY` with `INTERVAL`, `BYDAY`, and an end. `UNTIL` ends the

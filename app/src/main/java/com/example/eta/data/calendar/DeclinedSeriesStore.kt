@@ -26,6 +26,11 @@ class DeclinedSeriesStore(context: Context) {
     /** A copy: the set `SharedPreferences` returns must not be written to. */
     private fun declined(): Set<String> = prefs.getStringSet(KEY_DECLINED, emptySet()).orEmpty().toSet()
 
+    /** Back to a first start: no series has been kept single, so each is offered again. */
+    fun reset() {
+        prefs.edit { clear() }
+    }
+
     private fun key(calendarId: String, seriesId: String) = "$calendarId|$seriesId"
 
     private companion object {
