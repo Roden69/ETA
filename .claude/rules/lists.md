@@ -108,7 +108,10 @@ link, kept after the step is released.
 - **Released** when the predecessor is **checked off** (a block completed through
   `PlanRepository.complete`, or "Erledigt" on the Listen tab, or a finished card via
   `ItemRepository.update`). It gets `enteredCollectionAt = now` and is offered:
-  "»X« ist jetzt dran" with "In die Wochenliste" (same gate as every other pull).
+  "»X« ist jetzt dran" with "In die Wochenliste" (same gate as every other pull). A step
+  that was never filled in is not taken into the week: the notice asks for "Bearbeiten"
+  first (`ItemRepository.takeIntoWeek` would keep it in the Sammelliste anyway, see
+  `week-planning.md`, "Every ToDo in `Stage.WEEK` is concretized").
 - **Only the next step** is released: a step waits for the one before it, so the
   order is enforced and any amount of time may pass between steps.
 - **Ticking the predecessor back** makes an offered step that is still in the

@@ -89,13 +89,42 @@ place — and still refuse anything new, the opposite of the rule's intent. An e
 revolver now always means the week can be filled again.
 
 
+**The gate is solvable in place (issue #54b).** Open goals used to hold the whole
+Sammelliste with nothing on the page that could be done about it: the column said
+"Nichts verplanbar" and the goals sat unnamed in a text box, so a week that had been
+planned out could not take anything new without a way out being found by accident.
+The goals now sit at the **top of the Sammelliste column**, each with two actions:
+**"In diese Woche übernehmen"** re-stamps `weekStartedOn` to the current cycle (an
+explicit choice, never a silent carry-over; `takeUnfinishedIntoWeek`), and **"Zurück
+in die Sammelliste"** is `returnToCollection`. The column opens as soon as none is left,
+because `observeUnfinishedWeekGoals` is a flow. The Listen tab's notices point here.
+
 **Nothing leaves the Sammelliste column without a reason.** `weekPool`
 (`domain/planning/WeekPool.kt`) splits the ToDos into pullable and held, and each held
 card carries its `PullBlock`: a follow-up still waiting for its predecessor, an unlock
 day after the week's end ("Einplanbar ab …"), or open goals of an earlier cycle. Held
-cards are listed greyed out under "Noch nicht in dieser Woche". Before, a card that
-unlocked after the week's end was dropped from the column without a word, and the open
-goals case blanked the whole column to "Gesperrt." while the Listen tab listed the
-cards. `pullIntoWeek` checks the same `pullBlockOf` rule, so a stale tap cannot take in
-what the screen would hold back. A pull writes stage and stamp only from the screen's
-copy of the card: it persists, and the Listen tab shows it straight away.
+cards are listed greyed out under "Noch nicht in dieser Woche". `pullIntoWeek` checks
+the same `pullBlockOf` rule, so a stale tap cannot take in what the screen would hold
+back. A pull writes stage and stamp only from the screen's copy of the card: it
+persists, and the Listen tab shows it straight away.
+
+**Every ToDo in `Stage.WEEK` is concretized (issue #54b).** The revolver offers only
+finished cards, so a bare one in the week could never be planned. `weekStageOf`
+(`domain/planning/WeekPool.kt`) is the one rule: a card that is not `isConcretized`
+lands in the Sammelliste, not the week. `ItemRepository.takeIntoWeek` and `moveTo(WEEK)`
+apply it, so every path in (the weekly planning, the Listen tab, the day planner's
+return, the calendar's conflict answers) is covered. The screen never offers a bare
+card the week: a tap on an unfinished Sammelliste card opens the same ToDo form the
+concretizing step uses (`GoalDialog` over `TodoAttributeFields`), and saving it
+answers the card **and** takes it into the week in one step; cancelling leaves it where
+it was. `pullIntoWeek` refuses an unfinished card as a stale-tap guard.
+
+**Stranded cards are fixable.** A ToDo that reached `Stage.WEEK` without its answers
+(earlier versions allowed it) is shown in the week column with the same dialog, which
+answers it in place and keeps its stamp. `ConcretizeViewModel.pending` includes such
+cards, so the concretizing step lists them too. No migration.
+
+**The calendar page leads on.** Both phases start on the calendar, which is still the
+first page (appointments before the week is filled). Its "Weiter zu deinen ToDos"
+action animates the pager to the Sammelliste and says how many ToDos are ready, or —
+while open goals hold everything — why, in one phrase.

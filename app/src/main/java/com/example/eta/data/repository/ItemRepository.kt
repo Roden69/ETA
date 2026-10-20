@@ -14,6 +14,7 @@ import com.example.eta.domain.model.Priority
 import com.example.eta.domain.model.Stage
 import com.example.eta.domain.subtask.SubtaskDraft
 import com.example.eta.domain.model.normalizeName
+import com.example.eta.domain.planning.weekStageOf
 import com.example.eta.domain.recurrence.Rhythm
 import com.example.eta.domain.recurrence.rulesWithTimes
 import com.example.eta.domain.staging.collectionTimeoutThreshold
@@ -324,10 +325,22 @@ class ItemRepository(
      *
      * The stamp is what lets the next cycle ask what this one committed to: the
      * week list itself empties as soon as things are planned into days.
+     *
+     * **Every way into the week goes through here or [moveTo].** A card that is not
+     * concretized cannot be a week goal (see `weekStageOf`); it stays in the
+     * Sammelliste instead of being written into the week unplannable.
      */
     suspend fun takeIntoWeek(item: Item, cycleStart: LocalDate) {
         val now = clock.now()
-        itemDao.upsert(item.copy(stage = Stage.WEEK, weekStartedOn = cycleStart, updatedAt = now))
+        val stage = weekStageOf(item)
+        itemDao.upsert(
+            item.copy(
+                stage = stage,
+                weekStartedOn = cycleStart.takeIf { stage == Stage.WEEK },
+                enteredCollectionAt = item.enteredCollectionAt ?: now.takeIf { stage == Stage.COLLECTION },
+                updatedAt = now,
+            ),
+        )
     }
 
     /**
@@ -346,18 +359,29 @@ class ItemRepository(
     }
 
     /**
-     * Stages an item forward. Re-entering the Sammelliste restarts the timeout
-     * clock, which is what makes a deliberately deferred ToDo safe from the ban.
+     * Stages an item forward. Re-entering the Sammelliste on purpose restarts the
+     * timeout clock, which is what makes a deliberately deferred ToDo safe from the ban.
+     *
+     * An unfinished card asked for the week lands in the Sammelliste instead (see
+     * [weekStageOf]), and that fallback must not restart the clock: a card that returns
+     * to the Sammelliste keeps its `enteredCollectionAt`, so the Sperrliste cannot be dodged.
      */
     suspend fun moveTo(item: Item, stage: Stage) {
         val now = clock.now()
+        // Asking for the week with a card that is not finished lands it in the Sammelliste.
+        val target = if (stage == Stage.WEEK) weekStageOf(item) else stage
+        val fallback = stage == Stage.WEEK && target == Stage.COLLECTION
         itemDao.upsert(
             item.copy(
-                stage = stage,
-                enteredCollectionAt = if (stage == Stage.COLLECTION) now else item.enteredCollectionAt,
+                stage = target,
+                enteredCollectionAt = when {
+                    fallback -> item.enteredCollectionAt ?: now
+                    target == Stage.COLLECTION -> now
+                    else -> item.enteredCollectionAt
+                },
                 // Handing it back gives up the commitment, so it stops counting
                 // against the next cycle's gate.
-                weekStartedOn = if (stage == Stage.COLLECTION) null else item.weekStartedOn,
+                weekStartedOn = if (target == Stage.COLLECTION) null else item.weekStartedOn,
                 updatedAt = now,
             ),
         )

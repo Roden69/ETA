@@ -20,6 +20,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.saveable.rememberSaveable
@@ -35,6 +36,7 @@ import com.example.eta.domain.model.Item
 import com.example.eta.domain.planning.WeekBudget
 import com.example.eta.domain.planning.PullBlock
 import com.example.eta.domain.planning.costOf
+import com.example.eta.ui.attributes.TodoAttributes
 import com.example.eta.ui.calendar.CalendarEventsSection
 import com.example.eta.ui.calendar.CalendarEventsViewModel
 import com.example.eta.ui.components.ConfirmDialog
@@ -60,6 +62,9 @@ import com.example.eta.ui.theme.colorOf
 import kotlinx.coroutines.launch
 
 private enum class Step { INFLATION, EVALUATION, CALENDAR, PLAN }
+
+/** A card that is answered in the concretize dialog; [intoWeek] takes it into the week on save. */
+private data class FillIn(val item: Item, val intoWeek: Boolean)
 
 /**
  * Which steps a visit runs through.
@@ -117,6 +122,8 @@ fun WeekPlannerScreen(
     )
     val scope = rememberCoroutineScope()
     var adding by remember { mutableStateOf(false) }
+    // A Sammelliste or week card still missing its answers, asked for in the dialog.
+    var filling by remember { mutableStateOf<FillIn?>(null) }
     // Each step's scroll position, held up here: paging away from a step, or the
     // timetable replacing the whole screen, would otherwise start it at the top.
     val pageScrolls = Step.entries.associateWith { rememberScrollState() }
@@ -181,7 +188,15 @@ fun WeekPlannerScreen(
                     when (steps[page]) {
                         Step.INFLATION -> InflationStep(inflation, banned)
                         Step.EVALUATION -> EvaluationStep(evaluation, viewModel::setEvaluation)
-                        Step.CALENDAR -> calendarViewModel?.let { CalendarEventsSection(it) }
+                        Step.CALENDAR -> calendarViewModel?.let {
+                            CalendarEventsSection(it)
+                            NextToTodosAction(
+                                state = state,
+                                onNext = {
+                                    scope.launch { pagerState.animateScrollToPage(steps.indexOf(Step.PLAN)) }
+                                },
+                            )
+                        }
                         Step.PLAN -> {
                             if (weekAdjust != null) {
                                 EtaSurface(modifier = Modifier.fillMaxWidth()) {
@@ -201,7 +216,12 @@ fun WeekPlannerScreen(
                                     }
                                 }
                             }
-                            PlanStep(state, viewModel, onAdd = { adding = true })
+                            PlanStep(
+                                state,
+                                viewModel,
+                                onAdd = { adding = true },
+                                onFillIn = { item, intoWeek -> filling = FillIn(item, intoWeek) },
+                            )
                         }
                     }
                     Spacer(Modifier.size(EtaTheme.spacing.xl))
@@ -255,12 +275,33 @@ fun WeekPlannerScreen(
 
 
     if (adding) {
-        AddGoalDialog(
+        GoalDialog(
             today = viewModel.today,
+            title = "Neues ToDo",
+            hint = "Landet in der Sammelliste und kann gleich in die Woche.",
+            confirmLabel = "Anlegen",
+            offerFollowUps = true,
             foldCandidates = state.foldable.foldCandidatesExcept(),
             onDismiss = { adding = false },
-            onCreate = { name, attributes ->
+            onConfirm = { name, attributes ->
                 viewModel.addToCollection(name, attributes) { adding = false }
+            },
+        )
+    }
+
+    filling?.let { fill ->
+        GoalDialog(
+            today = viewModel.today,
+            title = "ToDo ausfüllen",
+            hint = "Ohne Kategorie, Priorität und Dauer lässt sich ein ToDo nicht verplanen.",
+            confirmLabel = if (fill.intoWeek) "Speichern und in die Woche" else "Speichern",
+            initialName = fill.item.name,
+            initialAttributes = TodoAttributes.of(fill.item, viewModel.today),
+            foldCandidates = state.foldable.foldCandidatesExcept(fill.item.id),
+            onDismiss = { filling = null },
+            onConfirm = { name, attributes ->
+                viewModel.concretizeGoal(fill.item, name, attributes, fill.intoWeek)
+                filling = null
             },
         )
     }
@@ -379,7 +420,12 @@ private fun EvaluationStep(text: String, onChange: (String) -> Unit) {
 
 /** Part 3: the two columns, with what is left of the week above them. */
 @Composable
-private fun PlanStep(state: WeekPlannerUiState, viewModel: WeekPlannerViewModel, onAdd: () -> Unit) {
+private fun PlanStep(
+    state: WeekPlannerUiState,
+    viewModel: WeekPlannerViewModel,
+    onAdd: () -> Unit,
+    onFillIn: (Item, intoWeek: Boolean) -> Unit,
+) {
     BudgetBox(state.budget)
 
     if (!state.canTakeOnMore) {
@@ -394,19 +440,12 @@ private fun PlanStep(state: WeekPlannerUiState, viewModel: WeekPlannerViewModel,
                     color = EtaTheme.colors.warning,
                 )
                 EtaText(
-                    text = "Aus der letzten Woche sind noch ${state.unfinished.size} Ziele " +
-                        "nicht verplant. Neues kommt erst in die Wochenliste, wenn diese " +
-                        "verplant oder zurückgegeben sind.",
+                    text = "Aus der letzten Woche sind noch ${state.unfinished.size} Ziele nicht verplant. " +
+                        "Sie stehen oben in der Sammelliste: übernehmen oder zurückgeben. " +
+                        "Neues kommt erst in die Woche, wenn keines mehr offen ist.",
                     style = EtaTheme.typography.caption,
                     color = EtaTheme.colors.textSecondary,
                 )
-                state.unfinished.forEach { item ->
-                    EtaText(
-                        text = "· ${item.name}",
-                        style = EtaTheme.typography.body,
-                        color = EtaTheme.colors.textSecondary,
-                    )
-                }
             }
         }
     }
@@ -417,14 +456,18 @@ private fun PlanStep(state: WeekPlannerUiState, viewModel: WeekPlannerViewModel,
             items = state.collection,
             emptyHint = if (state.held.isEmpty()) "Leer." else "Nichts verplanbar, siehe unten.",
             modifier = Modifier.weight(1f),
-            onPick = viewModel::pullIntoWeek,
+            leading = { UnfinishedGoals(state.unfinished, viewModel, onFillIn) },
+            // A card without its answers is finished first; the same tap then pulls it.
+            onPick = { item -> if (item.isConcretized) viewModel.pullIntoWeek(item) else onFillIn(item, true) },
         )
         ItemColumn(
             title = "Diese Woche",
             items = state.weekList,
             emptyHint = "Noch nichts vorgenommen.",
             modifier = Modifier.weight(1f),
-            onPick = viewModel::returnToCollection,
+            onPick = { item ->
+                if (item.isConcretized) viewModel.returnToCollection(item) else onFillIn(item, false)
+            },
         )
     }
 
@@ -448,11 +491,66 @@ private fun PlanStep(state: WeekPlannerUiState, viewModel: WeekPlannerViewModel,
     )
 
     EtaText(
-        text = "Ein Tipp verschiebt eine Karte in die andere Spalte. Verplant wird sie " +
-            "erst in der Tagesplanung.",
+        text = "Ein Tipp verschiebt eine Karte in die andere Spalte. Unvollständige Karten werden " +
+            "zuerst ausgefüllt. Verplant wird sie erst in der Tagesplanung.",
         style = EtaTheme.typography.caption,
         color = EtaTheme.colors.textMuted,
     )
+}
+
+/**
+ * Goals of an earlier cycle still lying in the week. They hold the gate, so they are
+ * answered at the top of the Sammelliste, not below the fold: each is taken on into
+ * this week or handed back, and the column opens once none is left.
+ */
+@Composable
+private fun UnfinishedGoals(
+    goals: List<Item>,
+    viewModel: WeekPlannerViewModel,
+    onFillIn: (Item, intoWeek: Boolean) -> Unit,
+) {
+    if (goals.isEmpty()) return
+    EtaText(
+        text = "Offen aus der letzten Woche",
+        style = EtaTheme.typography.label,
+        color = EtaTheme.colors.warning,
+    )
+    goals.forEach { goal ->
+        key(goal.id) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .background(EtaTheme.colors.background, EtaTheme.shapes.small)
+                    .padding(EtaTheme.spacing.sm),
+                verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.xs),
+            ) {
+                EtaText(
+                    text = goal.name,
+                    style = EtaTheme.typography.body,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                )
+                if (!goal.isConcretized) {
+                    EtaText(
+                        text = "noch unvollständig",
+                        style = EtaTheme.typography.caption,
+                        color = EtaTheme.colors.textMuted,
+                    )
+                }
+                EtaButton(
+                    text = "In diese Woche übernehmen",
+                    onClick = {
+                        if (goal.isConcretized) viewModel.takeUnfinishedIntoWeek(goal) else onFillIn(goal, true)
+                    },
+                )
+                EtaButton(
+                    text = "Zurück in die Sammelliste",
+                    style = EtaButtonStyle.Secondary,
+                    onClick = { viewModel.returnToCollection(goal) },
+                )
+            }
+        }
+    }
 }
 
 @Composable
@@ -507,11 +605,14 @@ private fun ItemColumn(
     items: List<Item>,
     emptyHint: String,
     modifier: Modifier = Modifier,
+    /** Shown above the cards, under the title: what has to be answered first. */
+    leading: @Composable () -> Unit = {},
     onPick: (Item) -> Unit,
 ) {
     EtaSurface(modifier = modifier, contentPadding = EtaTheme.spacing.md) {
         Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.md)) {
             EtaText(text = title, style = EtaTheme.typography.heading)
+            leading()
             if (items.isEmpty()) {
                 EtaText(
                     text = emptyHint,
@@ -553,6 +654,7 @@ private fun ItemCard(item: Item, onClick: () -> Unit) {
         }
         EtaText(
             text = when {
+                !item.isConcretized -> "noch unvollständig — antippen zum Ausfüllen"
                 duration == null -> "noch ohne Dauer"
                 // What it really costs the week, break and all.
                 else -> "${duration.formatShort()} · kostet ${costOf(duration).formatShort()}"
@@ -585,13 +687,41 @@ private fun HeldCard(item: Item, reason: PullBlock) {
                 is PullBlock.NotYetAvailable -> "Einplanbar ab ${reason.from.formatLong()}"
                 PullBlock.AfterPredecessor -> "Erst die Aufgabe davor erledigen."
                 is PullBlock.OpenGoals -> if (reason.count == 1) {
-                    "Erst das offene Ziel der letzten Woche verplanen oder zurückgeben."
+                    "Erst das offene Ziel der letzten Woche verplanen oder zurückgeben. Es steht oben in der Sammelliste."
                 } else {
-                    "Erst die ${reason.count} offenen Ziele der letzten Woche verplanen oder zurückgeben."
+                    "Erst die ${reason.count} offenen Ziele der letzten Woche verplanen oder zurückgeben. " +
+                        "Sie stehen oben in der Sammelliste."
                 }
             },
             style = EtaTheme.typography.caption,
             color = EtaTheme.colors.textMuted,
         )
+    }
+}
+
+/**
+ * On the calendar page: the way on to the Sammelliste, with how many of its ToDos can
+ * go into the week. When the open goals hold everything, the phrase says why.
+ */
+@Composable
+private fun NextToTodosAction(state: WeekPlannerUiState, onNext: () -> Unit) {
+    val pullable = state.collection.size
+    EtaSurface(modifier = Modifier.fillMaxWidth()) {
+        Column(verticalArrangement = Arrangement.spacedBy(EtaTheme.spacing.sm)) {
+            EtaText(
+                text = when {
+                    state.unfinished.isNotEmpty() -> "Gerade gesperrt: offene Ziele der letzten Woche."
+                    pullable == 0 -> "Gerade nichts zum Einplanen."
+                    pullable == 1 -> "1 ToDo bereit zum Einplanen."
+                    else -> "$pullable ToDos bereit zum Einplanen."
+                },
+                style = EtaTheme.typography.caption,
+                color = EtaTheme.colors.textSecondary,
+            )
+            EtaButton(
+                text = "Weiter zu deinen ToDos",
+                onClick = onNext,
+            )
+        }
     }
 }
