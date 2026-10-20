@@ -23,6 +23,24 @@ import org.robolectric.annotation.Config
 class SettingsScenarioTest {
 
     @Test
+    fun `changing the wake time before the morning starts re-lays the morning of today`() = scenario(
+        start = "2026-10-19T05:00",
+    ) {
+        step("Einrichtung vor dem Aufstehen") { completeSetup(SampleData.lenaSetup(clock.now())) }
+        val previous = roleBlockOn(ItemRole.MORNING, clock.today).block
+        assertEquals(LocalTime(7, 0), previous.start)
+
+        step("Aufstehen vor Beginn der Morgenroutine auf 08:00 ändern") {
+            changeSettings { it.copy(wakeTime = LocalTime(8, 0)) }
+        }
+        step("Heute folgt die noch nicht begonnene Morgenroutine der neuen Zeit") {
+            val morning = roleBlockOn(ItemRole.MORNING, clock.today).block
+            assertEquals(LocalTime(8, 0), morning.start)
+            assertEquals(previous.plannedDuration, morning.plannedDuration)
+        }
+    }
+
+    @Test
     fun `a new wake time reaches today's open blocks and later days, but not a started block or a confirmed tomorrow`() =
         scenario(start = "2026-10-19T20:00") {
             step("Einrichtung, morgen bestätigt") {

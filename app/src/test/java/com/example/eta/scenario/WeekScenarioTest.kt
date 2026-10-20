@@ -210,6 +210,12 @@ class WeekScenarioTest {
             container.pointsRepository.record(100.0, PointsReason.CONTRACT, "Startguthaben")
         }
 
+        step("Sonntag: vor dem gewählten Wertverfalltag wird nichts abgezogen") {
+            applyInflationOnAppStart()
+            assertTrue(inflationRows().isEmpty())
+            assertEquals(100.0, balance(), TOLERANCE)
+        }
+
         advanceTo(LocalDateTime(2026, 10, 19, 9, 0))
         step("Montag, erster App-Start: 30 % werden abgezogen") { applyInflationOnAppStart() }
         step("Montag, weitere App-Starts: nichts mehr") {
@@ -223,6 +229,7 @@ class WeekScenarioTest {
             repeat(2) { applyInflationOnAppStart() }
         }
         assertEquals("one row per week", 2, inflationRows().size)
+        assertEquals(49.0, balance(), TOLERANCE)
     }
 
     private suspend fun Scenario.applyInflationOnAppStart() {
