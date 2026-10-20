@@ -2,6 +2,7 @@ package com.example.eta.ui.lists
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.example.eta.alarm.TaskStartCoordinator
 import com.example.eta.data.local.BlockWithItem
 import com.example.eta.data.repository.ItemRepository
 import com.example.eta.data.repository.PlanRepository
@@ -130,6 +131,7 @@ class SmartListsViewModel(
     private val planRepository: PlanRepository,
     private val scheduleMaintenance: ScheduleMaintenance,
     private val recurringTaskService: RecurringTaskService,
+    private val taskStartCoordinator: TaskStartCoordinator,
     private val reevaluationService: ReevaluationService,
     private val subtaskRepository: SubtaskRepository,
     private val setupRepository: SetupRepository,
@@ -338,6 +340,7 @@ class SmartListsViewModel(
         if (attributes.weekdays.isEmpty()) return
         viewModelScope.launch {
             recurringTaskService.createGroup(attributes.toEdit(name, note))
+            taskStartCoordinator.reschedule()
         }
     }
 
@@ -424,6 +427,7 @@ class SmartListsViewModel(
                 startTimes = attributes.ownStartTimes,
             )
             scheduleMaintenance.topUp()
+            taskStartCoordinator.reschedule()
         }
     }
 
@@ -446,12 +450,16 @@ class SmartListsViewModel(
                 ids = group.ids,
                 edit = attributes.toEdit(name, note),
             )
+            taskStartCoordinator.reschedule()
         }
     }
 
     /** Ends a standing task; past occurrences stay in the Erfolgsliste. */
     fun endRecurringGroup(group: RecurringGroup) {
-        viewModelScope.launch { recurringTaskService.endGroup(group.ids) }
+        viewModelScope.launch {
+            recurringTaskService.endGroup(group.ids)
+            taskStartCoordinator.reschedule()
+        }
     }
 
     /**

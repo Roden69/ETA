@@ -91,6 +91,9 @@ class PlanRepository(
     /**
      * Materializes the blocks the given recurring definitions owe for the range.
      * Idempotent: existing occurrences are left alone. Returns how many were added.
+     *
+     * [keep] drops expanded occurrences before they are written; the schedule
+     * maintenance uses it so an edit does not lay a day's occurrence in the past.
      */
     suspend fun materializeRecurring(
         definitions: List<Item>,
@@ -98,11 +101,13 @@ class PlanRepository(
         to: LocalDate,
         vacations: List<VacationPlan> = emptyList(),
         suppressed: Set<Pair<String, LocalDate>> = emptySet(),
+        keep: (PlannedBlock) -> Boolean = { true },
     ): Int {
         val existing = blockDao.findExistingSlots(from, to)
             .map { it.itemId to it.date }
             .toSet()
         val blocks = expandRecurring(definitions, from, to, existing, clock.now(), vacations, suppressed)
+            .filter(keep)
         if (blocks.isEmpty()) return 0
         // The read above can be stale — two runs overlapping both see "nothing
         // there". The unique index is what actually keeps the day from doubling;

@@ -4,13 +4,17 @@ import com.example.eta.data.local.CalendarDao
 import com.example.eta.data.local.ItemDao
 import com.example.eta.domain.growth.placeDynamicGrowth
 import com.example.eta.domain.model.BlockOrigin
+import com.example.eta.domain.model.PlannedBlock
 import com.example.eta.domain.planning.minuteToLocalTime
+import com.example.eta.domain.recurrence.isLaidAfterEdit
+import com.example.eta.domain.recurrence.isRelayableToday
 import com.example.eta.domain.recurrence.matches
 import kotlin.time.Clock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.plus
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.datetime.todayIn
 
 /** How far ahead the standing schedule is kept materialized. */
@@ -37,11 +41,15 @@ class ScheduleMaintenance(
     private val timeZone: TimeZone = TimeZone.currentSystemDefault(),
 ) {
 
-    /** Materializes from today to the horizon. Returns how many blocks were added. */
-    suspend fun topUp(): Int = topUpUntil(clock.todayIn(timeZone).plus(DatePeriod(days = SCHEDULE_HORIZON_DAYS)))
+    /**
+     * Materializes from today to the horizon. Returns how many blocks were added.
+     * [keep] decides which new occurrences are laid down; the default keeps all.
+     */
+    suspend fun topUp(keep: (PlannedBlock) -> Boolean = { true }): Int =
+        topUpUntil(clock.todayIn(timeZone).plus(DatePeriod(days = SCHEDULE_HORIZON_DAYS)), keep)
 
     /** Materializes at least as far as [until], for a range that reaches further. */
-    suspend fun topUpUntil(until: LocalDate): Int {
+    suspend fun topUpUntil(until: LocalDate, keep: (PlannedBlock) -> Boolean = { true }): Int {
         val today = clock.todayIn(timeZone)
         val horizon = maxOf(until, today.plus(DatePeriod(days = SCHEDULE_HORIZON_DAYS)))
         // A standing task past its "Wiederholen bis" has nothing left to lay
@@ -68,6 +76,7 @@ class ScheduleMaintenance(
             to = horizon,
             vacations = vacationRepository.plansFrom(today),
             suppressed = suppressed,
+            keep = keep,
         )
         // A dynamic growth task's hour is not a property of the task but of the
         // day it lands in, so a freshly materialized occurrence has no hour worth
@@ -116,12 +125,21 @@ class ScheduleMaintenance(
      * Takes the still-open occurrences of [itemIds] off the days that are still
      * open and lays them down again from the definitions as they now stand.
      *
-     * The rule every edit to a standing task follows: today, and tomorrow once
-     * its plan is confirmed, keep what they have.
+     * The rule every edit to a standing task follows. Days after today: as before,
+     * what is still open from the first open day on. Today: only what has not
+     * started yet is taken off ([isRelayableToday]), and an occurrence that would
+     * start before now is not laid down again ([isLaidAfterEdit]). Today's
+     * started, running, completed and called-off blocks stay.
      */
     suspend fun relayOccurrences(itemIds: List<String>) {
         if (itemIds.isEmpty()) return
+        val now = clock.now().toLocalDateTime(timeZone)
+        val edited = itemIds.toSet()
+        planRepository.findDay(now.date)
+            .map { it.block }
+            .filter { isRelayableToday(it, edited, now) }
+            .forEach { planRepository.removeBlock(it) }
         planRepository.clearUpcoming(itemIds, planRepository.firstOpenDay())
-        topUp()
+        topUp { isLaidAfterEdit(it, edited, now) }
     }
 }

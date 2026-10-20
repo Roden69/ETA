@@ -953,6 +953,7 @@ internal fun smartListsViewModelFactory(container: AppContainer): ViewModelProvi
                 planRepository = container.planRepository,
                 scheduleMaintenance = container.scheduleMaintenance,
                 recurringTaskService = container.recurringTaskService,
+                taskStartCoordinator = container.taskStartCoordinator,
                 reevaluationService = container.reevaluationService,
                 subtaskRepository = container.subtaskRepository,
                 setupRepository = container.setupRepository,
@@ -1003,6 +1004,7 @@ internal fun growthTasksViewModelFactory(container: AppContainer): ViewModelProv
             GrowthTasksViewModel(
                 growthService = container.growthService,
                 recurringTaskService = container.recurringTaskService,
+                taskStartCoordinator = container.taskStartCoordinator,
                 subtaskRepository = container.subtaskRepository,
                 itemRepository = container.itemRepository,
             )
