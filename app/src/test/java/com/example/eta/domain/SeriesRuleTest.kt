@@ -6,16 +6,25 @@ import com.example.eta.domain.calendar.readSeriesRule
 import com.example.eta.domain.recurrence.Rhythm
 import kotlinx.datetime.DayOfWeek
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.LocalTime
+import kotlinx.datetime.TimeZone
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 
-/** The first occurrence of the series in these tests is Wednesday 2026-10-14. */
+/**
+ * The first occurrence of the series in these tests is Wednesday 2026-10-14, at
+ * 08:00 Berlin time, unless a test says otherwise.
+ */
 class SeriesRuleTest {
 
     private val start = LocalDate(2026, 10, 14)
+    private val berlin = TimeZone.of("Europe/Berlin")
+    private val eight = LocalTime(8, 0)
 
-    private fun read(vararg lines: String): SeriesReading = readSeriesRule(lines.toList(), start)
+    private fun read(vararg lines: String): SeriesReading =
+        readSeriesRule(lines.toList(), start, berlin, eight)
 
     private fun repeats(reading: SeriesReading): SeriesPattern {
         assertTrue("expected a converted series, got $reading", reading is SeriesReading.Repeats)
@@ -33,6 +42,7 @@ class SeriesRuleTest {
         assertEquals(1, pattern.weeks)
         assertEquals(setOf(DayOfWeek.WEDNESDAY), pattern.weekdays)
         assertEquals(Rhythm.Weekly, pattern.rhythm)
+        assertNull(pattern.lastDate)
     }
 
     @Test
@@ -72,20 +82,76 @@ class SeriesRuleTest {
     }
 
     @Test
-    fun `a series with an end date or a count is refused`() {
-        refused(read("RRULE:FREQ=WEEKLY;COUNT=10"))
-        refused(read("RRULE:FREQ=WEEKLY;UNTIL=20261231T000000Z"))
+    fun `a university rule with a UTC end instant ends on the local date of that instant`() {
+        // 22:59:59 UTC on 5 February is 23:59:59 in Berlin, still the same day.
+        val pattern = repeats(
+            readSeriesRule(
+                listOf("RRULE:FREQ=WEEKLY;WKST=MO;UNTIL=20270205T225959Z;BYDAY=MO"),
+                LocalDate(2026, 10, 19),
+                berlin,
+                eight,
+            ),
+        )
+        assertEquals(setOf(DayOfWeek.MONDAY), pattern.weekdays)
+        assertEquals(LocalDate(2027, 2, 5), pattern.lastDate)
+    }
+
+    @Test
+    fun `an UTC end instant that falls before the lesson on its last day ends the day before`() {
+        // 00:00 UTC on 26 October is 01:00 in Berlin, before the 08:00 lesson of that day.
+        val pattern = repeats(
+            readSeriesRule(
+                listOf("RRULE:FREQ=WEEKLY;UNTIL=20261026T000000Z;BYDAY=MO"),
+                LocalDate(2026, 10, 19),
+                berlin,
+                eight,
+            ),
+        )
+        assertEquals(LocalDate(2026, 10, 25), pattern.lastDate)
+    }
+
+    @Test
+    fun `an end date without a time is the last day itself`() {
+        val pattern = repeats(
+            readSeriesRule(
+                listOf("RRULE:FREQ=WEEKLY;UNTIL=20270205;BYDAY=MO"),
+                LocalDate(2026, 10, 19),
+                berlin,
+                null,
+            ),
+        )
+        assertEquals(LocalDate(2027, 2, 5), pattern.lastDate)
+    }
+
+    @Test
+    fun `a count ends on the date of its last counted occurrence`() {
+        // Wednesday 14th is not on the list, so the counted ones are Fri 16th, Mon 19th, Fri 23rd.
+        val pattern = repeats(read("RRULE:FREQ=WEEKLY;COUNT=3;BYDAY=MO,FR"))
+        assertEquals(LocalDate(2026, 10, 23), pattern.lastDate)
+    }
+
+    @Test
+    fun `a count with an interval counts only the weeks the series repeats in`() {
+        val pattern = repeats(read("RRULE:FREQ=WEEKLY;INTERVAL=2;COUNT=2;BYDAY=WE"))
+        assertEquals(LocalDate(2026, 10, 28), pattern.lastDate)
+    }
+
+    @Test
+    fun `an exception date is no refusal, because the calendar already leaves that day out`() {
+        val pattern = repeats(read("RRULE:FREQ=WEEKLY;BYDAY=WE", "EXDATE;VALUE=DATE:20261021"))
+        assertEquals(setOf(DayOfWeek.WEDNESDAY), pattern.weekdays)
+        assertNull(pattern.lastDate)
+    }
+
+    @Test
+    fun `an extra date or an exception rule next to the rule is refused, not ignored`() {
+        assertTrue(refused(read("RRULE:FREQ=WEEKLY", "RDATE:20261023T100000Z")).contains("RDATE"))
+        assertTrue(refused(read("RRULE:FREQ=WEEKLY", "EXRULE:FREQ=WEEKLY")).contains("EXRULE"))
     }
 
     @Test
     fun `positional weekdays are refused because a weekday alone does not say which one`() {
         refused(read("RRULE:FREQ=WEEKLY;INTERVAL=2;BYDAY=1MO"))
-    }
-
-    @Test
-    fun `an exception next to the rule is refused, not ignored`() {
-        refused(read("RRULE:FREQ=WEEKLY", "EXDATE;VALUE=DATE:20261021"))
-        refused(read("RRULE:FREQ=WEEKLY", "RDATE:20261023T100000Z"))
     }
 
     @Test
@@ -101,6 +167,6 @@ class SeriesRuleTest {
 
     @Test
     fun `a master without any recurrence line is refused`() {
-        refused(readSeriesRule(emptyList(), start))
+        refused(readSeriesRule(emptyList(), start, berlin, eight))
     }
 }

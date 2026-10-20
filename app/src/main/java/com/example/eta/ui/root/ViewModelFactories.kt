@@ -59,6 +59,7 @@ internal fun rootViewModelFactory(container: AppContainer): ViewModelProvider.Fa
                 resetLocalStores = {
                     container.eveningStore.reset()
                     container.featureSuggestionStore.reset()
+                    container.declinedSeriesStore.reset()
                 },
             )
         }

@@ -14,6 +14,9 @@ import com.example.eta.data.calendar.GoogleCalendarApi
 import com.example.eta.data.local.EtaDatabase
 import com.example.eta.data.local.ETA_DATABASE_MIGRATIONS
 import com.example.eta.data.repository.CalendarImportService
+import com.example.eta.data.calendar.CalendarApi
+import com.example.eta.data.calendar.CalendarAuth
+import com.example.eta.data.calendar.DeclinedSeriesStore
 import com.example.eta.data.repository.CalendarRefreshService
 import com.example.eta.data.repository.CalendarRepository
 import com.example.eta.data.repository.CalendarSyncService
@@ -76,6 +79,12 @@ class AppContainer(
      * anything. Off in the sandbox unless a test asks for it.
      */
     val alarms: Boolean = !sandbox,
+    /**
+     * Google's sign-in and calendar reads. The app takes the defaults; tests put a
+     * fixed calendar in their place, so the sync can run without a network.
+     */
+    calendarAuth: CalendarAuth = GoogleAuth(context),
+    calendarApi: CalendarApi = GoogleCalendarApi(),
 ) {
     private val appContext = context.applicationContext
 
@@ -249,16 +258,18 @@ class AppContainer(
      * matches the app by package name and signing certificate against the Android
      * OAuth client in the Cloud project, so there is nothing here to leak.
      */
-    private val googleAuth: GoogleAuth = GoogleAuth(appContext)
+    /** Series kept single or acknowledged; a fact about this install, cleared by "Alles zurücksetzen". */
+    val declinedSeriesStore: DeclinedSeriesStore = DeclinedSeriesStore(appContext)
 
     val calendarRepository: CalendarRepository = CalendarRepository(
         dao = database.calendarDao(),
-        api = GoogleCalendarApi(),
+        api = calendarApi,
+        declinedSeries = declinedSeriesStore,
         clock = clock,
     )
 
     val calendarSyncService: CalendarSyncService = CalendarSyncService(
-        auth = googleAuth,
+        auth = calendarAuth,
         repository = calendarRepository,
     )
 
@@ -279,6 +290,7 @@ class AppContainer(
         calendarRepository = calendarRepository,
         planRepository = planRepository,
         setupRepository = setupRepository,
+        scheduleMaintenance = scheduleMaintenance,
         clock = clock,
         timeZone = timeZone,
     )

@@ -200,7 +200,9 @@ class CalendarImportService(
      * import asks for, so the card is an ordinary standing task afterwards and is
      * edited like one. Every undecided occurrence of the series is taken off the
      * list by [CalendarRepository.adoptSeries], and later ones are taken as they
-     * arrive. Changes Google makes to the series afterwards are not followed.
+     * arrive. The cards end on the series' last day, if Google has one, so a
+     * series that ends is not repeated after its end. Changes Google makes to the
+     * series afterwards are not followed.
      *
      * Returns the ids of the cards made.
      */
@@ -222,7 +224,7 @@ class CalendarImportService(
                 returnAfter = details.returnAfter,
                 breakAfter = details.breakAfter,
                 endSound = details.endSound,
-                extras = details.extras,
+                extras = details.extras.copy(repeatUntil = pattern.lastDate),
             ),
             rhythm = pattern.rhythm,
         )

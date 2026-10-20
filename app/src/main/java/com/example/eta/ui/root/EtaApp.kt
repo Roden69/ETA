@@ -722,7 +722,6 @@ private fun WeekAdjustScreen(
     )
 }
 
-
 /** The dashboard's offer: its own view model, so the dashboard's stays as it was. */
 @Composable
 private fun CatchUpOffer(container: AppContainer, dateKey: String, onRun: (CatchUpRun) -> Unit) {
