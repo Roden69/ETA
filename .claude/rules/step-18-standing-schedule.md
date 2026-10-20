@@ -56,6 +56,12 @@ count as missed. Confirmed tomorrow and every earlier day keep their rows as bef
 same path serves the settings' bed-preparation and morning rows (`saveSettings`) and every
 edit on the Listen tab (`saveGroup`, `saveWeekday`, `reschedule`, `endGroup`).
 
+The suppression survives later app starts: ordinary materialization compares today's
+new occurrence with the definition's persisted `updatedAt` and never creates a block
+before that edit. A confirmed tomorrow also receives no newly introduced definitions;
+keeping its existing rows alone would otherwise let a renamed weekday definition
+silently add a second occurrence beside them.
+
 **Hand placement wins for today.** A block the user moved, resized or made flexible is kept
 as it stands, so a hand move never snaps back on an edit. `isPlacedByHand` decides it: the
 block is `isMovable` (dragged, or flexible), or its start differs from `originalStart` or
@@ -69,6 +75,8 @@ their open blocks are still re-laid completely.
 (`WeekTabViewModel`: drag/resize, `saveGroup`, `saveWeekday`, create) call
 `TaskStartCoordinator.reschedule()` after the relay, so the task-start alarm aims at the
 block as it now stands.
+Settings saves also re-arm both planning phases, so changing their times updates the
+actual system alarms before the screen reports success.
 
 **The frame of the day can keep paying nothing**: `RecurringAttributes.category` is
 nullable and the editor offers "Keine", or correcting the time of Pause would have
