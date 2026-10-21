@@ -168,16 +168,6 @@ python3 -m venv .venv-docs && .venv-docs/bin/python -m pip install -r requiremen
 
 No git hooks, formatter task, lint baseline or release/copy script exist.
 
-### Gradle load across worktrees
-
-Every worktree build starts its own Gradle daemon plus test-worker JVMs; five
-parallel builds drove the load average to ~150 on 20 cores.
-
-- Cap workers: `org.gradle.workers.max=4` in `~/.gradle/gradle.properties`
-  (user-level, not committed).
-- Run at most 2 worktree Gradle builds at the same time; start further builds
-  only after one has finished.
-
 ## Code Conventions & Common Patterns
 
 - **Style:** `kotlin.code.style=official`; no ktlint, detekt, spotless or
